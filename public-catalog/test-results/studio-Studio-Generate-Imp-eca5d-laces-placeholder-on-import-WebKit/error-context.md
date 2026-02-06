@@ -1,0 +1,201 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - link "ForeverTech Logo ForeverTech Catalog" [ref=e6]:
+            - /url: /
+            - img "ForeverTech Logo" [ref=e8]
+            - generic [ref=e9]: ForeverTech Catalog
+          - status "System Offline" [ref=e11]:
+            - generic [ref=e15]: Connecting...
+        - navigation [ref=e16]:
+          - link "Latest Drops" [ref=e17]:
+            - /url: /
+          - link "Governance" [ref=e18]:
+            - /url: /governance
+          - link "Studio" [ref=e19]:
+            - /url: /studio
+          - link "Gallery" [ref=e20]:
+            - /url: /gallery
+          - link "Support" [ref=e21]:
+            - /url: /support
+        - generic [ref=e22]:
+          - link "Login" [ref=e23]:
+            - /url: /login
+            - img [ref=e24]
+            - generic [ref=e27]: Login
+          - link [ref=e28]:
+            - /url: /cart
+            - img [ref=e29]
+    - main [ref=e32]:
+      - heading "Creator Studio" [level=1] [ref=e33]
+      - generic [ref=e34]:
+        - generic [ref=e35]:
+          - generic [ref=e36]:
+            - generic [ref=e37]:
+              - img [ref=e38]
+              - heading "AI Content Factory" [level=2] [ref=e41]
+            - link "View Data Dashboard" [ref=e42]:
+              - /url: /factory-dashboard
+          - generic [ref=e43]:
+            - textbox "Topic or Campaign" [ref=e44]
+            - generic [ref=e45]:
+              - generic [ref=e46]:
+                - checkbox "LinkedIn" [checked] [ref=e47]
+                - generic [ref=e48]: LinkedIn
+              - generic [ref=e49]:
+                - checkbox "Instagram" [checked] [ref=e50]
+                - generic [ref=e51]: Instagram
+              - generic [ref=e52]:
+                - checkbox "X/Twitter" [checked] [ref=e53]
+                - generic [ref=e54]: X/Twitter
+            - generic [ref=e55]:
+              - combobox [ref=e56]:
+                - option "Mock" [selected]
+                - option "DALL·E 3"
+                - option "Stable Diffusion"
+                - option "Midjourney"
+              - generic [ref=e57]:
+                - checkbox "Safety Filters" [checked] [ref=e58]
+                - generic [ref=e59]: Safety Filters
+              - generic [ref=e60]:
+                - checkbox "Auto Social Generator" [ref=e61]
+                - generic [ref=e62]: Auto Social Generator
+            - generic [ref=e63]:
+              - button "Preview" [disabled] [ref=e64]
+              - button "Generate" [disabled] [ref=e65]
+        - generic [ref=e66]:
+          - generic [ref=e67]:
+            - img [ref=e68]
+            - heading "AI Asset Generator" [level=2] [ref=e71]
+          - generic [ref=e72]:
+            - textbox "Describe the image you want to generate..." [ref=e73]: futuristic city skyline at dusk, neon lights, high detail
+            - generic [ref=e74]:
+              - generic [ref=e75]:
+                - checkbox "Quantum Mode (Wolfram + Qiskit)" [checked] [ref=e76]
+                - generic [ref=e77]: Quantum Mode (Wolfram + Qiskit)
+              - generic [ref=e78]:
+                - checkbox "IPFS Upload" [ref=e79]
+                - generic [ref=e80]: IPFS Upload
+            - button "Generate Asset" [ref=e81]
+          - generic [ref=e83]:
+            - generic [ref=e84]: Failed to connect to generation service
+            - button "Import" [disabled] [ref=e86]
+        - generic [ref=e87]:
+          - generic [ref=e88]:
+            - img [ref=e89]
+            - heading "Multi-Channel Poster" [level=2] [ref=e92]
+          - generic [ref=e93]:
+            - 'textbox "What''s on your mind? #Web3" [ref=e94]': "My campaign post. (Attached: Generated Image)"
+            - generic [ref=e95]:
+              - textbox [ref=e96]
+              - generic [ref=e97]: Schedule (optional)
+            - generic [ref=e98]:
+              - 'button "Twitter: On" [ref=e99]'
+              - 'button "Telegram: On" [ref=e100]'
+              - 'button "Instagram: Off" [ref=e101]'
+              - 'button "TikTok: Off" [ref=e102]'
+              - 'button "YouTube: Off" [ref=e103]'
+            - generic [ref=e104]:
+              - generic [ref=e105]:
+                - generic [ref=e106]: February 2026
+                - generic [ref=e107]:
+                  - button "Toggle range selection mode" [ref=e109]: "Range Mode: Off"
+                  - generic [ref=e110]:
+                    - generic [ref=e111]: Start
+                    - textbox "Start date" [ref=e112]
+                    - generic [ref=e113]: End
+                    - textbox "End date" [ref=e114]
+                    - button "Clear date range" [ref=e115]: Clear
+                    - button "Clear selected dates" [ref=e116]: Clear Dates
+                  - button "Prev" [ref=e117]
+                  - button "Next" [ref=e118]
+              - row "Sun Mon Tue Wed Thu Fri Sat" [ref=e119]:
+                - generic [ref=e120]: Sun
+                - generic [ref=e121]: Mon
+                - generic [ref=e122]: Tue
+                - generic [ref=e123]: Wed
+                - generic [ref=e124]: Thu
+                - generic [ref=e125]: Fri
+                - generic [ref=e126]: Sat
+              - grid "Calendar" [ref=e127]:
+                - gridcell "February 1, 2026" [ref=e128] [cursor=pointer]:
+                  - generic [ref=e130]: "1"
+                - gridcell "February 2, 2026" [ref=e131] [cursor=pointer]:
+                  - generic [ref=e133]: "2"
+                - gridcell "February 3, 2026" [ref=e134] [cursor=pointer]:
+                  - generic [ref=e136]: "3"
+                - gridcell "February 4, 2026" [ref=e137] [cursor=pointer]:
+                  - generic [ref=e139]: "4"
+                - gridcell "February 5, 2026" [ref=e140] [cursor=pointer]:
+                  - generic [ref=e142]: "5"
+                - gridcell "February 6, 2026" [ref=e143] [cursor=pointer]:
+                  - generic [ref=e145]: "6"
+                - gridcell "February 7, 2026" [ref=e146] [cursor=pointer]:
+                  - generic [ref=e148]: "7"
+                - gridcell "February 8, 2026" [ref=e149] [cursor=pointer]:
+                  - generic [ref=e151]: "8"
+                - gridcell "February 9, 2026" [ref=e152] [cursor=pointer]:
+                  - generic [ref=e154]: "9"
+                - gridcell "February 10, 2026" [ref=e155] [cursor=pointer]:
+                  - generic [ref=e157]: "10"
+                - gridcell "February 11, 2026" [ref=e158] [cursor=pointer]:
+                  - generic [ref=e160]: "11"
+                - gridcell "February 12, 2026" [ref=e161] [cursor=pointer]:
+                  - generic [ref=e163]: "12"
+                - gridcell "February 13, 2026" [ref=e164] [cursor=pointer]:
+                  - generic [ref=e166]: "13"
+                - gridcell "February 14, 2026" [ref=e167] [cursor=pointer]:
+                  - generic [ref=e169]: "14"
+                - gridcell "February 15, 2026" [ref=e170] [cursor=pointer]:
+                  - generic [ref=e172]: "15"
+                - gridcell "February 16, 2026" [ref=e173] [cursor=pointer]:
+                  - generic [ref=e175]: "16"
+                - gridcell "February 17, 2026" [ref=e176] [cursor=pointer]:
+                  - generic [ref=e178]: "17"
+                - gridcell "February 18, 2026" [ref=e179] [cursor=pointer]:
+                  - generic [ref=e181]: "18"
+                - gridcell "February 19, 2026" [ref=e182] [cursor=pointer]:
+                  - generic [ref=e184]: "19"
+                - gridcell "February 20, 2026" [ref=e185] [cursor=pointer]:
+                  - generic [ref=e187]: "20"
+                - gridcell "February 21, 2026" [ref=e188] [cursor=pointer]:
+                  - generic [ref=e190]: "21"
+                - gridcell "February 22, 2026" [ref=e191] [cursor=pointer]:
+                  - generic [ref=e193]: "22"
+                - gridcell "February 23, 2026" [ref=e194] [cursor=pointer]:
+                  - generic [ref=e196]: "23"
+                - gridcell "February 24, 2026" [ref=e197] [cursor=pointer]:
+                  - generic [ref=e199]: "24"
+                - gridcell "February 25, 2026" [ref=e200] [cursor=pointer]:
+                  - generic [ref=e202]: "25"
+                - gridcell "February 26, 2026" [ref=e203] [cursor=pointer]:
+                  - generic [ref=e205]: "26"
+                - gridcell "February 27, 2026" [ref=e206] [cursor=pointer]:
+                  - generic [ref=e208]: "27"
+                - gridcell "February 28, 2026" [ref=e209] [cursor=pointer]:
+                  - generic [ref=e211]: "28"
+              - generic [ref=e212]: No schedule set
+            - button "Post to All Channels" [ref=e213]
+          - generic [ref=e214]:
+            - paragraph [ref=e215]: "Pro Tip: Use the Screenshot Manager service for capturing web assets."
+            - link "Open Screenshot Manager" [ref=e216]:
+              - /url: http://localhost:4010/api/screenshots
+  - region "Notifications alt+T"
+  - generic [ref=e221] [cursor=pointer]:
+    - button "Open Next.js Dev Tools" [ref=e222]:
+      - img [ref=e223]
+    - generic [ref=e228]:
+      - button "Open issues overlay" [ref=e229]:
+        - generic [ref=e230]:
+          - generic [ref=e231]: "0"
+          - generic [ref=e232]: "1"
+        - generic [ref=e233]: Issue
+      - button "Collapse issues badge" [ref=e234]:
+        - img [ref=e235]
+  - alert [ref=e237]
+```

@@ -1,0 +1,43 @@
+:root {
+  --calendar-highlight-color: #1d9bf0;
+  --calendar-highlight-opacity: 0.2;
+  --calendar-range-gradient: linear-gradient(90deg, rgba(29, 155, 240, var(--calendar-highlight-opacity)) 0%, rgba(29, 155, 240, var(--calendar-highlight-opacity)) 100%);
+  --calendar-date-color: #22c55e;
+}
+
+.calendarDay {
+  position: relative;
+  overflow: hidden;
+  transition: background-color 200ms ease-in-out, opacity 200ms ease-in-out, box-shadow 200ms ease-in-out;
+  cursor: pointer;
+}
+.calendarDay:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.calendarDaySelected {
+  background-color: var(--calendar-highlight-color);
+  color: #fff;
+}
+
+.calendarDayIndividuallySelected {
+  background-color: var(--calendar-date-color);
+  color: #000;
+}
+
+.calendarDayInRange {
+  background-image: var(--calendar-range-gradient);
+  color: #fff;
+}
+
+.calendarDayRangeStart {
+  box-shadow: 0 0 0 2px var(--calendar-highlight-color) inset;
+  border-top-left-radius: 0.5rem;
+  border-bottom-left-radius: 0.5rem;
+}
+
+.calendarDayRangeEnd {
+  box-shadow: 0 0 0 2px var(--calendar-highlight-color) inset;
+  border-top-right-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+}

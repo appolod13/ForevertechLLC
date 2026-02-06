@@ -1,0 +1,13 @@
+{
+  "hero": {
+    "badgeText": "Decentralized Web3 Platform",
+    "titleMain": "FOREVERTECH",
+    "titleLine1": "Own Your Content.",
+    "titleLine2": "Control Your Future.",
+    "description": "Build your decentralized presence with IPFS hosting, blockchain verification, and Web3 monetization. Free, self-hosted, and truly yours.",
+    "ctaPrimaryText": "Explore Services",
+    "ctaPrimaryHref": "#services",
+    "ctaSecondaryText": "Get Started Free",
+    "ctaSecondaryHref": "#contact"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "config": {
+    "coinName": "ForeverCoin",
+    "messageReward": 1,
+    "cashbackPercent": 2
+  },
+  "users": {}
+}
