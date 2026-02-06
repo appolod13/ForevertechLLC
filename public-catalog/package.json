@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3002",
+    "dev:https": "next dev -p 3002 --experimental-https",
+    "dev:https:cert": "next dev -p 3002 --experimental-https --experimental-https-key ./certificates/localhost-key.pem --experimental-https-cert ./certificates/localhost.pem",
     "build": "next build",
     "start": "next start -p 3002",
     "lint": "eslint",
@@ -20,6 +22,7 @@
     "project-workspace": "file:../project-workspace",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "sonner": "^1.7.4",
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
