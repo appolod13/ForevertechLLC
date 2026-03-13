@@ -2,14 +2,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Header } from '../../components/Header';
 import { DataDashboardButton } from '../../components/DataDashboardButton';
+import { FusionAI } from '../../components/FusionAI';
 import { Image as ImageIcon, Send, Sparkles } from 'lucide-react';
 import styles from './page.module.css';
 
 import { MIRROR_API_URL } from '@/lib/utils';
 
 export default function StudioPage() {
+  const searchParams = useSearchParams();
+  const testMode = (searchParams?.get('test') || '') === '1';
   const [prompt, setPrompt] = useState('');
   const [generatedImage, setGeneratedImage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -62,7 +66,14 @@ export default function StudioPage() {
         const items = Array.isArray(data.posts) ? data.posts : [];
         setCatalogPosts(items.map((p: any) => ({ id: String(p.id || Math.random()), content: String(p.content || '') })));
       } catch {
-        setCatalogPosts([]);
+        try {
+          const res = await fetch('/api/catalog/posts', { cache: 'no-store' });
+          const data = await res.json();
+          const items = Array.isArray(data.posts) ? data.posts : [];
+          setCatalogPosts(items.map((p: any) => ({ id: String(p.id || Math.random()), content: String(p.content || '') })));
+        } catch {
+          setCatalogPosts([]);
+        }
       }
     };
     fetchCatalog();
@@ -207,13 +218,18 @@ export default function StudioPage() {
     setGenerationError(null);
     setGeneratedImage('');
     try {
-      const endpoint = quantumMode ? `${MIRROR_API_URL}/api/generate-quantum-image` : `${MIRROR_API_URL}/api/generate-image`;
+      const endpoint = testMode
+        ? '/api/generate/image'
+        : (quantumMode ? `${MIRROR_API_URL}/api/generate-quantum-image` : `${MIRROR_API_URL}/api/generate-image`);
       const payload = quantumMode ? { query: prompt, width: 512, height: 512, pattern: 'wolfram', colormap: 'plasma' } : { prompt, width: 512, height: 512 };
       const start = Date.now();
       const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await res.json();
       if (data.success) {
-        const url = typeof data.imageUrl === 'string' && data.imageUrl.startsWith('http') ? data.imageUrl : `${MIRROR_API_URL}${data.imageUrl}`;
+        const imageUrl = data.imageUrl || data.image_url;
+        const url = typeof imageUrl === 'string' && imageUrl.startsWith('http')
+          ? imageUrl
+          : (testMode ? String(imageUrl || '') : `${MIRROR_API_URL}${imageUrl || ''}`);
         setGeneratedImage(url);
         setGenerationMetadata({
           timestamp: new Date().toISOString(),
@@ -262,7 +278,8 @@ export default function StudioPage() {
         setPostingStatus('success');
         setPostContent('');
       } else {
-        setPostingStatus(data.error ? String(data.error) : 'error');
+        const err = data.error;
+        setPostingStatus(typeof err === 'string' ? err : (err ? JSON.stringify(err) : 'error'));
       }
     } catch (e) {
       console.error(e);
@@ -344,6 +361,19 @@ export default function StudioPage() {
       setImporting(true);
       setImportStatus(null);
       setImportProgress(25);
+      if (testMode) {
+        const placeholder = '(Attached: Generated Image)';
+        const snippet = `${placeholder}: ${generatedImage}`;
+        const currentContent = postContent;
+        const finalContent = currentContent?.trim()
+          ? `${currentContent.trimEnd()}\n\n${snippet}`
+          : snippet;
+        setPostContent(finalContent);
+        setImportProgress(100);
+        setImportStatus('success');
+        setTimeout(() => setImporting(false), 200);
+        return;
+      }
       const original = generatedImage;
       const igUrl = await resizeAndUpload(original, 1080, 1080, `ig-${Date.now()}.jpg`);
       const primaryUrl = igUrl || original;
@@ -702,6 +732,11 @@ export default function StudioPage() {
                 </div>
               )}
             </div>
+
+            <FusionAI 
+              prompt={prompt} 
+              onImageGenerated={(url) => setGeneratedImage(url)} 
+            />
           </div>
 
           {/* Multi-Poster */}

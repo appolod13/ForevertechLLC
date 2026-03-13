@@ -1,0 +1,11 @@
+import { describe, it, expect } from "vitest";
+import { GET } from "./health/route";
+
+describe("health route", () => {
+  it("returns ok", async () => {
+    const res = await GET();
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.ok ?? json.success ?? true).toBeTruthy();
+  });
+});

@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useAuth } from './AuthContext';
+import { fetchWithRetry } from '../lib/integrations/http';
 
 function generateUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -9,6 +10,8 @@ function generateUUID() {
     return v.toString(16);
   });
 }
+
+const API_BASE = process.env.NEXT_PUBLIC_CART_API_BASE || 'http://localhost:3001';
 
 export interface CartItem {
   id: string;
@@ -60,7 +63,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const params = new URLSearchParams();
       if (user?.id) params.append('userId', user.id);
       params.append('deviceId', deviceId);
-      const res = await fetch(`http://localhost:3001/api/cart?${params.toString()}`);
+      const res = await fetch(`${API_BASE}/api/cart?${params.toString()}`);
       const data = await res.json();
       if (data.success) {
         setItems(data.items || []);
@@ -91,18 +94,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const addToCart = async (item: CartItem) => {
     try {
       const payload = { item, userId: user?.id, deviceId };
-      const res = await fetch(`${MIRROR_API_URL}/api/cart/add`, {
+      const res = await fetchWithRetry(`${API_BASE}/api/cart/add`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        headers: { 'content-type': 'application/json' },
+        body: payload
       });
-      const contentType = res.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const data = await res.json();
-        if (data.success) {
-          fetchCart();
-          try { localStorage.setItem('cart_sync', String(Date.now())); } catch {}
-        }
+      if (typeof res === 'object' && (res as any).success) {
+        fetchCart();
+        try { localStorage.setItem('cart_sync', String(Date.now())); } catch {}
       } else {
         fetchCart();
         try { localStorage.setItem('cart_sync', String(Date.now())); } catch {}
@@ -115,12 +114,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const removeFromCart = async (itemId: string) => {
     try {
       const payload = { itemId, userId: user?.id, deviceId };
-      const res = await fetch('http://localhost:3001/api/cart/remove', {
+      const res = await fetchWithRetry(`${API_BASE}/api/cart/remove`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        headers: { 'content-type': 'application/json' },
+        body: payload
       });
-      const data = await res.json();
+      const data = typeof res === 'object' ? (res as any) : {};
       if (data.success) {
         fetchCart();
         try { localStorage.setItem('cart_sync', String(Date.now())); } catch {}
@@ -133,18 +132,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const clearCart = async () => {
     try {
       const payload = { userId: user?.id, deviceId };
-      const res = await fetch('http://localhost:3001/api/cart/clear', {
+      const res = await fetchWithRetry(`${API_BASE}/api/cart/clear`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        headers: { 'content-type': 'application/json' },
+        body: payload
       });
-      const contentType = res.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const data = await res.json();
-        if (data.success) {
-          setItems([]);
-          try { localStorage.setItem('cart_sync', String(Date.now())); } catch {}
-        }
+      const data = typeof res === 'object' ? (res as any) : {};
+      if (data.success) {
+        setItems([]);
+        try { localStorage.setItem('cart_sync', String(Date.now())); } catch {}
       }
     } catch (error) {
       console.error('Clear cart failed:', error);
@@ -158,17 +154,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
     try {
       for (const itemId of itemIds) {
         const payload = { itemId, userId: user?.id, deviceId };
-        const res = await fetch('http://localhost:3001/api/cart/remove', {
+        const res = await fetchWithRetry(`${API_BASE}/api/cart/remove`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          headers: { 'content-type': 'application/json' },
+          body: payload
         });
-        const contentType = res.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const data = await res.json();
-          if (!data.success) {
-            console.error('Remove purchased item failed:', itemId);
-          }
+        const data = typeof res === 'object' ? (res as any) : {};
+        if (!data.success) {
+          console.error('Remove purchased item failed:', itemId);
         }
       }
       await fetchCart();

@@ -1,0 +1,4 @@
+{
+  gateway: { mode: "local", port: 19001 },
+  agents: { defaults: { workspace: "./.openclaw-staging/workspace" } }
+}

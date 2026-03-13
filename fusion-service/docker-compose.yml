@@ -1,0 +1,30 @@
+services:
+  fusion-service:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./notes:/app/notes
+    environment:
+      - WOLFRAM_ALPHA_APPID=${WOLFRAM_ALPHA_APPID}
+      - MODEL_TYPE=${MODEL_TYPE:-stable-diffusion-v1.5}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: unless-stopped
+
+volumes:
+  uploads:

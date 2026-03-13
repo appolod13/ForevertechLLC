@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'fusion-service'
+    static_configs:
+      - targets: ['fusion-service:8000']

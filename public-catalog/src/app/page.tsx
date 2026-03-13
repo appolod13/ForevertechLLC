@@ -4,9 +4,12 @@ import { TwitterFeed } from '@/components/TwitterFeed';
 import { LatestAIImage } from '@/components/LatestAIImage';
 import Image from 'next/image';
 
+const API_BASE = process.env.CATALOG_API_BASE || process.env.NEXT_PUBLIC_CART_API_BASE || 'http://localhost:3001';
+const LOCAL_API_BASE = 'http://localhost:3002';
+
 async function getPosts() {
   try {
-    const res = await fetch('http://localhost:3001/api/catalog/posts', { 
+    const res = await fetch(`${API_BASE}/api/catalog/posts`, { 
       cache: 'no-store' 
     });
     if (!res.ok) {
@@ -19,8 +22,15 @@ async function getPosts() {
     const data = await res.json();
     return data.posts || [];
   } catch (error) {
-    console.error('Error fetching initial posts:', error);
-    return [];
+    console.error('Error fetching initial posts from primary backend, falling back to local:', error);
+    try {
+      const res = await fetch(`${LOCAL_API_BASE}/api/catalog/posts`, { cache: 'no-store' });
+      const data = await res.json();
+      return data.posts || [];
+    } catch (fallbackError) {
+      console.error('Error fetching from fallback API:', fallbackError);
+      return [];
+    }
   }
 }
 

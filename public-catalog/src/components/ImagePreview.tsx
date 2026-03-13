@@ -153,7 +153,11 @@ export function ImagePreview({
               {Object.entries(metadata.params).map(([key, value]) => (
                 <div key={key} className="contents">
                   <span className="text-gray-500 capitalize">{key}:</span>
-                  <span className="truncate">{String(value)}</span>
+                  <span className="truncate">
+                    {typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' 
+                      ? String(value) 
+                      : JSON.stringify(value)}
+                  </span>
                 </div>
               ))}
             </div>

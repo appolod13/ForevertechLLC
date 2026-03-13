@@ -75,7 +75,10 @@ export function CatalogItem({
         imageUrl: hasError ? undefined : imgSrc,
         description: safeContent,
         imageError: hasError,
-        originalPrompt: String(metadata?.prompt ?? metadata?.title ?? 'Unknown Prompt'),
+        originalPrompt: (() => {
+          const p = metadata?.prompt ?? metadata?.title ?? 'Unknown Prompt';
+          return typeof p === 'string' ? p : JSON.stringify(p);
+        })(),
         originalFilename: mediaUrl || 'Unknown File',
         metadata: {
           ...metadata,
@@ -139,7 +142,10 @@ export function CatalogItem({
             <AlertTriangle className="mb-2 h-8 w-8 text-amber-500" />
             <p className="text-xs font-medium text-zinc-400 mb-1">Image Unavailable</p>
             <p className="text-[10px] text-zinc-600 font-mono break-all line-clamp-2">
-              Prompt: {String(metadata?.prompt ?? metadata?.title ?? 'Unknown')}
+              Prompt: {(() => {
+                const p = metadata?.prompt ?? metadata?.title ?? 'Unknown';
+                return typeof p === 'string' ? p : JSON.stringify(p);
+              })()}
             </p>
             <p className="text-[10px] text-zinc-700 font-mono break-all mt-1">
               File: {mediaUrl}
