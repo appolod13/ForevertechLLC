@@ -23,4 +23,4 @@ COPY . .
 
 EXPOSE 5328
 
-CMD ["python", "quantum_gen/server.py"]
+CMD ["uvicorn", "quantum_gen.server:app", "--host", "0.0.0.0", "--port", "5328"]

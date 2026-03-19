@@ -67,8 +67,8 @@ services:
   # Public Catalog App
   public-catalog:
     build:
-      context: ..
-      dockerfile: public-catalog/Dockerfile
+      context: ../public-catalog
+      dockerfile: Dockerfile
     container_name: public-catalog
     restart: unless-stopped
     ports:
