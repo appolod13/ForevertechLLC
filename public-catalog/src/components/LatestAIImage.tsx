@@ -12,12 +12,23 @@ interface AIImageResponse {
   filename: string;
 }
 
-export function LatestAIImage() {
+export function LatestAIImage({ overrideUrl }: { overrideUrl?: string }) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    if (overrideUrl) {
+      const normalized =
+        overrideUrl.startsWith("http") || overrideUrl.startsWith("data:")
+          ? overrideUrl
+          : `${MIRROR_API_URL}${overrideUrl.startsWith("/") ? overrideUrl : `/${overrideUrl}`}`;
+      setImageUrl(normalized);
+      setLoading(false);
+      setError(false);
+      return;
+    }
+
     async function fetchImage() {
       try {
         const res = await fetch(`${MIRROR_API_URL}/api/latest-ai-image`);
@@ -47,7 +58,7 @@ export function LatestAIImage() {
     }
 
     fetchImage();
-  }, []);
+  }, [overrideUrl]);
 
   if (error) {
     return (
