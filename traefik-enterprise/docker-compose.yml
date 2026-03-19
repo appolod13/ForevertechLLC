@@ -1,0 +1,341 @@
+services:
+  traefik:
+    image: traefik:v3.6
+    container_name: traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - traefik-network
+      - frontend-network
+      - backend-network
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080" # Dashboard (optional, auth in prod)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./config/dynamic:/etc/traefik/dynamic:ro
+      - ./certs:/etc/traefik/certs
+      - ./logs:/var/log/traefik
+    environment:
+      - DOMAIN=${DOMAIN:?DOMAIN is required}
+      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=${ACME_EMAIL:?ACME_EMAIL is required}
+      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPTSTAGING_ACME_EMAIL=${ACME_EMAIL:?ACME_EMAIL is required}
+      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_DNSCHALLENGE_PROVIDER=cloudflare
+      - CF_API_EMAIL=${CLOUDFLARE_EMAIL:?CLOUDFLARE_EMAIL is required}
+      - CF_DNS_API_TOKEN=${CLOUDFLARE_DNS_API_TOKEN:?CLOUDFLARE_DNS_API_TOKEN is required}
+    labels:
+      - "traefik.enable=true"
+      # Dashboard routing
+      - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
+      - "traefik.http.routers.traefik.middlewares=traefik-auth@docker,secure-headers@file"
+      # Middlewares
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=${DASHBOARD_AUTH}"
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Static File Server
+  nginx:
+    image: nginx:alpine
+    container_name: static-server
+    restart: unless-stopped
+    networks:
+      - traefik-network
+      - frontend-network
+    volumes:
+      - ./services/static:/usr/share/nginx/html:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.static.rule=Host(`static.${DOMAIN}`)"
+      - "traefik.http.routers.static.entrypoints=websecure"
+      - "traefik.http.routers.static.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
+      - "traefik.http.routers.static.middlewares=secure-headers@file,rate-limit@file"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+
+  # Public Catalog App
+  public-catalog:
+    build:
+      context: ..
+      dockerfile: public-catalog/Dockerfile
+    container_name: public-catalog
+    restart: unless-stopped
+    ports:
+      - "${CATALOG_HOST_PORT:-3001}:3000"
+    networks:
+      - traefik-network
+      - frontend-network
+      - backend-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=https://api.${DOMAIN}
+      - NEXT_PUBLIC_FUSION_API_URL=https://fusion.${DOMAIN}
+      - NEXT_PUBLIC_QUANTUM_API_URL=https://quantum.${DOMAIN}
+      - NEXT_PUBLIC_LOCAL_API_URL=http://localhost:3000
+      - FUSION_SERVICE_URL=http://fusion-service:8000
+      - AI_IMAGE_GEN_URL=http://quantum-image-gen:5328
+      - BUILD_PIPELINE_ENABLED=${BUILD_PIPELINE_ENABLED:-0}
+      - CF_ACCOUNT_ID=${CF_ACCOUNT_ID}
+      - CF_ZONE_ID=${CF_ZONE_ID}
+      - CF_EMAIL_ROUTING_TOKEN=${CF_EMAIL_ROUTING_TOKEN}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.catalog.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`app.${DOMAIN}`)"
+      - "traefik.http.routers.catalog.entrypoints=websecure"
+      - "traefik.http.routers.catalog.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
+      - "traefik.http.routers.catalog.middlewares=secure-headers@file"
+      - "traefik.http.services.catalog.loadbalancer.server.port=3000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "http=require('http');req=http.get('http://localhost:3000/api/health',res=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Fusion AI Microservice
+  fusion-service:
+    profiles: ["fusion"]
+    build:
+      context: ../fusion-service
+      dockerfile: Dockerfile.cpu
+    container_name: fusion-service
+    restart: unless-stopped
+    networks:
+      - traefik-network
+      - frontend-network
+      - backend-network
+    volumes:
+      - ../fusion-service/uploads:/app/uploads
+      - ../fusion-service/notes:/app/notes
+    environment:
+      - WOLFRAM_ALPHA_APPID=${WOLFRAM_ALPHA_APPID}
+      - MODEL_TYPE=${MODEL_TYPE}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.fusion.rule=Host(`fusion.${DOMAIN}`)"
+      - "traefik.http.routers.fusion.entrypoints=websecure"
+      - "traefik.http.routers.fusion.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
+      - "traefik.http.routers.fusion.middlewares=secure-headers@file,rate-limit@file"
+      - "traefik.http.services.fusion.loadbalancer.server.port=8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import sys,urllib.request; url='http://localhost:8000/health';\ntry:\n  r=urllib.request.urlopen(url, timeout=5)\n  sys.exit(0 if r.status==200 else 1)\nexcept Exception:\n  sys.exit(1)\n",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Quantum Image Generator
+  quantum-image-gen:
+    build:
+      context: ../quantum-image-gen
+      dockerfile: Dockerfile
+    container_name: quantum-image-gen
+    restart: unless-stopped
+    networks:
+      - traefik-network
+      - frontend-network
+      - backend-network
+    volumes:
+      - ../quantum-image-gen/public/uploads:/app/public/uploads
+    environment:
+      - WOLFRAM_ALPHA_APPID=${WOLFRAM_ALPHA_APPID}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.quantum.rule=Host(`quantum.${DOMAIN}`)"
+      - "traefik.http.routers.quantum.entrypoints=websecure"
+      - "traefik.http.routers.quantum.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
+      - "traefik.http.routers.quantum.middlewares=secure-headers@file,rate-limit@file"
+      - "traefik.http.services.quantum.loadbalancer.server.port=5328"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import sys,urllib.request; url='http://localhost:5328/health';\ntry:\n  r=urllib.request.urlopen(url, timeout=5)\n  sys.exit(0 if r.status==200 else 1)\nexcept Exception:\n  sys.exit(1)\n",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Sample Node.js App (Backend API)
+  web-app:
+    build: ./services/web-app
+    container_name: web-app
+    restart: unless-stopped
+    networks:
+      - traefik-network
+      - frontend-network
+      - backend-network
+    environment:
+      - PORT=3000
+      - CF_API_TOKEN=${CF_API_TOKEN}
+      - CF_CLIENT_ID=${CF_CLIENT_ID}
+      - CF_VERSION_ID=${CF_VERSION_ID}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.webapp.rule=Host(`api.${DOMAIN}`)"
+      - "traefik.http.routers.webapp.entrypoints=websecure"
+      - "traefik.http.routers.webapp.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
+      - "traefik.http.routers.webapp.middlewares=secure-headers@file,retry-mechanism@file"
+      - "traefik.http.services.webapp.loadbalancer.server.port=3000"
+      # Circuit Breaker
+      - "traefik.http.services.webapp.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.webapp.loadbalancer.healthcheck.interval=10s"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "http=require('http');req=http.get('http://localhost:3000/health',res=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Monitoring Stack
+  prometheus:
+    image: prom/prometheus:${PROMETHEUS_VERSION:-v2.45.0}
+    container_name: prometheus
+    restart: unless-stopped
+    profiles: ["metrics"]
+    networks:
+      - traefik-network
+      - backend-network
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.${DOMAIN}`)"
+      - "traefik.http.routers.prometheus.entrypoints=websecure"
+      - "traefik.http.routers.prometheus.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
+      - "traefik.http.routers.prometheus.middlewares=traefik-auth@docker"
+
+  grafana:
+    image: grafana/grafana:${GRAFANA_VERSION:-10.0.0}
+    container_name: grafana
+    restart: unless-stopped
+    profiles: ["metrics"]
+    networks:
+      - traefik-network
+      - backend-network
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN}`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
+
+  jaeger:
+    image: jaegertracing/all-in-one:${JAEGER_VERSION:-1.47}
+    container_name: jaeger
+    restart: unless-stopped
+    profiles: ["tracing"]
+    networks:
+      - traefik-network
+      - backend-network
+    ports:
+      - "16686:16686"
+      - "4317:4317" # OTLP gRPC
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jaeger.rule=Host(`tracing.${DOMAIN}`)"
+      - "traefik.http.routers.jaeger.entrypoints=websecure"
+      - "traefik.http.routers.jaeger.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    profiles: ["metrics"]
+    networks:
+      - traefik-network
+      - frontend-network
+      - backend-network
+    volumes:
+      - ./monitoring/uptime-kuma:/app/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.status.rule=Host(`status.${DOMAIN}`)"
+      - "traefik.http.routers.status.entrypoints=websecure"
+      - "traefik.http.routers.status.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
+      - "traefik.http.services.status.loadbalancer.server.port=3001"
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.1
+    container_name: node-exporter
+    restart: unless-stopped
+    profiles: ["metrics"]
+    networks:
+      - backend-network
+    pid: host
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    restart: unless-stopped
+    profiles: ["metrics"]
+    networks:
+      - backend-network
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.26.0
+    container_name: blackbox-exporter
+    restart: unless-stopped
+    profiles: ["metrics"]
+    networks:
+      - backend-network
+    volumes:
+      - ./monitoring/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    command:
+      - "--config.file=/etc/blackbox_exporter/config.yml"
+
+networks:
+  traefik-network:
+    external: false
+  frontend-network:
+    internal: false
+  backend-network:
+    internal: true
+  database-network:
+    internal: true

@@ -1,0 +1,5 @@
+.env
+certs/acme.json
+logs/*.log
+monitoring/prometheus/data/
+monitoring/grafana/data/

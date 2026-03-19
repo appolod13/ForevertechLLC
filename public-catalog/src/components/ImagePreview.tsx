@@ -164,7 +164,7 @@ export function ImagePreview({
           </div>
         )}
 
-        {imageUrl && (
+        {imageUrl && onImport && (
           <button
             disabled={isLoading || importing}
             onClick={onImport}
