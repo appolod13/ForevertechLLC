@@ -61,7 +61,10 @@ if [[ ! -s "${LOCAL_CONFIG_PATH}" ]]; then
   cat >"${LOCAL_CONFIG_PATH}" <<'JSON5'
 {
   // Local, non-networked gateway
-  gateway: { mode: "local" },
+  gateway: {
+    mode: "local",
+    http: { endpoints: { responses: { enabled: true } } },
+  },
   // Point agent workspace to project-local directory
   agents: { defaults: { workspace: "./.openclaw/workspace" } }
 }
@@ -83,7 +86,7 @@ if [[ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]]; then
   # Generate a simple local token; suitable for dev-only usage
   OPENCLAW_GATEWAY_TOKEN="local-dev-$(date +%s)"
   export OPENCLAW_GATEWAY_TOKEN
-  log "Using generated OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}"
+  log "Using generated OPENCLAW_GATEWAY_TOKEN"
 fi
 
 # Install deps (idempotent; fast with pnpm store cache)

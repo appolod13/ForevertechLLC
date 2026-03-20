@@ -7,7 +7,7 @@ This document logs the results of the comprehensive live test of the purchase-to
 ## Test Environment
 - **Date**: 2026-01-14
 - **Backend**: `mirror_site` (Node.js) on Port 3000
-- **Frontend**: `public-catalog` (Next.js) on Port 3002
+- **Frontend**: `public-catalog` (Next.js) on Port 3001
 - **Test Page**: `/workflow-test`
 
 ## Test Execution Log

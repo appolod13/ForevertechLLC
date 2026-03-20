@@ -41,7 +41,7 @@ graph TD
 ### Image Loading Failures
 - **Check Service Status**: Ensure `node server.js` is running in `ecommerce-agents/screenshot-manager-service/integrated-service`.
 - **Port Conflicts**: The service runs on port 4000. Check `lsof -i :4000`.
-- **CORS**: The service must allow requests from `localhost:3002`.
+- **CORS**: The service must allow requests from `localhost:3001`.
 
 ## API Reference
 

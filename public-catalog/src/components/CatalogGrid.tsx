@@ -36,14 +36,11 @@ export function CatalogGrid({ initialPosts }: CatalogGridProps) {
   });
   const filterRef = React.useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (latestPost) {
-      setPosts(prev => {
-        if (prev.find(p => p.id === latestPost.id)) return prev;
-        return [latestPost, ...prev];
-      });
-    }
-  }, [latestPost]);
+  const displayPosts = React.useMemo(() => {
+    if (!latestPost) return posts;
+    if (posts.find(p => p.id === latestPost.id)) return posts;
+    return [latestPost, ...posts];
+  }, [posts, latestPost]);
 
   // Handle click outside to close dropdown
   useEffect(() => {
@@ -82,7 +79,7 @@ export function CatalogGrid({ initialPosts }: CatalogGridProps) {
       }
       return s;
     }
-    let arr = posts.map(p => ({ post: p, score: score(p) }))
+    let arr = displayPosts.map(p => ({ post: p, score: score(p) }))
       .filter(({ post, score }) => {
         const t = textFor(post);
         const matches = q ? (t.includes(q) || tokens.some(tok => t.includes(tok))) : true;
@@ -111,7 +108,7 @@ export function CatalogGrid({ initialPosts }: CatalogGridProps) {
       }
     }
     return arr.map(x => x.post);
-  }, [posts, searchQuery, activeFilters]);
+  }, [displayPosts, searchQuery, activeFilters]);
 
   const activeFilterCount = (activeFilters.sort !== 'newest' ? 1 : 0) + (activeFilters.type !== 'all' ? 1 : 0);
 

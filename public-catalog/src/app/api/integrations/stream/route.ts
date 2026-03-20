@@ -19,7 +19,7 @@ export async function GET(_req: NextRequest) {
         clearInterval(id);
         controller.close();
       };
-      // @ts-expect-error
+      // @ts-expect-error missing oncancel in DOM stream controller types
       controller.oncancel = close;
     },
   });

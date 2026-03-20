@@ -2,6 +2,10 @@ import { NextRequest } from 'next/server';
 import { buildQuery } from '@/lib/search/buildQuery';
 import { addLog, getLogs } from '@/lib/logging';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 export async function GET() {
   return Response.json({ success: true, logs: getLogs() });
 }
@@ -27,15 +31,18 @@ export async function POST(req: NextRequest) {
     addLog({ stage: 'processing', input: { built, limit } });
 
     const proxy = process.env.NEXT_PUBLIC_SEARCH_PROXY_URL;
-    let results: any[] = [];
+    let results: Array<Record<string, unknown>> = [];
     let providerStatus: string | undefined = undefined;
     if (proxy) {
       try {
         const url = `${proxy}?q=${encodeURIComponent(built)}&num=${limit}`;
         const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) throw new Error(`provider-response-${res.status}`);
-        const data = await res.json();
-        results = Array.isArray(data.results) ? data.results : (Array.isArray(data.items) ? data.items : []);
+        const data: unknown = await res.json();
+        if (isRecord(data)) {
+          const candidate = Array.isArray(data.results) ? data.results : (Array.isArray(data.items) ? data.items : []);
+          results = candidate.filter(isRecord);
+        }
         providerStatus = 'ok';
       } catch (e) {
         providerStatus = 'error';
@@ -55,4 +62,3 @@ export async function POST(req: NextRequest) {
     return Response.json({ success: false, error: 'search-error' }, { status: 400 });
   }
 }
-

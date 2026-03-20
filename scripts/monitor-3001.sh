@@ -1,13 +1,7 @@
 #!/usr/bin/env bash
-# -----------------------------------------------------------------------------
-# Simple HTTP Monitor for a service on port 3002
-#
-# Pings a target URL and reports status. If ALERT_WEBHOOK_URL is set,
-# posts a JSON payload with the result. Intended for cron or CI usage.
-# -----------------------------------------------------------------------------
 set -euo pipefail
 
-TARGET_URL="${TARGET_URL:-http://172.20.10.6:3002/}"
+TARGET_URL="${TARGET_URL:-http://127.0.0.1:3001/}"
 TIMEOUT="${TIMEOUT:-5}"
 ALERT_WEBHOOK_URL="${ALERT_WEBHOOK_URL:-}"
 
@@ -44,3 +38,4 @@ fi
 if [[ "${status}" != "up" ]]; then
   exit 2
 fi
+

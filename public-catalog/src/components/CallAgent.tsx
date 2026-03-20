@@ -9,15 +9,54 @@ interface CallAgentProps {
   identity?: string;
 }
 
+type VoiceLog = {
+  to?: string;
+  status: string;
+  duration?: number;
+};
+
+type Contact = {
+  id: string;
+  name: string;
+  phone: string;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function asVoiceLogs(value: unknown): VoiceLog[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(isRecord)
+    .map((v) => ({
+      to: typeof v.to === 'string' ? v.to : undefined,
+      status: typeof v.status === 'string' ? v.status : 'unknown',
+      duration: typeof v.duration === 'number' ? v.duration : undefined,
+    }));
+}
+
+function asContacts(value: unknown): Contact[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(isRecord)
+    .map((v) => ({
+      id: typeof v.id === 'string' ? v.id : '',
+      name: typeof v.name === 'string' ? v.name : '',
+      phone: typeof v.phone === 'string' ? v.phone : '',
+    }))
+    .filter((c) => c.id && c.phone);
+}
+
 export function CallAgent({ identity = 'support-agent-1' }: CallAgentProps) {
   const [device, setDevice] = useState<Device | null>(null);
   const [connection, setConnection] = useState<Call | null>(null);
   const [status, setStatus] = useState<string>('Offline');
   const [number, setNumber] = useState('');
   const [isMuted, setIsMuted] = useState(false);
-  const [logs, setLogs] = useState<any[]>([]);
+  const [logs, setLogs] = useState<VoiceLog[]>([]);
   const [token, setToken] = useState<string | null>(null);
-  const [contacts, setContacts] = useState<any[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [activeTab, setActiveTab] = useState<'history' | 'contacts'>('history');
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
@@ -25,11 +64,12 @@ export function CallAgent({ identity = 'support-agent-1' }: CallAgentProps) {
 
   // Initialize Twilio Device
   useEffect(() => {
+    let currentDevice: Device | null = null;
     const initDevice = async () => {
       try {
         setStatus('Initializing...');
         // Fetch capability token from backend
-        const res = await fetch('http://localhost:3001/api/voice/token', {
+        const res = await fetch('/api/voice/token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ identity })
@@ -74,6 +114,7 @@ export function CallAgent({ identity = 'support-agent-1' }: CallAgentProps) {
         });
 
         await newDevice.register();
+        currentDevice = newDevice;
         setDevice(newDevice);
       } catch (e) {
         console.error(e);
@@ -85,22 +126,26 @@ export function CallAgent({ identity = 'support-agent-1' }: CallAgentProps) {
 
     // Cleanup
     return () => {
-      if (device) device.destroy();
+      if (currentDevice) currentDevice.destroy();
     };
   }, [identity]);
 
   // Fetch logs periodically
   useEffect(() => {
       // Initial contacts fetch
-      fetch('http://localhost:3001/api/agent/contacts')
+      fetch('/api/agent/contacts')
         .then(res => res.json())
-        .then(data => setContacts(data.contacts || []))
+        .then((data: unknown) => {
+          if (isRecord(data)) setContacts(asContacts(data.contacts));
+        })
         .catch(console.error);
 
       const interval = setInterval(() => {
-          fetch('http://localhost:3001/api/voice/logs')
+          fetch('/api/voice/logs')
             .then(res => res.json())
-            .then(data => setLogs(data.logs || []))
+            .then((data: unknown) => {
+              if (isRecord(data)) setLogs(asVoiceLogs(data.logs));
+            })
             .catch(e => console.error(e));
       }, 5000);
       return () => clearInterval(interval);
@@ -117,7 +162,7 @@ export function CallAgent({ identity = 'support-agent-1' }: CallAgentProps) {
 
       setIsSaving(true);
       try {
-          const res = await fetch('http://localhost:3001/api/agent/contacts', {
+          const res = await fetch('/api/agent/contacts', {
               method: 'POST',
               headers: {'Content-Type': 'application/json'},
               body: JSON.stringify({ name: contactName, phone: contactPhone })
@@ -130,7 +175,7 @@ export function CallAgent({ identity = 'support-agent-1' }: CallAgentProps) {
 
           const data = await res.json();
           if (data.success) {
-              setContacts(data.contacts);
+              setContacts(asContacts(data.contacts));
               setContactName('');
               setContactPhone('');
           } else {
@@ -151,7 +196,7 @@ export function CallAgent({ identity = 'support-agent-1' }: CallAgentProps) {
         setStatus('Calling (Mock)...');
         // Use new dedicated /api/call endpoint
         try {
-            const res = await fetch('http://localhost:3001/api/call', {
+            const res = await fetch('/api/call', {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -168,9 +213,9 @@ export function CallAgent({ identity = 'support-agent-1' }: CallAgentProps) {
             const data = await res.json();
             console.log('Call Initiated:', data);
             setStatus('In Call (Mock)');
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error('Call Error:', e);
-            setStatus(`Error: ${e.message}`);
+            setStatus(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
         }
         return;
     }
@@ -179,8 +224,8 @@ export function CallAgent({ identity = 'support-agent-1' }: CallAgentProps) {
       try {
         const conn = await device.connect({ params: { To: number } });
         setConnection(conn);
-      } catch (e: any) {
-        setStatus(`Call Failed: ${e.message}`);
+      } catch (e: unknown) {
+        setStatus(`Call Failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
       }
     }
   };
@@ -290,7 +335,7 @@ export function CallAgent({ identity = 'support-agent-1' }: CallAgentProps) {
         <div className="max-h-48 overflow-y-auto p-4">
           {activeTab === 'history' ? (
             <div className="space-y-2">
-              {logs.slice().reverse().map((log: any, i) => (
+              {logs.slice().reverse().map((log, i) => (
                 <div key={i} className="flex justify-between items-center text-sm p-2 hover:bg-white/5 rounded">
                   <div className="flex items-center gap-2">
                     <span className={`w-1.5 h-1.5 rounded-full ${log.status === 'completed' ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
@@ -340,7 +385,7 @@ export function CallAgent({ identity = 'support-agent-1' }: CallAgentProps) {
                 
                 {/* List */}
                 <div className="space-y-1 mt-2">
-                    {contacts.map((c: any) => (
+                    {contacts.map((c) => (
                         <div key={c.id} className="flex justify-between items-center bg-black/20 p-2 rounded hover:bg-black/40 cursor-pointer group" onClick={() => setNumber(c.phone)}>
                             <span className="text-sm text-white font-medium">{c.name}</span>
                             <span className="text-xs text-gray-400 group-hover:text-white transition-colors">{c.phone}</span>

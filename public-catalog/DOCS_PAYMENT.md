@@ -75,7 +75,7 @@ Digits=1234567812345678
 
 ## Testing Guide
 1.  **Setup**: Ensure `mirror_site` is running with the updated `.env`.
-2.  **Access**: Go to `http://localhost:3002/support` and switch to "Agent View".
+2.  **Access**: Go to `http://localhost:3001/support` and switch to "Agent View".
 3.  **Wallet**: Add a test card in the Wallet Panel.
 4.  **Voice Call**:
     - Use the Call Agent to dial `+15005550006`.

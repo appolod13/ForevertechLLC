@@ -29,7 +29,7 @@ export function WalletPanel() {
 
   const fetchWallet = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/payment/wallet');
+      const res = await fetch('/api/payment/wallet');
       const data = await res.json();
       if (data.success) {
         setBalance(data.balance);
@@ -42,15 +42,20 @@ export function WalletPanel() {
   };
 
   useEffect(() => {
-    fetchWallet();
+    const initialId = setTimeout(() => {
+      fetchWallet();
+    }, 0);
     const interval = setInterval(fetchWallet, 5000); // Live updates
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initialId);
+      clearInterval(interval);
+    };
   }, []);
 
   const handleAddCard = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('http://localhost:3001/api/payment/card', {
+      const res = await fetch('/api/payment/card', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newCard)

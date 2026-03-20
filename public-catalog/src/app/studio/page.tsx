@@ -26,6 +26,9 @@ function StudioPageInner() {
   const testMode = (searchParams?.get('test') || '') === '1';
   const [hydrated, setHydrated] = useState(false);
   const [prompt, setPrompt] = useState('Cinematic wide establishing shot of a vast futuristic megacity at golden hour, dense urban grid filled with thousands of warm amber lights in the foreground, distant layered mountains and a sharp jagged peak on the horizon, a cluster of ultra-tall sleek curved glass-and-metal skyscrapers dominating the right side with vertical electric-blue illuminated seams, atmospheric haze and volumetric light, soft bloom, high detail, realistic materials, epic scale, warm peach sunset sky with a large soft cloud mass in the upper left, sharp architecture silhouettes, ultra high quality sci‑fi concept art, photoreal lighting, 1024x1024');
+  const [crossOptimizeLoading, setCrossOptimizeLoading] = useState(false);
+  const [crossOptimizeError, setCrossOptimizeError] = useState<string | null>(null);
+  const [crossOptimizeReports, setCrossOptimizeReports] = useState<Array<{ model: string; role: string; output: string; error?: string }> | null>(null);
   const [generatedImage, setGeneratedImage] = useState('');
   const [draftImage, setDraftImage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -376,6 +379,37 @@ function StudioPageInner() {
       return canvas.toDataURL('image/png');
     } catch {
       return '';
+    }
+  };
+
+  const crossOptimizePrompt = async () => {
+    if (!prompt || crossOptimizeLoading) return;
+    setCrossOptimizeLoading(true);
+    setCrossOptimizeError(null);
+    setCrossOptimizeReports(null);
+    try {
+      const res = await fetch('/api/agents/cross-optimize', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          prompt,
+          goals: ['maximize realism', 'clear composition', 'avoid watermarks/text'],
+          includeOpenClaw: true,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.success) {
+        setCrossOptimizeError(String(json?.error || 'cross_optimize_failed'));
+        return;
+      }
+      const optimized = String(json.data.optimizedPrompt || '').trim();
+      if (optimized) setPrompt(optimized);
+      const reports = Array.isArray(json.data.reports) ? json.data.reports : null;
+      setCrossOptimizeReports(reports);
+    } catch (e) {
+      setCrossOptimizeError(e instanceof Error ? e.message : 'cross_optimize_failed');
+    } finally {
+      setCrossOptimizeLoading(false);
     }
   };
 
@@ -1011,6 +1045,34 @@ function StudioPageInner() {
                 value={prompt}
                 onChange={e => setPrompt(e.target.value)}
               />
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={crossOptimizePrompt}
+                  disabled={crossOptimizeLoading || !prompt || isGenerating}
+                  className={`px-4 py-2 rounded-lg font-semibold text-sm border ${crossOptimizeLoading || !prompt || isGenerating ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 border-blue-500/30 text-white'}`}
+                >
+                  {crossOptimizeLoading ? 'Optimizing...' : 'Optimize Prompt (Cross-Agent)'}
+                </button>
+                {crossOptimizeError && (
+                  <div className="text-sm text-yellow-300">
+                    {crossOptimizeError}
+                  </div>
+                )}
+              </div>
+              {crossOptimizeReports && (
+                <div className="rounded-lg border border-gray-700 bg-gray-900 p-3 text-xs text-gray-300 space-y-2">
+                  {crossOptimizeReports.map((r, idx) => (
+                    <div key={`${r.model}-${idx}`} className="border-b border-gray-800 pb-2 last:border-b-0 last:pb-0">
+                      <div className="text-gray-400">
+                        {String(r.role)} • {String(r.model)}{r.error ? ` • error=${String(r.error)}` : ''}
+                      </div>
+                      {!r.error && (
+                        <div className="mt-1 whitespace-pre-wrap">{String(r.output).slice(0, 1200)}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="flex items-center justify-between gap-4">
                 <label className={`flex items-center gap-2 text-sm p-2 rounded-lg border transition-all cursor-pointer ${quantumMode ? 'border-purple-500 bg-purple-500/10 shadow-[0_0_15px_rgba(168,85,247,0.3)]' : 'border-gray-700 hover:border-gray-600'}`}>
                   <input type="checkbox" className="w-4 h-4 accent-purple-500" checked={quantumMode} onChange={e => setQuantumMode(e.target.checked)} />

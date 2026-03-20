@@ -8,6 +8,23 @@ import { addLog, getLogs } from '@/lib/logging';
 type Platform = 'linkedin' | 'instagram' | 'twitter';
 type Provider = 'mock' | 'dalle' | 'stablediffusion' | 'midjourney';
 
+type GeneratedImage = {
+  image_url: string;
+  meta?: Record<string, unknown>;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function asGeneratedImage(value: unknown): GeneratedImage {
+  if (!isRecord(value) || typeof value.image_url !== 'string') {
+    throw new Error('invalid_image_generation_response');
+  }
+  const meta = isRecord(value.meta) ? value.meta : undefined;
+  return { image_url: value.image_url, meta };
+}
+
 let generatedStore: Array<{
   platform: Platform;
   text_content: string;
@@ -60,10 +77,11 @@ export async function POST(req: NextRequest) {
         ? filterPII(String(body.texts?.[p] || ''))
         : String(captions[p] || '');
       // Basic timeout guard for image generation
-      const img = await Promise.race([
+      const raced = await Promise.race([
         generateImageForPlatform(provider, safeTopic, p),
         new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
-      ]) as any;
+      ]);
+      const img = asGeneratedImage(raced);
       const meta = safeMetadata({
         provider,
         platform: p,

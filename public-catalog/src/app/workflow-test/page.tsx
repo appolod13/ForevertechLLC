@@ -9,7 +9,7 @@ export default function WorkflowTestPage() {
   const [logs, setLogs] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
-  const [testData, setTestData] = useState<any>({});
+  const [testData, setTestData] = useState<Record<string, unknown>>({});
 
   const addLog = (msg: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -27,7 +27,7 @@ export default function WorkflowTestPage() {
       addLog('--- PHASE 1: PURCHASE ---');
       addLog('Initiating purchase for Account #ACC-101...');
       
-      const purchaseRes = await fetch('http://localhost:3001/api/accounts/purchase', {
+      const purchaseRes = await fetch('/api/accounts/purchase', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accountId: 'ACC-101', name: 'Premium Account' })
@@ -35,7 +35,7 @@ export default function WorkflowTestPage() {
       
       if (!purchaseRes.ok) throw new Error('Purchase failed');
       const purchaseData = await purchaseRes.json();
-      setTestData((prev: any) => ({ ...prev, order: purchaseData.order }));
+      setTestData((prev) => ({ ...prev, order: purchaseData.order as unknown }));
       addLog(`Purchase Successful! Order ID: ${purchaseData.order.id}`);
       addLog(`Status Verified: ${purchaseData.order.status}`);
       
@@ -51,7 +51,7 @@ export default function WorkflowTestPage() {
       };
       addLog(`Entering shipping details for ${mockShipping.email}...`);
       
-      const shippingRes = await fetch('http://localhost:3001/api/shipping/update', {
+      const shippingRes = await fetch('/api/shipping/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId: purchaseData.order.id, shipping: mockShipping })
@@ -68,7 +68,7 @@ export default function WorkflowTestPage() {
       addLog('--- PHASE 3: CART INTEGRATION ---');
       addLog('Adding purchased account to cart for processing...');
       
-      const cartRes = await fetch('http://localhost:3001/api/cart/add', {
+      const cartRes = await fetch('/api/cart/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ item: { id: purchaseData.order.accountId, name: purchaseData.order.name, price: 49.99 } })
@@ -85,7 +85,7 @@ export default function WorkflowTestPage() {
       addLog('--- PHASE 4: CALL BOT ACTIVATION ---');
       addLog('Triggering AI Voice Agent...');
       
-      const callRes = await fetch('http://localhost:3001/api/support/call', {
+      const callRes = await fetch('/api/support/call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phoneNumber: mockShipping.phone, reason: 'Post-Purchase Verification' })
@@ -99,9 +99,8 @@ export default function WorkflowTestPage() {
       setCurrentStep(5);
       addLog('--- TEST COMPLETE: SUCCESS ---');
 
-    } catch (e: any) {
-      addLog(`[ERROR] ${e.message}`);
-      console.error(e);
+    } catch (e: unknown) {
+      addLog(`[ERROR] ${e instanceof Error ? e.message : 'Unknown error'}`);
     } finally {
       setIsRunning(false);
     }
@@ -172,7 +171,7 @@ export default function WorkflowTestPage() {
           <div className="lg:col-span-2 bg-black rounded-xl border border-gray-800 p-4 font-mono text-sm h-[500px] overflow-y-auto shadow-inner">
             {logs.length === 0 && (
               <div className="text-gray-600 text-center mt-20">
-                Click "Start Live Test" to begin...
+                Click &quot;Start Live Test&quot; to begin...
               </div>
             )}
             {logs.map((log, i) => (
@@ -187,7 +186,7 @@ export default function WorkflowTestPage() {
   );
 }
 
-function StepCard({ step, current, title, icon, desc }: any) {
+function StepCard({ step, current, title, icon, desc }: { step: number; current: number; title: string; icon: React.ReactNode; desc: string }) {
   const status = current > step ? 'completed' : current === step ? 'active' : 'pending';
   
   return (

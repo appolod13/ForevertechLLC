@@ -13,6 +13,14 @@ function generateUUID() {
 
 const API_BASE = process.env.NEXT_PUBLIC_CART_API_BASE || 'http://localhost:3001';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isSuccessResponse(value: unknown): value is { success: boolean } {
+  return isRecord(value) && typeof value.success === 'boolean';
+}
+
 export interface CartItem {
   id: string;
   title: string;
@@ -99,7 +107,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         headers: { 'content-type': 'application/json' },
         body: payload
       });
-      if (typeof res === 'object' && (res as any).success) {
+      if (isSuccessResponse(res) && res.success) {
         fetchCart();
         try { localStorage.setItem('cart_sync', String(Date.now())); } catch {}
       } else {
@@ -119,8 +127,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         headers: { 'content-type': 'application/json' },
         body: payload
       });
-      const data = typeof res === 'object' ? (res as any) : {};
-      if (data.success) {
+      if (isSuccessResponse(res) && res.success) {
         fetchCart();
         try { localStorage.setItem('cart_sync', String(Date.now())); } catch {}
       }
@@ -137,8 +144,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         headers: { 'content-type': 'application/json' },
         body: payload
       });
-      const data = typeof res === 'object' ? (res as any) : {};
-      if (data.success) {
+      if (isSuccessResponse(res) && res.success) {
         setItems([]);
         try { localStorage.setItem('cart_sync', String(Date.now())); } catch {}
       }
@@ -159,8 +165,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           headers: { 'content-type': 'application/json' },
           body: payload
         });
-        const data = typeof res === 'object' ? (res as any) : {};
-        if (!data.success) {
+        if (!(isSuccessResponse(res) && res.success)) {
           console.error('Remove purchased item failed:', itemId);
         }
       }

@@ -18,7 +18,7 @@ export async function GET() {
       nodeEnv: process.env.NODE_ENV || "development",
     },
     checks: {
-      port: 3002,
+      port: 3001,
       dependencies: {
         database: "not-configured",
       },
