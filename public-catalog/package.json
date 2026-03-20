@@ -8,7 +8,8 @@
     "start": "next start -p 3001",
     "lint": "eslint",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "parity:collect": "node scripts/parity/collect.mjs"
   },
   "dependencies": {
     "@twilio/voice-sdk": "^2.18.0",

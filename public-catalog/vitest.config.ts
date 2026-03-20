@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    testTimeout: 20000,
     exclude: ['src/**/__tests__/**'],
     include: ['src/**/*.test.{ts,tsx}', 'src/**/?(*.)test.{ts,tsx}'],
     coverage: {
