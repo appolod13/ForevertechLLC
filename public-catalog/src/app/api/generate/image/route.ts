@@ -4,12 +4,59 @@ import { rateLimitKey, consume } from "@/lib/api/rate-limit";
 import { ok, fail } from "@/lib/api/response";
 import { logInfo, logError } from "@/lib/api/logger";
 import { generateImageForPlatform } from "@/lib/contentFactory/image";
+import { uploadToIpfs } from "@/lib/ipfs/upload";
+import { createHash } from "crypto";
 
 type Platform = "linkedin" | "instagram" | "twitter";
 type Provider = "mock" | "dalle" | "stablediffusion" | "midjourney";
 
 type ImageRequest = { prompt: string; platform: Platform; provider: Provider };
 type ImageRequestV2 = { prompt: string; negative_prompt?: string; width?: number; height?: number; provider?: Provider; quantum_mode?: boolean; ipfs_upload?: boolean };
+
+type AIResult =
+  | { success: true; image_url: string; meta: Record<string, unknown> }
+  | { success: false; error: string };
+
+type Cached = {
+  createdAt: number;
+  lastAccessAt: number;
+  image_url: string;
+  meta: Record<string, unknown>;
+};
+
+const cache = new Map<string, Cached>();
+const CACHE_TTL_MS = 10 * 60_000;
+const CACHE_MAX = 200;
+
+function cacheKeyFor(v: { prompt: string; negative_prompt?: string; width: number; height: number; provider?: Provider; quantum_mode: boolean }): string {
+  const payload = JSON.stringify(v);
+  return createHash("sha256").update(payload).digest("hex");
+}
+
+function getCache(key: string): Cached | null {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.createdAt > CACHE_TTL_MS) {
+    cache.delete(key);
+    return null;
+  }
+  entry.lastAccessAt = Date.now();
+  return entry;
+}
+
+function setCache(key: string, value: Cached) {
+  cache.set(key, value);
+  if (cache.size <= CACHE_MAX) return;
+  let oldestKey: string | null = null;
+  let oldestTs = Infinity;
+  for (const [k, v] of cache.entries()) {
+    if (v.lastAccessAt < oldestTs) {
+      oldestTs = v.lastAccessAt;
+      oldestKey = k;
+    }
+  }
+  if (oldestKey) cache.delete(oldestKey);
+}
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
@@ -73,7 +120,7 @@ async function tryAIGenerate(
   quantum_mode: boolean,
   ipfs_upload: boolean,
   timeoutMs: number,
-) {
+): Promise<AIResult> {
   const base = (process.env.AI_IMAGE_GEN_URL || "http://localhost:5328").trim();
   const url = base.replace(/\/$/, "") + "/v1/images/generations";
   const controller = new AbortController();
@@ -97,7 +144,8 @@ async function tryAIGenerate(
     const d = isRecord(data) ? data : {};
 
     if (!res.ok || d.success !== true) {
-      return { success: false, error: d.error || `HTTP_${res.status}` };
+      const err = typeof d.error === "string" && d.error.trim() ? d.error.trim() : `HTTP_${res.status}`;
+      return { success: false, error: err };
     }
 
     if (typeof d.imageUrl !== "string" || !d.imageUrl.trim()) {
@@ -163,11 +211,23 @@ async function tryFusionGenerate(prompt: string, width: number, height: number, 
   }
 }
 
+async function maybeUploadIpfs(params: { image_url: string; requestId: string }): Promise<Record<string, unknown>> {
+  const internalQuantumBase = (process.env.AI_IMAGE_GEN_URL || "").trim().replace(/\/$/, "");
+  const result = await uploadToIpfs({
+    imageUrl: params.image_url,
+    filename: `generated_${params.requestId}.png`,
+    internalBaseUrl: internalQuantumBase || undefined,
+  });
+  if (result.status === "disabled") return { ipfs_status: "disabled" };
+  if (result.status === "failed") return { ipfs_status: "failed", ipfs_error: result.error };
+  return { ipfs_status: "uploaded", ipfs_url: result.ipfsUrl, ipfs_gateway: result.gatewayUrl, ipfs_cid: result.cid };
+}
+
 export async function POST(req: NextRequest) {
   try {
     const requestId = globalThis.crypto?.randomUUID?.() || String(Date.now());
-    const key = getApiKey(req.headers);
-    if (!validateApiKey(key)) {
+    const apiKeyHeader = getApiKey(req.headers);
+    if (!validateApiKey(apiKeyHeader)) {
       if (!isSameOrigin(req)) return fail("unauthorized", 401);
     }
     const rl = consume(rateLimitKey(req.headers), { windowMs: 60_000, max: 60 });
@@ -196,6 +256,17 @@ export async function POST(req: NextRequest) {
     const quantumTimeoutMs = asPositiveInt(process.env.AI_IMAGE_TIMEOUT_QUANTUM_MS) ?? 120_000;
     const timeoutMs = parsed.quantum_mode ? quantumTimeoutMs : stdTimeoutMs;
 
+    const cacheKey = cacheKeyFor({ prompt: parsed.prompt, negative_prompt: parsed.negative_prompt, width, height, provider: parsed.provider, quantum_mode: Boolean(parsed.quantum_mode) });
+    const cached = getCache(cacheKey);
+    if (cached) {
+      if (parsed.ipfs_upload && typeof cached.meta.ipfs_url !== "string") {
+        const ipfsMeta = await maybeUploadIpfs({ image_url: cached.image_url, requestId });
+        cached.meta = { ...cached.meta, ...ipfsMeta };
+        setCache(cacheKey, cached);
+      }
+      return ok({ image_url: cached.image_url, meta: cached.meta, requestId, cached: true });
+    }
+
     if (parsed.quantum_mode) {
       const aiService = await tryAIGenerate(
         parsed.prompt,
@@ -207,8 +278,14 @@ export async function POST(req: NextRequest) {
       );
       
       if (aiService.success) {
-        logInfo("image.generate.success", { requestId, meta: aiService.meta });
-        return ok({ image_url: aiService.image_url, meta: aiService.meta, requestId });
+        const meta = { ...(aiService.meta || {}) };
+        if (parsed.ipfs_upload) {
+          const ipfsMeta = await maybeUploadIpfs({ image_url: aiService.image_url, requestId });
+          Object.assign(meta, ipfsMeta);
+        }
+        logInfo("image.generate.success", { requestId, meta });
+        setCache(cacheKey, { createdAt: Date.now(), lastAccessAt: Date.now(), image_url: aiService.image_url, meta });
+        return ok({ image_url: aiService.image_url, meta, requestId });
       }
 
       logError("image.generate.quantum_failed", { requestId, error: aiService.error });
@@ -221,22 +298,36 @@ export async function POST(req: NextRequest) {
         timeoutMs,
       );
       if (degraded.success) {
+        const meta = { ...(degraded.meta || {}), degraded_from_quantum: true, degraded_reason: aiService.error || "unknown" };
+        if (parsed.ipfs_upload) {
+          const ipfsMeta = await maybeUploadIpfs({ image_url: degraded.image_url, requestId });
+          Object.assign(meta, ipfsMeta);
+        }
+        setCache(cacheKey, { createdAt: Date.now(), lastAccessAt: Date.now(), image_url: degraded.image_url, meta });
         return ok({
           image_url: degraded.image_url,
-          meta: { ...(degraded.meta || {}), degraded_from_quantum: true, degraded_reason: aiService.error || "unknown" },
+          meta,
           requestId,
         });
       }
 
       const result = await generateImageForPlatform("mock", parsed.prompt, "twitter");
-      return ok({ image_url: result.image_url, meta: { ...result.meta, fallback: true, degraded_from_quantum: true }, requestId });
+      const meta = { ...result.meta, fallback: true, degraded_from_quantum: true };
+      setCache(cacheKey, { createdAt: Date.now(), lastAccessAt: Date.now(), image_url: result.image_url, meta });
+      return ok({ image_url: result.image_url, meta, requestId });
     }
 
     // Try Fusion first if quantum_mode is false
     const fusion = await tryFusionGenerate(parsed.prompt, width, height, parsed.negative_prompt);
     if (fusion) {
-      logInfo("image.generate.success", { requestId, meta: fusion.meta });
-      return ok({ image_url: fusion.image_url, meta: fusion.meta, requestId });
+      const meta = { ...(fusion.meta || {}) };
+      if (parsed.ipfs_upload) {
+        const ipfsMeta = await maybeUploadIpfs({ image_url: fusion.image_url, requestId });
+        Object.assign(meta, ipfsMeta);
+      }
+      logInfo("image.generate.success", { requestId, meta });
+      setCache(cacheKey, { createdAt: Date.now(), lastAccessAt: Date.now(), image_url: fusion.image_url, meta });
+      return ok({ image_url: fusion.image_url, meta, requestId });
     }
 
     // Fallback to Mock/Quantum (Rule 30) if Fusion fails
@@ -250,11 +341,19 @@ export async function POST(req: NextRequest) {
     );
     
     if (aiService.success) {
-      logInfo("image.generate.success", { requestId, meta: aiService.meta });
-      return ok({ image_url: aiService.image_url, meta: aiService.meta, requestId });
+      const meta = { ...(aiService.meta || {}) };
+      if (parsed.ipfs_upload) {
+        const ipfsMeta = await maybeUploadIpfs({ image_url: aiService.image_url, requestId });
+        Object.assign(meta, ipfsMeta);
+      }
+      logInfo("image.generate.success", { requestId, meta });
+      setCache(cacheKey, { createdAt: Date.now(), lastAccessAt: Date.now(), image_url: aiService.image_url, meta });
+      return ok({ image_url: aiService.image_url, meta, requestId });
     }
     const result = await generateImageForPlatform("mock", parsed.prompt, "twitter");
-    return ok({ image_url: result.image_url, meta: { ...result.meta, fallback: true }, requestId });
+    const meta = { ...result.meta, fallback: true };
+    setCache(cacheKey, { createdAt: Date.now(), lastAccessAt: Date.now(), image_url: result.image_url, meta });
+    return ok({ image_url: result.image_url, meta, requestId });
   } catch (e) {
     logError("image.generate.error", e);
     return fail("internal_error", 500);

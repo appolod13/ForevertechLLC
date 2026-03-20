@@ -1,7 +1,7 @@
 
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Header } from '../../components/Header';
 import { DataDashboardButton } from '../../components/DataDashboardButton';
@@ -74,6 +74,10 @@ function StudioPageInner() {
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [rangeMode, setRangeMode] = useState<boolean>(false);
   const [lastGenTimestamp, setLastGenTimestamp] = useState<number>(Date.now());
+  const [chatUser, setChatUser] = useState<string>('Guest');
+  const [chatInput, setChatInput] = useState<string>('');
+  const [chatConnected, setChatConnected] = useState<boolean>(false);
+  const [chatMessages, setChatMessages] = useState<Array<{ id: string; time: string; user: string; text: string; assetUrl?: string }>>([]);
 
   const [pipelineStage, setPipelineStage] = useState<string>('');
   const [progress, setProgress] = useState<number>(0);
@@ -92,6 +96,72 @@ function StudioPageInner() {
   useEffect(() => {
     setHydrated(true);
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    let es: EventSource | null = null;
+
+    const bootstrap = async () => {
+      try {
+        const res = await fetch('/api/chat/history', { cache: 'no-store' });
+        const json = await res.json();
+        if (isMounted && json?.success && Array.isArray(json.data?.messages)) {
+          setChatMessages(json.data.messages);
+        }
+      } catch {
+      }
+
+      try {
+        es = new EventSource('/api/chat/stream');
+        es.addEventListener('open', () => {
+          if (isMounted) setChatConnected(true);
+        });
+        es.addEventListener('error', () => {
+          if (isMounted) setChatConnected(false);
+        });
+        es.addEventListener('history', (evt) => {
+          try {
+            const parsed = JSON.parse((evt as MessageEvent).data);
+            if (isMounted && parsed && Array.isArray(parsed.messages)) setChatMessages(parsed.messages);
+          } catch {
+          }
+        });
+        es.addEventListener('message', (evt) => {
+          try {
+            const msg = JSON.parse((evt as MessageEvent).data);
+            if (!isMounted || !msg) return;
+            setChatMessages((prev) => [...prev, msg].slice(-200));
+          } catch {
+          }
+        });
+      } catch {
+        if (isMounted) setChatConnected(false);
+      }
+    };
+
+    bootstrap();
+
+    return () => {
+      isMounted = false;
+      if (es) es.close();
+    };
+  }, []);
+
+  const sendChat = async (assetUrl?: string) => {
+    const text = chatInput.trim();
+    if (!text && !assetUrl) return;
+    setChatInput('');
+    try {
+      await fetch('/api/chat/message', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ user: chatUser || 'Guest', text, assetUrl }),
+      });
+    } catch {
+    }
+  };
+
+  const chatPreview = useMemo(() => chatMessages.slice(-50), [chatMessages]);
 
   useEffect(() => {
     try {
@@ -1195,6 +1265,65 @@ function StudioPageInner() {
                 value={postContent}
                 onChange={e => setPostContent(e.target.value)}
               />
+              <div className="rounded-xl border border-gray-700 bg-gray-900 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-semibold text-white">Live Chat</div>
+                  <div className={`text-xs ${chatConnected ? 'text-green-300' : 'text-yellow-300'}`}>
+                    {chatConnected ? 'Connected' : 'Reconnecting'}
+                  </div>
+                </div>
+                <div className="mt-3 max-h-48 overflow-y-auto space-y-2">
+                  {chatPreview.length === 0 && (
+                    <div className="text-xs text-gray-500">No messages yet</div>
+                  )}
+                  {chatPreview.map((m) => (
+                    <div key={m.id} className="text-xs text-gray-200 border-b border-gray-800 pb-2 last:border-b-0 last:pb-0">
+                      <div className="text-gray-400">{new Date(m.time).toLocaleTimeString()} • {m.user}</div>
+                      {m.text && <div className="whitespace-pre-wrap">{m.text}</div>}
+                      {m.assetUrl && (
+                        <a className="text-blue-400 hover:text-blue-300 break-all" href={m.assetUrl} target="_blank" rel="noreferrer">
+                          {m.assetUrl}
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <input
+                    value={chatUser}
+                    onChange={(e) => setChatUser(e.target.value)}
+                    className="w-28 bg-gray-950 border border-gray-700 rounded-lg px-2 py-2 text-xs text-gray-200"
+                    placeholder="Name"
+                  />
+                  <input
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        sendChat();
+                      }
+                    }}
+                    className="flex-1 bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200"
+                    placeholder="Discuss the generated asset..."
+                  />
+                  <button
+                    onClick={() => sendChat()}
+                    className="px-3 py-2 rounded-lg text-xs font-semibold border border-blue-500/30 bg-blue-600 hover:bg-blue-500 text-white"
+                  >
+                    Send
+                  </button>
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    disabled={!generatedImage}
+                    onClick={() => sendChat(generatedImage)}
+                    className={`px-3 py-2 rounded-lg text-xs font-semibold border ${generatedImage ? 'border-purple-500/30 bg-purple-600 hover:bg-purple-500 text-white' : 'border-gray-800 bg-gray-800 text-gray-500 cursor-not-allowed'}`}
+                  >
+                    Import Generated Asset
+                  </button>
+                </div>
+              </div>
               <div className="flex items-center gap-3">
                 <input 
                   type="datetime-local" 

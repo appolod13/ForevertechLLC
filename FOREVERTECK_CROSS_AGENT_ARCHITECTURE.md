@@ -18,6 +18,17 @@ Multi-agent repositories tagged under `cross-agent` and broader multi-agent topi
   - Optionally calls OpenClaw Gateway (OpenResponses HTTP API) as an additional critic
   - Aggregates outputs into `optimizedPrompt` and returns `reports[]` (including per-provider errors)
 
+**Asset Pipeline**
+- `POST /api/generate/image`
+  - Supports `quantum_mode` (Wolfram/Qiskit-backed service)
+  - Supports `ipfs_upload` via IPFS HTTP API when configured
+  - Includes an in-process cache (TTL) keyed by prompt+params to speed up repeated requests
+
+**Live Chat**
+- `GET /api/chat/stream` (SSE)
+  - Broadcasts `message` events for real-time discussion and asset importing
+  - Stores a bounded message history in process memory
+
 **OpenClaw Integration**
 - `./scripts/openclaw-run.sh` runs the OpenClaw gateway locally and enables OpenResponses:
   - `POST http://127.0.0.1:18789/v1/responses`
@@ -34,4 +45,3 @@ Local development runs exclusively on:
 - Unit/integration tests validate:
   - cross-optimize route behavior with mocked providers
   - existing Studio behavior via vitest/react-testing-library
-
