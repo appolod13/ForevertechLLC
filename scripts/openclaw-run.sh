@@ -56,7 +56,8 @@ fi
 
 # Create directories
 mkdir -p "${LOCAL_BASE_DIR}" "${LOCAL_STATE_DIR}" "${LOCAL_WORKSPACE_DIR}"
-if [[ ! -s "${LOCAL_CONFIG_PATH}" ]]; then
+config_compact="$(tr -d ' \n\r\t' < "${LOCAL_CONFIG_PATH}" 2>/dev/null || true)"
+if [[ ! -s "${LOCAL_CONFIG_PATH}" || "${config_compact}" == "{}" ]]; then
   # Minimal JSON5 config for frictionless local startup
   cat >"${LOCAL_CONFIG_PATH}" <<'JSON5'
 {
