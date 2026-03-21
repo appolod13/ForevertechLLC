@@ -3,7 +3,7 @@ import { Providers } from "@/components/Providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ForeverTech Public Catalog",
+  title: "ForeverTeck Public Catalog",
   description: "Decentralized content catalog and marketplace.",
   icons: {
     icon: "/favicon.ico",

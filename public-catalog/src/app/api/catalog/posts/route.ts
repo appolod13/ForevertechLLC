@@ -7,8 +7,8 @@ export async function GET() {
     posts: [
       {
         id: '1',
-        content: 'Welcome to ForeverTech! The future of decentralized technology is here.',
-        author: 'ForeverTech Admin',
+        content: 'Welcome to ForeverTeck! The future of decentralized technology is here.',
+        author: 'ForeverTeck Admin',
         timestamp: new Date().toISOString(),
       },
       {
@@ -19,7 +19,7 @@ export async function GET() {
       },
       {
         id: '3',
-        content: 'ForeverTech nodes are now live in 12 countries. Join the network today!',
+        content: 'ForeverTeck nodes are now live in 12 countries. Join the network today!',
         author: 'Network Ops',
         timestamp: new Date().toISOString(),
       },

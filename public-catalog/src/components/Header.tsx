@@ -21,7 +21,7 @@ export function Header() {
             <div className="relative h-12 w-12 overflow-hidden rounded-full border-2 border-white shadow-lg shadow-primary/20">
               <Image 
                 src="/images/Forevertech_logo.jpg" 
-                alt="ForeverTech Logo" 
+                alt="ForeverTeck Logo" 
                 fill
                 className="object-cover"
                 sizes="48px"
@@ -29,7 +29,7 @@ export function Header() {
               />
             </div>
             <span className="hidden text-xl font-bold text-white sm:inline-block">
-              ForeverTech <span className="text-zinc-500 font-normal">Catalog</span>
+              ForeverTeck <span className="text-zinc-500 font-normal">Catalog</span>
             </span>
           </Link>
           <div className="ml-2 hidden md:block">

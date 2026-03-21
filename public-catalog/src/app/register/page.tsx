@@ -29,7 +29,7 @@ export default function RegisterPage() {
     <div className="container mx-auto flex h-[calc(100vh-64px)] items-center justify-center px-4">
       <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950/50 p-8 shadow-2xl backdrop-blur-sm">
         <h1 className="mb-2 text-2xl font-bold text-white">Create an account</h1>
-        <p className="mb-8 text-zinc-400">Join ForeverTech today</p>
+        <p className="mb-8 text-zinc-400">Join ForeverTeck today</p>
 
         {error && (
           <div className="mb-6 rounded-lg bg-red-500/10 p-3 text-sm text-red-400 border border-red-500/20">

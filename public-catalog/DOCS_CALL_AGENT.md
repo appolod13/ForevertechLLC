@@ -2,7 +2,7 @@
 # Call Agent System Documentation
 
 ## Overview
-The Call Agent System allows support agents and authorized users to make and receive voice calls directly from the browser using the ForeverTech dashboard. It integrates with Twilio for telephony and includes a fallback "Mock Mode" for testing without active credentials.
+The Call Agent System allows support agents and authorized users to make and receive voice calls directly from the browser using the ForeverTeck dashboard. It integrates with Twilio for telephony and includes a fallback "Mock Mode" for testing without active credentials.
 
 ## Architecture
 

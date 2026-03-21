@@ -1,4 +1,5 @@
 .env
+.venv/
 certs/acme.json
 logs/*.log
 monitoring/prometheus/data/

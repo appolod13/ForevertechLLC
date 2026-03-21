@@ -40,7 +40,7 @@ export default async function Home() {
             <div className="relative col-span-1 md:col-span-2 aspect-video w-full overflow-hidden rounded-2xl border border-zinc-800 shadow-2xl shadow-primary/10 group">
               <Image
                 src="/placeholder-future-city.svg"
-                alt="ForeverTech Future City"
+                alt="ForeverTeck Future City"
                 fill
                 priority
                 className="object-cover transition-transform duration-700 group-hover:scale-105"

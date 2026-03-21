@@ -1,4 +1,4 @@
-# ForeverTech Public Catalog
+# ForeverTeck Public Catalog
 
 ## 1. Architecture Decisions
 
