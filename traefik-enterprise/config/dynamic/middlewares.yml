@@ -1,0 +1,26 @@
+http:
+  middlewares:
+    secure-headers:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        stsSeconds: 15552000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        customResponseHeaders:
+          x-content-type-options: "nosniff"
+          x-frame-options: "DENY"
+          x-xss-protection: "1; mode=block"
+
+    rate-limit:
+      rateLimit:
+        average: 100
+        burst: 50
+
+    retry-mechanism:
+      retry:
+        attempts: 3
+        initialInterval: 100ms
+

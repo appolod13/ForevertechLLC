@@ -1,9 +1,0 @@
-{
-  // Local, non-networked gateway
-  gateway: {
-    mode: "local",
-    http: { endpoints: { responses: { enabled: true } } },
-  },
-  // Point agent workspace to project-local directory
-  agents: { defaults: { workspace: "./.openclaw/workspace" } }
-}
