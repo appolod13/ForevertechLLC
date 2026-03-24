@@ -6,6 +6,7 @@ import { logInfo, logError } from "@/lib/api/logger";
 import { generateImageForPlatform } from "@/lib/contentFactory/image";
 import { uploadToIpfs } from "@/lib/ipfs/upload";
 import { createHash } from "crypto";
+import { setLatestImage } from "@/lib/runtimeState/latestImage";
 
 type Platform = "linkedin" | "instagram" | "twitter";
 type Provider = "mock" | "dalle" | "stablediffusion" | "midjourney";
@@ -242,6 +243,7 @@ export async function POST(req: NextRequest) {
       logInfo("image.generate.request", { requestId, prompt: parsed.prompt, platform: parsed.platform, provider: parsed.provider });
       const result = await generateImageForPlatform(parsed.provider, parsed.prompt, parsed.platform);
       logInfo("image.generate.success", { requestId, meta: result.meta });
+      setLatestImage({ imageUrl: result.image_url, meta: result.meta });
       return ok({ image_url: result.image_url, meta: result.meta, requestId });
     }
 
@@ -264,6 +266,7 @@ export async function POST(req: NextRequest) {
         cached.meta = { ...cached.meta, ...ipfsMeta };
         setCache(cacheKey, cached);
       }
+      setLatestImage({ imageUrl: cached.image_url, meta: cached.meta });
       return ok({ image_url: cached.image_url, meta: cached.meta, requestId, cached: true });
     }
 
@@ -285,6 +288,7 @@ export async function POST(req: NextRequest) {
         }
         logInfo("image.generate.success", { requestId, meta });
         setCache(cacheKey, { createdAt: Date.now(), lastAccessAt: Date.now(), image_url: aiService.image_url, meta });
+        setLatestImage({ imageUrl: aiService.image_url, meta });
         return ok({ image_url: aiService.image_url, meta, requestId });
       }
 
@@ -304,6 +308,7 @@ export async function POST(req: NextRequest) {
           Object.assign(meta, ipfsMeta);
         }
         setCache(cacheKey, { createdAt: Date.now(), lastAccessAt: Date.now(), image_url: degraded.image_url, meta });
+        setLatestImage({ imageUrl: degraded.image_url, meta });
         return ok({
           image_url: degraded.image_url,
           meta,
@@ -314,6 +319,7 @@ export async function POST(req: NextRequest) {
       const result = await generateImageForPlatform("mock", parsed.prompt, "twitter");
       const meta = { ...result.meta, fallback: true, degraded_from_quantum: true };
       setCache(cacheKey, { createdAt: Date.now(), lastAccessAt: Date.now(), image_url: result.image_url, meta });
+      setLatestImage({ imageUrl: result.image_url, meta });
       return ok({ image_url: result.image_url, meta, requestId });
     }
 
@@ -327,6 +333,7 @@ export async function POST(req: NextRequest) {
       }
       logInfo("image.generate.success", { requestId, meta });
       setCache(cacheKey, { createdAt: Date.now(), lastAccessAt: Date.now(), image_url: fusion.image_url, meta });
+      setLatestImage({ imageUrl: fusion.image_url, meta });
       return ok({ image_url: fusion.image_url, meta, requestId });
     }
 
@@ -348,11 +355,13 @@ export async function POST(req: NextRequest) {
       }
       logInfo("image.generate.success", { requestId, meta });
       setCache(cacheKey, { createdAt: Date.now(), lastAccessAt: Date.now(), image_url: aiService.image_url, meta });
+      setLatestImage({ imageUrl: aiService.image_url, meta });
       return ok({ image_url: aiService.image_url, meta, requestId });
     }
     const result = await generateImageForPlatform("mock", parsed.prompt, "twitter");
     const meta = { ...result.meta, fallback: true };
     setCache(cacheKey, { createdAt: Date.now(), lastAccessAt: Date.now(), image_url: result.image_url, meta });
+    setLatestImage({ imageUrl: result.image_url, meta });
     return ok({ image_url: result.image_url, meta, requestId });
   } catch (e) {
     logError("image.generate.error", e);

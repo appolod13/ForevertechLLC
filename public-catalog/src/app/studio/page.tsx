@@ -171,7 +171,13 @@ function StudioPageInner() {
       if (!parsed || typeof parsed !== 'object') return;
       const rec = parsed as { imageUrl?: unknown; meta?: unknown; prompt?: unknown; quantumMode?: unknown };
       if (typeof rec.imageUrl === 'string' && rec.imageUrl.trim()) {
-        setGeneratedImage(rec.imageUrl);
+        const u = rec.imageUrl.trim();
+        const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+        if (isLocal && u.startsWith('http') && u.includes('/images/') && u.includes('quantum.')) {
+          setGeneratedImage(u.replace(/^https?:\/\/[^/]+/, 'http://localhost:5328'));
+        } else {
+          setGeneratedImage(u);
+        }
       }
       if (typeof rec.prompt === 'string') {
         setPrompt(rec.prompt);
