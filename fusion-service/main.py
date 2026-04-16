@@ -3,13 +3,15 @@ import uuid
 import time
 import asyncio
 import torch
-from typing import List
+from typing import List, Optional, Literal
+from io import BytesIO
 from fastapi import FastAPI, UploadFile, File, WebSocket, WebSocketDisconnect, BackgroundTasks, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ValidationError
 import json
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from fastapi.responses import Response
+from fastapi.staticfiles import StaticFiles
 from processors.image_processor import ImageProcessor
 from trainer.fusion_trainer import FusionTrainer
 
@@ -18,6 +20,8 @@ app = FastAPI(title="Fusion AI Microservice")
 # Initialize components
 processor = ImageProcessor()
 trainer = FusionTrainer()
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # CORS for external UI integration
 app.add_middleware(
@@ -40,6 +44,14 @@ class FusionRequest(BaseModel):
     strength: float = 0.75
     steps: int = 50
     seed: int = -1
+
+
+class BrainRequest(BaseModel):
+    prompt: Optional[str] = None
+    steps: int = 8
+    seed: int = -1
+    mode: Literal["procedural", "diffusion", "auto"] = "procedural"
+    randomize: bool = True
 
 @app.get("/health")
 async def health():
@@ -89,6 +101,55 @@ async def fuse(
     background_tasks.add_task(run_fusion_pipeline, job_id, fusion_request, file_paths)
     
     return {"jobId": job_id}
+
+
+@app.post("/brain")
+async def brain_generate(payload: BrainRequest):
+    REQUESTS.labels(endpoint="/brain").inc()
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {"status": "brain_start", "progress": 0, "result": None, "error": None}
+    start_time = time.time()
+    try:
+        jobs[job_id]["status"] = "brain_generate"
+        jobs[job_id]["progress"] = 0.3
+        design, meta = trainer.brain_generate(
+            prompt=payload.prompt,
+            seed=payload.seed,
+            steps=payload.steps,
+            mode=payload.mode,
+            randomize=payload.randomize,
+        )
+
+        jobs[job_id]["status"] = "brain_mockup"
+        jobs[job_id]["progress"] = 0.7
+        mockup = processor.create_tshirt_mockup(design)
+
+        filename = f"brain_{job_id}.png"
+        path = os.path.join("uploads", filename)
+        mockup.save(path)
+
+        jobs[job_id]["status"] = "done"
+        jobs[job_id]["progress"] = 1.0
+        jobs[job_id]["result"] = f"/uploads/{filename}"
+        jobs[job_id]["meta"] = meta
+
+        latency = time.time() - start_time
+        LATENCY.labels(device=trainer.device).observe(latency)
+
+        buf = BytesIO()
+        mockup.save(buf, format="PNG")
+        body = buf.getvalue()
+        headers = {
+            "X-Job-Id": job_id,
+            "X-Image-Url": jobs[job_id]["result"],
+            "X-Emotion": str(meta.get("emotion", "")),
+            "X-Seed": str(meta.get("seed", "")),
+        }
+        return Response(content=body, media_type="image/png", headers=headers)
+    except Exception as e:
+        jobs[job_id]["status"] = "error"
+        jobs[job_id]["error"] = str(e)
+        raise
 
 @app.websocket("/progress/{job_id}")
 async def progress_websocket(websocket: WebSocket, job_id: str):

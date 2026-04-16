@@ -42,3 +42,18 @@ async def test_training_loop_step():
     lr = trainer.get_wolfram_lr(0, 300)
     assert lr > 0
     assert lr <= 1e-4
+
+def test_brain_generator_deterministic():
+    trainer = FusionTrainer()
+    img1, meta1 = trainer.brain_generate(prompt="test idea", seed=123, mode="procedural", randomize=False, size=256)
+    img2, meta2 = trainer.brain_generate(prompt="test idea", seed=123, mode="procedural", randomize=False, size=256)
+    assert meta1["seed"] == meta2["seed"] == 123
+    assert meta1["emotion"] == meta2["emotion"]
+    assert img1.size == img2.size == (256, 256)
+    assert img1.tobytes() == img2.tobytes()
+
+def test_tshirt_mockup_shape():
+    processor = ImageProcessor(upload_dir="tests/tmp_uploads")
+    design = Image.fromarray(np.uint8(np.random.rand(256, 256, 3) * 255))
+    mockup = processor.create_tshirt_mockup(design, canvas_size=512)
+    assert mockup.size == (512, 512)
