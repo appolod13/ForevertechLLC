@@ -12,6 +12,7 @@ import json
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
+from PIL import Image
 from processors.image_processor import ImageProcessor
 from trainer.fusion_trainer import FusionTrainer
 
@@ -52,6 +53,21 @@ class BrainRequest(BaseModel):
     seed: int = -1
     mode: Literal["procedural", "diffusion", "auto"] = "procedural"
     randomize: bool = True
+    realism: Literal["none", "photo"] = "none"
+
+
+class StyleFitRequest(BaseModel):
+    dataset_path: str
+    style_name: str = "default"
+    limit: int = 200
+    resize: int = 128
+
+
+class ShapeFitRequest(BaseModel):
+    dataset_path: str
+    style_name: str = "default"
+    limit: int = 200
+    resize: int = 256
 
 @app.get("/health")
 async def health():
@@ -118,6 +134,7 @@ async def brain_generate(payload: BrainRequest):
             steps=payload.steps,
             mode=payload.mode,
             randomize=payload.randomize,
+            realism=payload.realism,
         )
 
         jobs[job_id]["status"] = "brain_mockup"
@@ -150,6 +167,122 @@ async def brain_generate(payload: BrainRequest):
         jobs[job_id]["status"] = "error"
         jobs[job_id]["error"] = str(e)
         raise
+
+
+@app.post("/brain/img2img")
+async def brain_img2img(
+    prompt: str = Form(...),
+    negative_prompt: str = Form(""),
+    file: UploadFile = File(...),
+    seed: int = Form(-1),
+    steps: int = Form(12),
+    strength: float = Form(0.55),
+    guidance_scale: float = Form(7.0),
+    size: int = Form(512),
+    realism: Literal["none", "photo"] = Form("photo"),
+):
+    REQUESTS.labels(endpoint="/brain/img2img").inc()
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {"status": "img2img_start", "progress": 0, "result": None, "error": None}
+    start_time = time.time()
+    try:
+        jobs[job_id]["status"] = "img2img_decode"
+        jobs[job_id]["progress"] = 0.15
+
+        raw = await file.read()
+        try:
+            init_image = Image.open(BytesIO(raw)).convert("RGB")
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid image upload")
+
+        jobs[job_id]["status"] = "img2img_generate"
+        jobs[job_id]["progress"] = 0.55
+        design, meta = trainer.brain_img2img(
+            init_image=init_image,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            seed=seed,
+            steps=steps,
+            strength=strength,
+            guidance_scale=guidance_scale,
+            size=size,
+            realism=realism,
+        )
+
+        jobs[job_id]["status"] = "img2img_mockup"
+        jobs[job_id]["progress"] = 0.85
+        mockup = processor.create_tshirt_mockup(design)
+
+        filename = f"img2img_{job_id}.png"
+        path = os.path.join("uploads", filename)
+        mockup.save(path)
+
+        jobs[job_id]["status"] = "done"
+        jobs[job_id]["progress"] = 1.0
+        jobs[job_id]["result"] = f"/uploads/{filename}"
+        jobs[job_id]["meta"] = meta
+
+        latency = time.time() - start_time
+        LATENCY.labels(device=trainer.device).observe(latency)
+
+        buf = BytesIO()
+        mockup.save(buf, format="PNG")
+        body = buf.getvalue()
+        headers = {
+            "X-Job-Id": job_id,
+            "X-Image-Url": jobs[job_id]["result"],
+            "X-Seed": str(meta.get("seed", "")),
+            "X-Mode": str(meta.get("mode", "")),
+        }
+        return Response(content=body, media_type="image/png", headers=headers)
+    except Exception as e:
+        jobs[job_id]["status"] = "error"
+        jobs[job_id]["error"] = str(e)
+        raise
+
+
+@app.get("/brain/style")
+async def brain_style_status():
+    REQUESTS.labels(endpoint="/brain/style").inc()
+    mem = trainer.style_memory
+    if mem is None:
+        return {"loaded": False, "styleMemoryPath": trainer.style_memory_path}
+    return {"loaded": True, "styleMemoryPath": trainer.style_memory_path, **mem.__dict__}
+
+
+@app.post("/brain/style/fit")
+async def brain_style_fit(payload: StyleFitRequest):
+    REQUESTS.labels(endpoint="/brain/style/fit").inc()
+    result = trainer.fit_style_memory(
+        dataset_path=payload.dataset_path,
+        style_name=payload.style_name,
+        limit=payload.limit,
+        resize=payload.resize,
+        save_path=trainer.style_memory_path,
+    )
+    return {"ok": True, **result}
+
+
+@app.get("/brain/shape")
+async def brain_shape_status():
+    REQUESTS.labels(endpoint="/brain/shape").inc()
+    mem = trainer.shape_memory
+    if mem is None:
+        return {"loaded": False, "shapeMemoryPath": trainer.shape_memory_path}
+    return {"loaded": True, "shapeMemoryPath": trainer.shape_memory_path, **mem.__dict__}
+
+
+@app.post("/brain/shape/fit")
+async def brain_shape_fit(payload: ShapeFitRequest):
+    REQUESTS.labels(endpoint="/brain/shape/fit").inc()
+    result = trainer.fit_shape_memory(
+        dataset_path=payload.dataset_path,
+        style_name=payload.style_name,
+        limit=payload.limit,
+        resize=payload.resize,
+        save_path=trainer.shape_memory_path,
+    )
+    return {"ok": True, **result}
 
 @app.websocket("/progress/{job_id}")
 async def progress_websocket(websocket: WebSocket, job_id: str):

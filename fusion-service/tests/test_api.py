@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from main import app
 import json
 from io import BytesIO
+from PIL import Image
 
 client = TestClient(app)
 
@@ -60,3 +61,25 @@ def test_health_endpoint():
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+def test_brain_img2img_invalid_image_rejected():
+    response = client.post(
+        "/brain/img2img",
+        data={"prompt": "utopian city", "seed": "-1"},
+        files={"file": ("bad.png", BytesIO(b"not an image"), "image/png")},
+    )
+    assert response.status_code == 400
+
+def test_brain_img2img_returns_png():
+    img = Image.new("RGB", (64, 64), (220, 235, 255))
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+
+    response = client.post(
+        "/brain/img2img",
+        data={"prompt": "utopian clean futuristic city", "seed": "123", "steps": "6", "strength": "0.55", "size": "256", "realism": "photo"},
+        files={"file": ("init.png", buf, "image/png")},
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/png")

@@ -1,0 +1,10 @@
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+__pycache__/
+
+fusion-service/uploads/
+fusion-service/tests/tmp_*/
+fusion-service/**/__pycache__/
+
