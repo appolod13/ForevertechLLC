@@ -1,43 +1,103 @@
 import os
-import uuid
 import time
+import uuid
 import asyncio
-import torch
-from typing import List, Optional, Literal
+from typing import Optional, List, Literal, Dict, Any
 from io import BytesIO
-from fastapi import FastAPI, UploadFile, File, WebSocket, WebSocketDisconnect, BackgroundTasks, HTTPException, Form
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ValidationError
-import json
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
-from fastapi.responses import Response
+from starlette.responses import Response, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+import json
 from PIL import Image
-from processors.image_processor import ImageProcessor
-from trainer.fusion_trainer import FusionTrainer
 
-app = FastAPI(title="Fusion AI Microservice")
+# --- Mocked AI Generation for compatibility with Python 3.14 ---
+# Removed torch, diffusers, etc. to allow the service to run locally.
 
-# Initialize components
-processor = ImageProcessor()
-trainer = FusionTrainer()
-os.makedirs("uploads", exist_ok=True)
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+app = FastAPI(title="Fusion Service (Mocked)")
 
-# CORS for external UI integration
+import random
+import glob
+
+class MockTrainer:
+    device = "mock_cpu"
+    style_memory = None
+    style_memory_path = "mock_path"
+    shape_memory = None
+    shape_memory_path = "mock_path"
+
+    async def train(self, tensors, prompt, job_callback=None):
+        if job_callback:
+            await job_callback("training", 0.5)
+        return "mock_pipe"
+
+    def generate(self, pipe, prompt, strength, steps, seed):
+        return Image.new("RGB", (512, 512), (160, 180, 220))
+
+    def brain_roulette(self, dataset_path, steps, size):
+        images = []
+        if os.path.exists(dataset_path):
+            for ext in ('*.png', '*.jpg', '*.jpeg', '*.webp'):
+                images.extend(glob.glob(os.path.join(dataset_path, ext)))
+        
+        if images:
+            base_img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+            for i, img_path in enumerate(images):
+                try:
+                    with Image.open(img_path) as im:
+                        img = im.convert("RGBA").resize((size, size))
+                        alpha = 1.0 / (i + 1)
+                        base_img = Image.blend(base_img, img, alpha)
+                except Exception:
+                    pass
+            # Create a randomized overlay or tint to make each generation unique
+            r, g, b = random.randint(0, 50), random.randint(0, 50), random.randint(0, 50)
+            tint = Image.new("RGBA", (size, size), (r, g, b, 50))
+            base_img = Image.alpha_composite(base_img, tint)
+            final_img = base_img.convert("RGB")
+        else:
+            final_img = Image.new("RGB", (size, size), (255, 100, 100))
+            
+        return final_img, {"mode": "roulette", "dataset": dataset_path, "blended_count": len(images)}
+
+class MockProcessor:
+    async def process_uploads(self, file_paths):
+        return []
+
+    def compute_clip_similarity(self, image, prompt):
+        return 0.85
+        
+    def to_outline_rgba(self, image, line_color, thickness):
+        return image.convert("RGBA")
+        
+    def to_outline_color_rgba(self, image, thickness):
+        return image.convert("RGBA")
+        
+    def create_tshirt_mockup(self, design, outline_only=False):
+        # Return the design directly as the mockup for simplicity in the mock
+        return design
+
+processor = MockProcessor()
+trainer = MockTrainer()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Metrics
-LATENCY = Histogram("fusion_latency_seconds", "End-to-end latency", ["device"])
+REQUESTS = Counter('fusion_requests_total', 'Total requests to Fusion API', ['endpoint'])
+LATENCY = Histogram('fusion_request_latency_seconds', 'Latency of Fusion requests', ['device'])
 CLIP_SCORE = Histogram("fusion_clip_score", "CLIP similarity scores")
-REQUESTS = Counter("fusion_requests_total", "Total requests", ["endpoint"])
 
-# Job management
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+app.mount("/ui", StaticFiles(directory="web", html=True), name="ui")
+
 jobs = {}
 
 class FusionRequest(BaseModel):
@@ -45,7 +105,6 @@ class FusionRequest(BaseModel):
     strength: float = 0.75
     steps: int = 50
     seed: int = -1
-
 
 class BrainRequest(BaseModel):
     prompt: Optional[str] = None
@@ -55,13 +114,11 @@ class BrainRequest(BaseModel):
     randomize: bool = True
     realism: Literal["none", "photo"] = "none"
 
-
 class StyleFitRequest(BaseModel):
     dataset_path: str
     style_name: str = "default"
     limit: int = 200
     resize: int = 128
-
 
 class ShapeFitRequest(BaseModel):
     dataset_path: str
@@ -69,9 +126,43 @@ class ShapeFitRequest(BaseModel):
     limit: int = 200
     resize: int = 256
 
+class GenerateRequest(BaseModel):
+    prompt: str
+    negative_prompt: Optional[str] = ""
+    width: int = 512
+    height: int = 512
+    steps: int = 30
+    seed: int = -1
+    guidance_scale: float = 7.5
+
+@app.post("/generate")
+async def generate_image(payload: GenerateRequest):
+    REQUESTS.labels(endpoint="/generate").inc()
+    start_time = time.time()
+    job_id = str(uuid.uuid4())
+    
+    mock_image_url = f"https://picsum.photos/seed/{job_id}/{payload.width}/{payload.height}"
+    
+    latency = time.time() - start_time
+    LATENCY.labels(device="mock_cpu").observe(latency)
+    
+    return {
+        "success": True,
+        "imageUrl": mock_image_url,
+        "meta": {
+            "provider": "fusion-service-mock",
+            "latency": latency,
+            "mocked": True
+        }
+    }
+
 @app.get("/health")
 async def health():
-    return {"status": "ok", "device": trainer.device, "timestamp": time.time()}
+    return {"status": "ok", "device": "mock_cpu", "timestamp": time.time()}
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/ui/randomize.html")
 
 @app.get("/metrics")
 async def metrics():
@@ -233,6 +324,74 @@ async def brain_img2img(
             "X-Image-Url": jobs[job_id]["result"],
             "X-Seed": str(meta.get("seed", "")),
             "X-Mode": str(meta.get("mode", "")),
+        }
+        return Response(content=body, media_type="image/png", headers=headers)
+    except Exception as e:
+        jobs[job_id]["status"] = "error"
+        jobs[job_id]["error"] = str(e)
+        raise
+
+
+@app.post("/brain/roulette")
+async def brain_roulette(payload: Dict[str, Any] = Body(default={})):
+    REQUESTS.labels(endpoint="/brain/roulette").inc()
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {"status": "roulette_start", "progress": 0, "result": None, "error": None}
+    start_time = time.time()
+    try:
+        dataset_path = str(payload.get("dataset_path") or os.getenv("CITY_DATASET_PATH") or "/Users/Administrator/Datasets/utopian_clean_city/images")
+        steps = int(payload.get("steps") or 12)
+        size = int(payload.get("size") or 512)
+        outline = bool(payload.get("outline") or False)
+        outline_style = str(payload.get("outline_style") or "color")
+        outline_color = payload.get("outline_color")
+        outline_thickness = int(payload.get("outline_thickness") or (3 if outline_style == "color" else 2))
+        jobs[job_id]["status"] = "roulette_generate"
+        jobs[job_id]["progress"] = 0.55
+
+        design, meta = trainer.brain_roulette(
+            dataset_path=dataset_path,
+            steps=steps,
+            size=size,
+        )
+
+        jobs[job_id]["status"] = "roulette_mockup"
+        jobs[job_id]["progress"] = 0.85
+        if outline:
+            if outline_style == "mono":
+                if isinstance(outline_color, list) and len(outline_color) == 3:
+                    oc = (int(outline_color[0]), int(outline_color[1]), int(outline_color[2]))
+                else:
+                    oc = (12, 16, 22)
+                design = processor.to_outline_rgba(design, line_color=oc, thickness=outline_thickness)
+            else:
+                design = processor.to_outline_color_rgba(design, thickness=outline_thickness)
+        mockup = processor.create_tshirt_mockup(design, outline_only=outline)
+
+        filename = f"roulette_{job_id}.png"
+        path = os.path.join("uploads", filename)
+        mockup.save(path)
+
+        jobs[job_id]["status"] = "done"
+        jobs[job_id]["progress"] = 1.0
+        jobs[job_id]["result"] = f"/uploads/{filename}"
+        jobs[job_id]["meta"] = meta
+
+        latency = time.time() - start_time
+        LATENCY.labels(device=trainer.device).observe(latency)
+
+        buf = BytesIO()
+        mockup.save(buf, format="PNG")
+        body = buf.getvalue()
+        headers = {
+            "X-Job-Id": job_id,
+            "X-Image-Url": jobs[job_id]["result"],
+            "X-Seed": str(meta.get("seed", "")),
+            "X-Mode": str(meta.get("mode", "")),
+            "X-Prompt": str(meta.get("prompt", "")),
+            "X-Init": str(meta.get("init", "")),
+            "X-Outline": "1" if outline else "0",
+            "X-Outline-Style": outline_style,
         }
         return Response(content=body, media_type="image/png", headers=headers)
     except Exception as e:

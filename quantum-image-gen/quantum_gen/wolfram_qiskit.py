@@ -2,15 +2,20 @@
 import math
 import hashlib
 import random
+import json
+import os
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 try:
     import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib import cm
     from qiskit import QuantumCircuit, transpile
     from qiskit_aer import AerSimulator
-    from qiskit.circuit.library import EfficientSU2
+    from qiskit.circuit.library import efficient_su2
 except ImportError:
     np = None
+    plt = None
     QuantumCircuit = None
 
 import os
@@ -227,9 +232,16 @@ def generate_wolfram_pattern(width, height, rule=30, steps=100, prompt=""):
     """
     Generates a 1D cellular automaton pattern (Wolfram rule) and expands it to 2D.
     """
-    # Initialize the first row with a single active cell in the center
     grid = np.zeros((height, width), dtype=np.float32)
-    grid[0, width // 2] = 1
+    
+    # Use prompt seed for reproducible variety, otherwise fallback to random
+    seed = _seed_from_text(prompt) if prompt else random.randint(0, 1000000)
+    np.random.seed(seed)
+    
+    # Initialize the first row with multiple random active cells to break grid patterns
+    num_initial_cells = max(1, width // 10)
+    initial_indices = np.random.choice(width, num_initial_cells, replace=False)
+    grid[0, initial_indices] = 1
     
     # Apply the rule for each subsequent row
     for i in range(1, height):
@@ -263,7 +275,7 @@ def map_pattern_to_quantum_circuit(pattern_grid, num_qubits=4):
     # Normalize pattern to [0, 2*pi] for rotation angles
     normalized_pattern = pattern_grid * 2 * np.pi
     
-    ansatz = EfficientSU2(num_qubits, reps=1)
+    ansatz = efficient_su2(num_qubits, reps=3)
     
     # We need to map the 2D pattern to the parameters of the ansatz
     # Since the pattern is large, we'll sample or aggregate it to fit the number of parameters
@@ -271,14 +283,18 @@ def map_pattern_to_quantum_circuit(pattern_grid, num_qubits=4):
     
     # Flatten and sample/resize the pattern to match parameters
     flat_pattern = normalized_pattern.flatten()
-    if len(flat_pattern) > num_params:
-        # Simple sampling
-        step = len(flat_pattern) // num_params
-        params = flat_pattern[::step][:num_params]
+    
+    params = []
+    if len(flat_pattern) >= num_params:
+        chunk_size = len(flat_pattern) // num_params
+        for i in range(num_params):
+            chunk = flat_pattern[i*chunk_size:(i+1)*chunk_size]
+            # Add a baseline rotation so it's not all zeros, and scale the mean
+            params.append(np.mean(chunk) + np.pi/4 + (i * 0.05))
     else:
-        # Pad with zeros if pattern is smaller (unlikely for images)
-        params = np.pad(flat_pattern, (0, num_params - len(flat_pattern)))
+        params = np.pad(flat_pattern, (0, num_params - len(flat_pattern))) + np.pi/4
         
+    params = np.array(params[:num_params])
     qc = ansatz.assign_parameters(params)
     qc.measure_all()
     return qc
@@ -342,17 +358,226 @@ def counts_to_rgb(counts, width, height):
             
     return Image.fromarray(img_array)
 
-def generate_quantum_image(prompt, width=512, height=512, rule=30):
-    if _contains_future_city(prompt):
+def generate_random_quantum_distribution(width, height, seed=None):
+    """
+    Creates a random 2D image based on a Qiskit quantum circuit sampling.
+    This simulates loading a random distribution (like a QGAN prior).
+    """
+    if not QuantumCircuit or not np:
+        # Pure mock fallback
+        arr = np.random.randint(0, 255, (height, width, 3), dtype=np.uint8)
+        return Image.fromarray(arr)
+
+    if seed is not None:
+        np.random.seed(seed)
+        random.seed(seed)
+
+    # Use a parameterized ansatz (e.g. EfficientSU2) for random distribution
+    num_qubits = 6 # 6 qubits = 64 states
+    ansatz = efficient_su2(num_qubits, reps=2)
+    num_params = ansatz.num_parameters
+    
+    # Bind random parameters to simulate a "learned" or "random" distribution
+    params = np.random.uniform(0, 2 * np.pi, num_params)
+    qc = ansatz.assign_parameters(params)
+    qc.measure_all()
+    
+    simulator = AerSimulator()
+    compiled_circuit = transpile(qc, simulator)
+    job = simulator.run(compiled_circuit, shots=8192)
+    counts = job.result().get_counts()
+    
+    total_shots = sum(counts.values())
+    sorted_keys = sorted(counts.keys())
+    probs = np.array([counts.get(k, 0) / total_shots for k in sorted_keys], dtype=np.float32)
+    
+    # Map the quantum probability distribution to a 2D image
+    img_array = np.zeros((height, width, 3), dtype=np.uint8)
+    
+    # Base color palette from prompt seed if available
+    base_r = random.randint(50, 255)
+    base_g = random.randint(50, 255)
+    base_b = random.randint(50, 255)
+    
+    for i in range(height):
+        for j in range(width):
+            # Spatial mapping to the quantum states
+            state_idx = (i * width + j) % len(sorted_keys)
+            state_idx_2 = ((i * j) + width) % len(sorted_keys)
+            
+            prob = float(probs[state_idx])
+            prob_2 = float(probs[state_idx_2])
+            
+            # Non-linear color mapping with radial and spiral quantum interference
+            cx, cy = width / 2, height / 2
+            dist = math.sqrt((i - cy)**2 + (j - cx)**2)
+            angle = math.atan2(i - cy, j - cx)
+            
+            r = int(min(255.0, base_r * prob * len(sorted_keys) * 0.8 + (math.sin(dist/20.0 + prob*10) * 50)))
+            g = int(min(255.0, base_g * prob_2 * len(sorted_keys) * 0.8 + (math.cos(angle*5.0 + prob_2*20) * 50)))
+            b = int(min(255.0, base_b * (prob + prob_2)/2 * len(sorted_keys) * 1.2 + (math.sin(dist/40.0 - angle*3) * 50)))
+            
+            img_array[i, j] = [max(0, r), max(0, g), max(0, b)]
+            
+    # Apply some filtering to make it look like a smooth "distribution" field
+    img = Image.fromarray(img_array)
+    img = img.filter(ImageFilter.GaussianBlur(radius=3))
+    return img
+
+def _analyze_prompt_energy(prompt):
+    """
+    Parses the prompt for emotional and shape keywords to determine 
+    colormap, Julia Set coordinates, and the interference distance metric.
+    Returns: (colormap_name, julia_cx, julia_cy, shape_type)
+    """
+    p = (prompt or "").lower()
+    
+    # Base shapes
+    shape_type = "circle"
+    if any(w in p for w in ["square", "box", "cube", "block", "rectangle"]): shape_type = "square"
+    elif any(w in p for w in ["diamond", "rhombus", "crystal", "gem"]): shape_type = "diamond"
+    elif any(w in p for w in ["wave", "line", "stripe", "horizontal", "vertical"]): shape_type = "wave"
+    elif any(w in p for w in ["spiral", "vortex", "whirlpool", "tornado"]): shape_type = "spiral"
+    elif any(w in p for w in ["triangle", "pyramid", "cone"]): shape_type = "triangle"
+    elif any(w in p for w in ["cross", "plus", "star"]): shape_type = "cross"
+
+    # Emotional/Energy Analysis
+    if any(w in p for w in ["love", "passion", "heart", "warm", "fire", "soul"]):
+        return "magma", -0.4, 0.6, "diamond" if shape_type == "circle" else shape_type
+    if any(w in p for w in ["calm", "peace", "water", "flow", "tranquil", "breeze", "ocean"]):
+        return "viridis", 0.285, 0.01, "wave" if shape_type == "circle" else shape_type
+    if any(w in p for w in ["energy", "chaos", "power", "electric", "lightning", "dynamic"]):
+        return "turbo", -0.8, 0.156, "cross" if shape_type == "circle" else shape_type
+    if any(w in p for w in ["transcendent", "mystic", "cosmos", "god", "divine", "spirit"]):
+        return "plasma", -0.7269, 0.1889, "spiral" if shape_type == "circle" else shape_type
+    if any(w in p for w in ["dark", "void", "abyss", "shadow", "deep"]):
+        return "inferno", -0.835, -0.2321, "square" if shape_type == "circle" else shape_type
+        
+    # Try to use a learned pattern from the quantum images dataset
+    learned_params = []
+    learned_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "learned_julia_params.json")
+    if os.path.exists(learned_file):
+        try:
+            with open(learned_file, "r") as f:
+                learned_params = json.load(f)
+        except:
+            pass
+
+    # Default: "roulette of possibilities"
+    cmaps = ["turbo", "viridis", "plasma", "magma", "inferno", "ocean", "rainbow"]
+    # Seed random with prompt to keep it deterministic for the same prompt
+    rng = random.Random(_seed_from_text(p))
+    
+    # Known "stunning" Julia set parameters
+    beautiful_c_values = [
+        (-0.4, 0.6),
+        (0.285, 0.01),
+        (0.285, 0.013),
+        (-0.70176, -0.3842),
+        (-0.835, -0.2321),
+        (-0.8, 0.156),
+        (-0.7269, 0.1889),
+        (0.0, -0.8),
+        (-1.037, 0.17),
+        (-0.12, 0.74),
+        (-0.391, -0.587),
+        (-0.54, 0.54)
+    ]
+    
+    if learned_params:
+        # Pick a learned parameter set based on the prompt hash
+        learned = rng.choice(learned_params)
+        
+        # Use the complexity feature to deterministically pick a beautiful C value
+        # rather than using raw mathematical mapping which can land in dead zones
+        try:
+            complexity = float(learned.get("features", {}).get("complexity", 0.5))
+        except:
+            complexity = 0.5
+            
+        idx = int(complexity * 100) % len(beautiful_c_values)
+        c_x, c_y = beautiful_c_values[idx]
+        
+        # Modulate it slightly with symmetry to make it unique but still fractal
+        try:
+            symmetry = float(learned.get("features", {}).get("symmetry", 0.5))
+            c_x += (symmetry - 0.5) * 0.02
+            c_y += (symmetry - 0.5) * 0.02
+        except:
+            pass
+    else:
+        c_x, c_y = rng.choice(beautiful_c_values)
+        
+    return rng.choice(cmaps), c_x, c_y, shape_type
+
+def generate_julia_set(width, height, c_x, c_y, zoom=1.0, max_iter=100, cmap_name="turbo"):
+    """
+    Generates a mathematically pure Julia set fractal and applies a Matplotlib colormap.
+    """
+    if not np or not plt:
+        return np.zeros((height, width, 3), dtype=np.uint8)
+
+    # Create a grid
+    x = np.linspace(-1.5 / zoom, 1.5 / zoom, width)
+    y = np.linspace(-1.5 / zoom, 1.5 / zoom, height)
+    X, Y = np.meshgrid(x, y)
+    Z = X + 1j * Y
+    C = c_x + 1j * c_y
+
+    div_time = np.zeros(Z.shape, dtype=int)
+    m = np.full(Z.shape, True, dtype=bool)
+
+    for i in range(max_iter):
+        Z[m] = Z[m]**2 + C
+        
+        # Find which points have diverged
+        diverged = np.abs(Z) > 2
+        
+        # We only care about points that diverged *in this specific iteration*
+        # (they were active in m, but are now diverged)
+        just_diverged = diverged & m
+        
+        # Record their divergence time
+        div_time[just_diverged] = i
+        
+        # Remove them from the active mask so we stop calculating them
+        m[just_diverged] = False
+
+    # Smooth coloring
+    smooth = np.zeros(Z.shape, dtype=float)
+    mask = div_time > 0
+    
+    # Give the inner solid set (where it didn't diverge) a distinct base color
+    # instead of just mapping it to 0
+    smooth[~mask] = 0.0 
+    
+    # Avoid log of zero
+    Z_abs = np.abs(Z[mask])
+    Z_abs[Z_abs == 0] = 1e-10
+    
+    # The standard continuous potential formula
+    smooth[mask] = div_time[mask] + 1 - np.log2(np.log(Z_abs))
+    
+    # Normalize for colormap, shift it so the inner solid set gets the lowest color
+    # and the chaotic borders get the bright colors
+    smooth_norm = smooth / np.max(smooth) if np.max(smooth) > 0 else smooth
+    
+    # Apply colormap
+    try:
+        colormap = cm.get_cmap(cmap_name)
+    except ValueError:
+        colormap = cm.get_cmap("turbo")
+        
+    img_rgba = colormap(smooth_norm)
+    img_rgb = (img_rgba[:, :, :3] * 255).astype(np.uint8)
+    return img_rgb
+
+def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum=False):
+    if _contains_future_city(prompt) and not force_quantum:
         return _future_city_concept(prompt, int(width), int(height), int(rule))
 
     if not np or not QuantumCircuit:
-        img = Image.new('RGB', (width, height), color=(0, 0, 0))
-        d = ImageDraw.Draw(img)
-        for i in range(0, width, 20):
-             d.line([(i, 0), (width-i, height)], fill=(0, 255, 255), width=1)
-        d.text((10,10), f"Quantum Mock: {prompt[:20]}... (Rule {rule})", fill=(255,255,255))
-        return img
+        return _future_city_concept(prompt + " (mock quantum)", int(width), int(height), int(rule))
 
     """
     Main function to generate a quantum-inspired image.
@@ -370,41 +595,110 @@ def generate_quantum_image(prompt, width=512, height=512, rule=30):
     print("Rendering image...")
     total_shots = sum(counts.values()) if counts else 0
     if total_shots <= 0:
-        return Image.fromarray(np.zeros((height, width, 3), dtype=np.uint8))
+        # Fallback if simulation fails
+        print("Simulation failed, falling back to random distribution")
+        seed = _seed_from_text(prompt) if prompt else random.randint(0, 1000000)
+        return generate_random_quantum_distribution(int(width), int(height), seed)
 
     sorted_keys = sorted(counts.keys())
     probs_np = np.array([counts[k] / total_shots for k in sorted_keys], dtype=np.float32)
 
-    if torch is not None and torch.cuda.is_available():
-        device = torch.device("cuda")
-        pattern_t = torch.from_numpy(pattern.astype(np.float32)).to(device)
-        probs_t = torch.from_numpy(probs_np).to(device)
-        idx = torch.arange(height * width, device=device) % probs_t.shape[0]
-        prob = probs_t[idx].reshape(height, width)
-        base = (pattern_t * 255.0).clamp(0.0, 255.0)
-        r = (base * prob).clamp(0.0, 255.0)
-        g = (base * (1.0 - prob)).clamp(0.0, 255.0)
-        b = (255.0 * prob).clamp(0.0, 255.0)
-        mask = base > 0.0
-        r = torch.where(mask, (r + 50.0).clamp(0.0, 255.0), r)
-        b = torch.where(mask, (b + 100.0).clamp(0.0, 255.0), b)
-        img = torch.stack([r, g, b], dim=-1).to(torch.uint8).cpu().numpy()
-        return Image.fromarray(img)
+    # 4. Extract Emotional Energy and Shape
+    cmap_name, julia_cx, julia_cy, shape_type = _analyze_prompt_energy(prompt)
+    
+    # Modulate Julia coordinates with top quantum probabilities (true Quantum-Julia mix)
+    # Kept extremely subtle so it doesn't break the fractal structure
+    julia_cx += (float(probs_np[0]) - 0.5) * 0.01
+    if len(probs_np) > 1:
+        julia_cy += (float(probs_np[1]) - 0.5) * 0.01
+        
+    print(f"Rendering Quantum Julia (cmap={cmap_name}, shape={shape_type})...")
+    julia_rgb = generate_julia_set(width, height, julia_cx, julia_cy, zoom=1.35, max_iter=150, cmap_name=cmap_name)
 
+    # Non-linear rendering using quantum probabilities and spatial coordinates
+    # This creates actual interference-like quantum patterns
     img_array = np.zeros((height, width, 3), dtype=np.uint8)
-    for i in range(height):
-        for j in range(width):
-            base_val = float(pattern[i, j]) * 255.0
-            state_idx = (i * width + j) % len(sorted_keys)
-            prob = float(probs_np[state_idx])
-            r = int(max(0.0, min(255.0, base_val * prob)))
-            g = int(max(0.0, min(255.0, base_val * (1.0 - prob))))
-            b = int(max(0.0, min(255.0, 255.0 * prob)))
-            if base_val > 0.0:
-                r = min(255, r + 50)
-                b = min(255, b + 100)
-            img_array[i, j] = [r, g, b]
-    return Image.fromarray(img_array)
+    
+    base_r = random.randint(50, 255)
+    base_g = random.randint(50, 255)
+    base_b = random.randint(50, 255)
+    
+    num_states = len(sorted_keys)
+    
+    # Vectorized computation for massive performance boost
+    I, J = np.meshgrid(np.arange(height), np.arange(width), indexing='ij')
+    
+    # Map coordinates to quantum states
+    state_idx = (I * width + J) % num_states
+    state_idx_2 = ((I * J) + width) % num_states
+    
+    prob = probs_np[state_idx]
+    prob_2 = probs_np[state_idx_2]
+    
+    # Radial and angular math
+    cx, cy = width / 2.0, height / 2.0
+    dx = J - cx
+    dy = I - cy
+    angle = np.arctan2(dy, dx)
+    
+    # Morph the distance metric based on the parsed shape keyword
+    if shape_type == "square":
+        dist = np.maximum(np.abs(dx), np.abs(dy)) + 1.0
+    elif shape_type == "diamond":
+        dist = (np.abs(dx) + np.abs(dy)) + 1.0
+    elif shape_type == "wave":
+        dist = np.abs(dy) + 1.0 + np.sin(dx / 10.0) * 20.0
+    elif shape_type == "spiral":
+        dist = np.sqrt(dx*dx + dy*dy) + angle * 40.0 + 1.0
+    elif shape_type == "triangle":
+        dist = np.maximum(np.abs(dx) * 1.732 + dy, -2.0 * dy) + 1.0
+    elif shape_type == "cross":
+        dist = np.minimum(np.abs(dx), np.abs(dy)) + 1.0
+    else: # circle
+        dist = np.sqrt(dx*dx + dy*dy) + 1.0
+        
+    # Create interference patterns
+    interference = np.sin(dist * prob * 0.5) + np.cos(angle * prob_2 * 10.0)
+    
+    # Calculate colors for active cells (base_val > 0.0)
+    active_r = np.clip(base_r * (0.6 + 0.4 * interference) + 50, 0, 255)
+    active_g = np.clip(base_g * prob * num_states * 1.5, 0, 255)
+    active_b = np.clip(base_b * prob_2 * num_states * 1.5 + 100, 0, 255)
+    
+    # Calculate colors for background cells
+    bg_r = np.clip(60 * prob * num_states * (1 + np.sin(dist/15.0 - angle)), 0, 255)
+    bg_g = np.clip(60 * prob_2 * num_states * (1 + np.cos(dist/20.0 + angle*2)), 0, 255)
+    bg_b = np.clip(120 * (prob + prob_2) * num_states, 0, 255)
+    
+    # Create the final image array using the pattern as a mask
+    mask = (pattern > 0.0)
+    
+    # Interference layer
+    r = np.where(mask, active_r, bg_r)
+    g = np.where(mask, active_g, bg_g)
+    b = np.where(mask, active_b, bg_b)
+    
+    interference_img = np.stack([r, g, b], axis=-1).astype(np.uint8)
+    
+    # 5. Blend the Julia fractal with the Quantum Interference patterns
+    # We want the Julia Set to be the undisputed dominant visual element.
+    # We'll apply the interference pattern as a subtle translucent overlay.
+    img_interf = Image.fromarray(interference_img).convert("RGBA")
+    img_julia = Image.fromarray(julia_rgb).convert("RGBA")
+    
+    # Drop the opacity of the interference layer to 15% so the Julia set 
+    # structure remains almost completely unadulterated.
+    img_interf.putalpha(40) 
+    
+    # Alpha composite puts interference on top of Julia
+    blended = Image.alpha_composite(img_julia, img_interf).convert("RGB")
+    
+    # Increase the contrast slightly to make the Julia Set colors pop for t-shirts
+    from PIL import ImageEnhance
+    enhancer = ImageEnhance.Contrast(blended)
+    final_img = enhancer.enhance(1.4) # Slightly stronger contrast
+            
+    return final_img
 
 if __name__ == "__main__":
     img = generate_quantum_image("test", 512, 512)

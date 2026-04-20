@@ -31,7 +31,9 @@ export function LatestAIImage({ overrideUrl }: { overrideUrl?: string }) {
 
     async function fetchImage() {
       try {
-        const res = await fetch(`${MIRROR_API_URL}/api/latest-ai-image`);
+        const res = await fetch(`${MIRROR_API_URL}/api/latest-ai-image`).catch(() => {
+          throw new Error('Network error: Failed to fetch');
+        });
         if (!res.ok) throw new Error('Failed to fetch');
         
         const contentType = res.headers.get('content-type');

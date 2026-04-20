@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { Header } from '../../components/Header';
 import { DataDashboardButton } from '../../components/DataDashboardButton';
 import { FusionAI } from '../../components/FusionAI';
+import BrainRandomizer from '../../components/BrainRandomizer';
 import { ImagePreview } from '../../components/ImagePreview';
 import { LatestAIImage } from '../../components/LatestAIImage';
 import { Send, Sparkles } from 'lucide-react';
@@ -521,9 +522,11 @@ function StudioPageInner() {
         setPipelineStage('Prompt validation');
         setProgress(8);
 
-        const timeoutMs = testMode ? 5_000 : (quantumMode ? 120_000 : 30_000);
+        const timeoutMs = testMode ? 5_000 : (quantumMode ? 120_000 : 60_000);
         const attemptStartedAt = Date.now();
         let tick: ReturnType<typeof setInterval> | null = null;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         try {
           setPipelineStage(quantumMode ? 'Quantum processing' : 'Rendering image');
@@ -542,9 +545,11 @@ function StudioPageInner() {
           const res = await fetch(endpoint, {
              method: 'POST',
              headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify(payload)
+             body: JSON.stringify(payload),
+             signal: controller.signal
           });
 
+          clearTimeout(timeoutId);
           if (tick) clearInterval(tick);
 
           const raw: unknown = await res.json().catch(() => null);
@@ -578,6 +583,7 @@ function StudioPageInner() {
           break;
 
         } catch (err: unknown) {
+          clearTimeout(timeoutId);
           if (tick) clearInterval(tick);
           const errMsg =
             (typeof err === 'object' && err !== null && 'message' in err && typeof (err as { message?: unknown }).message === 'string')
@@ -612,12 +618,19 @@ function StudioPageInner() {
       }
 
       let imageUrl = '';
-      if (typeof successData.imageUrl === 'string') imageUrl = successData.imageUrl;
-      else if (typeof successData.image_url === 'string') imageUrl = successData.image_url;
+      if (typeof successData.image_url === 'string') imageUrl = successData.image_url;
+      else if (typeof successData.imageUrl === 'string') imageUrl = successData.imageUrl;
       else if (typeof successData.data === 'object' && successData.data !== null) {
         const d = successData.data as Record<string, unknown>;
-        if (typeof d.imageUrl === 'string') imageUrl = d.imageUrl;
         if (typeof d.image_url === 'string') imageUrl = d.image_url;
+        else if (typeof d.imageUrl === 'string') imageUrl = d.imageUrl;
+      }
+      
+      // Additional check for fallback structure that might be deeply nested or wrapped
+      if (!imageUrl && successData.data && (successData.data as any).data) {
+        const dd = (successData.data as any).data;
+        if (typeof dd.image_url === 'string') imageUrl = dd.image_url;
+        else if (typeof dd.imageUrl === 'string') imageUrl = dd.imageUrl;
       }
 
       if (!imageUrl) {
@@ -1172,7 +1185,7 @@ function StudioPageInner() {
                 onImport={generatedImage ? handleImportToPoster : undefined}
                 importing={importing}
                 importProgress={importProgress}
-                className="h-[500px]"
+                className="h-[500px] z-0"
               />
               {isGenerating && (
                 <div className="w-full rounded-lg border border-gray-700 bg-gray-900 p-4">
@@ -1241,6 +1254,10 @@ function StudioPageInner() {
 
             <FusionAI 
               prompt={prompt} 
+              onImageGenerated={(url) => setGeneratedImage(url)} 
+            />
+
+            <BrainRandomizer 
               onImageGenerated={(url) => setGeneratedImage(url)} 
             />
 
