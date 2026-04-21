@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from quantum_gen.wolfram_qiskit import _contains_future_city, _future_city_concept
+from quantum_gen.wolfram_qiskit import _contains_future_city, generate_quantum_image
 
 
 class GenerationRequest(BaseModel):
@@ -49,14 +49,9 @@ def generate(req: GenerationRequest):
     width = int(req.width)
     height = int(req.height)
 
-    if _contains_future_city(prompt):
-        rule = int(_request_id(prompt, width, height, req.quantum_mode), 16) % 128
-        img = _future_city_concept(prompt, width, height, rule=rule)
-        provider = "future_city_concept_v1"
-    else:
-        rule = int(_request_id(prompt, width, height, req.quantum_mode), 16) % 128
-        img = _future_city_concept(f"future city | {prompt}", width, height, rule=rule)
-        provider = "fallback_concept_v1"
+    rule = int(_request_id(prompt, width, height, req.quantum_mode), 16) % 128
+    img = generate_quantum_image(prompt, width, height, rule=rule, force_quantum=req.quantum_mode)
+    provider = "quantum_v1" if req.quantum_mode else "standard_v1"
 
     rid = _request_id(prompt, width, height, req.quantum_mode)
     filename = f"{_now_tag()}_{rid}_{width}x{height}.png"

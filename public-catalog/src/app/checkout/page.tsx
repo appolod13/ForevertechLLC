@@ -10,11 +10,12 @@ import { useRouter } from 'next/navigation';
 
 export default function CheckoutPage() {
   const { items, total, clearCart, removePurchasedItems } = useCart();
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   const router = useRouter();
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [guestMode, setGuestMode] = useState(false);
   
   const [formData, setFormData] = useState({
     name: user?.name || '',
@@ -78,6 +79,21 @@ export default function CheckoutPage() {
 
       if (res.ok) {
         const data = await res.json();
+        
+        // Notify the local print shop via email with sizing and images
+        try {
+          await fetch('/api/print-shop/email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              items: items,
+              customerInfo: formData
+            })
+          });
+        } catch (e) {
+          console.error('Failed to notify print shop:', e);
+        }
+
         const purchasedIds = Array.isArray(data?.order?.items) ? data.order.items.map((i: { id: string }) => i.id) : [];
         if (purchasedIds.length > 0) {
           await removePurchasedItems(purchasedIds);
@@ -99,6 +115,47 @@ export default function CheckoutPage() {
       <div className="container mx-auto px-4 py-24 text-center">
         <h1 className="text-2xl font-bold text-white mb-4">Cart is empty</h1>
         <Link href="/" className="text-primary hover:underline">Go back to shopping</Link>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user && !guestMode && !isSuccess) {
+    return (
+      <div className="container mx-auto px-4 py-24 flex flex-col items-center justify-center">
+        <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950/50 p-8 shadow-2xl backdrop-blur-sm text-center">
+          <h2 className="text-2xl font-bold text-white mb-2">Checkout Options</h2>
+          <p className="text-zinc-400 mb-8 text-sm">Log in to save your designs and access previous purchases, or continue as a guest.</p>
+          
+          <div className="space-y-4">
+            <Link 
+              href="/login?redirect=/checkout" 
+              className="flex w-full justify-center rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary/90 transition-all"
+            >
+              Log In
+            </Link>
+            
+            <div className="relative flex items-center py-2">
+              <div className="flex-grow border-t border-zinc-800"></div>
+              <span className="mx-4 flex-shrink-0 text-xs text-zinc-500 uppercase">Or</span>
+              <div className="flex-grow border-t border-zinc-800"></div>
+            </div>
+            
+            <button 
+              onClick={() => setGuestMode(true)}
+              className="w-full rounded-lg border border-zinc-700 bg-transparent py-3 font-semibold text-white hover:bg-zinc-800 transition-all"
+            >
+              Continue as Guest
+            </button>
+          </div>
+        </div>
       </div>
     );
   }

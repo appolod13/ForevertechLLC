@@ -57,8 +57,11 @@ export function Header() {
 
         <div className="flex items-center gap-4">
           {user ? (
-             <div className="hidden md:flex items-center gap-2">
-               <span className="text-sm text-zinc-400">Hi, {user.name}</span>
+             <div className="hidden md:flex items-center gap-4">
+               <Link href="/profile" className="text-sm text-zinc-400 hover:text-white flex items-center gap-1">
+                 <User className="h-4 w-4" />
+                 <span>My Profile</span>
+               </Link>
                <button onClick={logout} className="text-xs text-red-400 hover:text-red-300">Logout</button>
              </div>
           ) : (
@@ -98,7 +101,9 @@ export function Header() {
             
             {user ? (
                <div className="flex justify-between items-center py-2 border-b border-zinc-900">
-                  <span className="text-zinc-300">Signed in as {user.name}</span>
+                  <Link href="/profile" onClick={() => setIsMobileMenuOpen(false)} className="text-zinc-300 flex items-center gap-2">
+                    <User className="h-4 w-4" /> My Profile
+                  </Link>
                   <button onClick={logout} className="text-sm text-red-400">Logout</button>
                </div>
             ) : (

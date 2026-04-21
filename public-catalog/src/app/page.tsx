@@ -78,6 +78,43 @@ export default async function Home() {
           </div>
         </section>
 
+        {/* How It Works Section */}
+        <section className="container mx-auto px-4 pt-12">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-8 text-center">
+            <h2 className="text-3xl font-bold text-white mb-6">How to Create Your Custom T-Shirt</h2>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+              <div className="flex flex-col items-center">
+                <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center mb-4 border border-primary/50">
+                  <span className="text-2xl font-bold text-primary">1</span>
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">Generate Art</h3>
+                <p className="text-zinc-400 text-sm">Head to the Studio and type an emotional prompt. Our Quantum AI will generate a unique fractal design.</p>
+              </div>
+              <div className="flex flex-col items-center">
+                <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center mb-4 border border-primary/50">
+                  <span className="text-2xl font-bold text-primary">2</span>
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">Teach the AI</h3>
+                <p className="text-zinc-400 text-sm">Like or Dislike the generated images. Your feedback trains the neural network for better results.</p>
+              </div>
+              <div className="flex flex-col items-center">
+                <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center mb-4 border border-primary/50">
+                  <span className="text-2xl font-bold text-primary">3</span>
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">Customize Gear</h3>
+                <p className="text-zinc-400 text-sm">Select your favorite design, pick a T-Shirt size (S, M, L, XL, XXL), and add it to your cart.</p>
+              </div>
+              <div className="flex flex-col items-center">
+                <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center mb-4 border border-primary/50">
+                  <span className="text-2xl font-bold text-primary">4</span>
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">Automated Print</h3>
+                <p className="text-zinc-400 text-sm">Checkout securely. Our AI Agent instantly emails the design to a local print shop for fulfillment.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <CatalogGrid initialPosts={initialPosts} />
         
         <section className="container mx-auto px-4 border-t border-gray-800 pt-12">

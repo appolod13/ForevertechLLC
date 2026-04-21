@@ -56,6 +56,8 @@ class FusionTrainer:
         self.img2img_pipe = None
         self._diffusion_last_error = None
         self._img2img_last_error = None
+        self._dataset_cache: Dict[str, List[str]] = {}
+        self._candidate_cache: Dict[str, List[str]] = {}
 
         self.style_memory: Optional[StyleMemory] = None
         self.style_memory_path = os.getenv("STYLE_MEMORY_PATH", os.path.join("uploads", "style_memory.json"))
@@ -68,6 +70,494 @@ class FusionTrainer:
         self.wa_client = None
         if os.getenv("WOLFRAM_ALPHA_APPID"):
             self.wa_client = wolframalpha.Client(os.getenv("WOLFRAM_ALPHA_APPID"))
+
+    def _list_dataset_images(self, dataset_path: str) -> List[str]:
+        key = os.path.abspath(os.path.expanduser(str(dataset_path)))
+        cached = self._dataset_cache.get(key)
+        if cached is not None:
+            return cached
+
+        exts = {".png", ".jpg", ".jpeg", ".webp"}
+        files: List[str] = []
+        for root, _, names in os.walk(key):
+            for n in names:
+                if os.path.splitext(n)[1].lower() in exts:
+                    files.append(os.path.join(root, n))
+        files.sort()
+        self._dataset_cache[key] = files
+        return files
+
+    def _city_score(self, img: Image.Image) -> float:
+        im = img.convert("RGB").resize((192, 192), Image.Resampling.BICUBIC)
+        arr = np.asarray(im).astype(np.float32) / 255.0
+        gray = (0.2126 * arr[:, :, 0] + 0.7152 * arr[:, :, 1] + 0.0722 * arr[:, :, 2]).astype(np.float32)
+
+        gx = np.zeros_like(gray)
+        gy = np.zeros_like(gray)
+        gx[:, 1:-1] = gray[:, 2:] - gray[:, :-2]
+        gy[1:-1, :] = gray[2:, :] - gray[:-2, :]
+        mag = np.sqrt(gx * gx + gy * gy)
+
+        top = arr[:48, :, :]
+        top_gray = gray[:48, :]
+        top_mag = mag[:48, :]
+        sky_mask = (
+            (top_gray > 0.50)
+            & (top[:, :, 2] > top[:, :, 1] + 0.02)
+            & (top[:, :, 2] > top[:, :, 0] + 0.02)
+            & (top_mag < 0.12)
+        )
+        sky = float(sky_mask.mean())
+
+        mid = arr[55:155, :, :]
+        mid_gray = gray[55:155, :]
+        mid_mag = mag[55:155, :]
+        mid_sat = (mid.max(axis=2) - mid.min(axis=2)) / (mid.max(axis=2) + 1e-8)
+        build_mask = (mid_gray > 0.25) & (mid_sat < 0.55) & (mid_mag > 0.12)
+        bld = float(build_mask.mean())
+
+        vert = float((np.abs(gx[55:155, :]) > 0.12).mean())
+        br = float(gray.mean())
+
+        green = arr[:, :, 1]
+        green_dom = float(((green > arr[:, :, 0] + 0.05) & (green > arr[:, :, 2] + 0.05)).mean())
+        nongreen = 1.0 - green_dom
+
+        edge_total = float((mag > 0.10).mean())
+        edge_var = float(mag.var())
+
+        return sky * 1.0 + bld * 1.3 + vert * 1.2 + edge_total * 0.8 + edge_var * 0.8 + br * 0.15 + nongreen * 0.25
+
+    def _pick_city_candidates(self, dataset_path: str, rng: np.random.Generator) -> List[str]:
+        key = os.path.abspath(os.path.expanduser(str(dataset_path)))
+        cached = self._candidate_cache.get(key)
+        if cached is None:
+            files = self._list_dataset_images(key)
+            if not files:
+                raise ValueError(f"No images found in dataset path: {key}")
+            if len(files) > 700:
+                sample = list(rng.choice(np.array(files, dtype=object), size=700, replace=False))
+            else:
+                sample = files
+
+            scored = []
+            for p in sample:
+                try:
+                    img = Image.open(p)
+                except Exception:
+                    continue
+                try:
+                    s = self._city_score(img)
+                except Exception:
+                    continue
+                scored.append((s, p))
+            scored.sort(reverse=True, key=lambda x: x[0])
+            top = [p for _, p in scored[: max(20, min(80, len(scored)))]]
+            if not top:
+                top = files[:200]
+            cached = top
+            self._candidate_cache[key] = cached
+
+        return list(cached)
+
+    def _build_patch_mosaic_init(self, candidates: List[str], rng: np.random.Generator, size: int) -> Image.Image:
+        canvas = Image.new("RGB", (size, size), (24, 30, 40))
+
+        # big sky/ground gradient so final image has structure, not chaos
+        top_c = (170, 205, 240)
+        mid_c = (210, 225, 240)
+        bot_c = (165, 176, 188)
+        draw = ImageDraw.Draw(canvas)
+        for y in range(size):
+            t = y / float(max(1, size - 1))
+            if t < 0.60:
+                k = t / 0.60
+                col = (
+                    int(top_c[0] * (1 - k) + mid_c[0] * k),
+                    int(top_c[1] * (1 - k) + mid_c[1] * k),
+                    int(top_c[2] * (1 - k) + mid_c[2] * k),
+                )
+            else:
+                k = (t - 0.60) / 0.40
+                col = (
+                    int(mid_c[0] * (1 - k) + bot_c[0] * k),
+                    int(mid_c[1] * (1 - k) + bot_c[1] * k),
+                    int(mid_c[2] * (1 - k) + bot_c[2] * k),
+                )
+            draw.line([(0, y), (size, y)], fill=col)
+
+        if not candidates:
+            return canvas
+
+        pick_n = int(min(len(candidates), max(8, min(22, int(size / 28)))))
+        idx = rng.choice(len(candidates), size=pick_n, replace=False) if len(candidates) >= pick_n else np.arange(len(candidates))
+        picked = [candidates[int(i)] for i in idx]
+
+        horizon = int(size * float(rng.uniform(0.58, 0.70)))
+        for p in picked:
+            try:
+                src = Image.open(p).convert("RGB")
+            except Exception:
+                continue
+            sw, sh = src.size
+            if sw < 8 or sh < 8:
+                continue
+            # patch mostly from building areas
+            pw = int(rng.uniform(sw * 0.18, sw * 0.55))
+            ph = int(rng.uniform(sh * 0.22, sh * 0.70))
+            pw = max(12, min(sw, pw))
+            ph = max(12, min(sh, ph))
+            sx = int(rng.uniform(0, max(1, sw - pw)))
+            sy = int(rng.uniform(sh * 0.10, max(sh * 0.92 - ph, 1)))
+            patch = src.crop((sx, sy, sx + pw, sy + ph))
+
+            tw = int(rng.uniform(size * 0.10, size * 0.32))
+            th = int(rng.uniform(size * 0.16, size * 0.52))
+            patch = patch.resize((max(8, tw), max(8, th)), Image.Resampling.LANCZOS)
+
+            # slight random tilt/perspective feel
+            angle = float(rng.uniform(-5.5, 5.5))
+            patch = patch.rotate(angle, resample=Image.Resampling.BICUBIC, expand=True)
+
+            x = int(rng.uniform(-size * 0.03, size * 0.93))
+            y = int(horizon - patch.height + rng.uniform(-size * 0.08, size * 0.12))
+            alpha = Image.new("L", patch.size, int(rng.uniform(128, 210)))
+            canvas.paste(patch, (x, y), alpha)
+
+        # add a light boulevard plane to anchor perspective
+        boulevard = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        bdraw = ImageDraw.Draw(boulevard)
+        bdraw.polygon(
+            [
+                (int(size * 0.12), int(size * 0.98)),
+                (int(size * 0.88), int(size * 0.98)),
+                (int(size * 0.62), int(size * 0.74)),
+                (int(size * 0.38), int(size * 0.74)),
+            ],
+            fill=(65, 78, 94, 120),
+        )
+        bdraw.line(
+            [(int(size * 0.50), int(size * 0.98)), (int(size * 0.50), int(size * 0.74))],
+            fill=(190, 210, 230, 110),
+            width=max(1, int(size * 0.005)),
+        )
+        boulevard = boulevard.filter(ImageFilter.GaussianBlur(radius=max(1, int(size * 0.008))))
+        canvas = Image.alpha_composite(canvas.convert("RGBA"), boulevard).convert("RGB")
+        canvas = canvas.filter(ImageFilter.GaussianBlur(radius=max(1, int(size * 0.004))))
+        return canvas
+
+    def _sample_patch(self, candidates: List[str], rng: np.random.Generator, kind: Literal["sky", "city", "garden", "flower"]) -> Optional[Image.Image]:
+        if not candidates:
+            return None
+
+        attempts = 120
+        for _ in range(attempts):
+            p = str(rng.choice(np.array(candidates, dtype=object)))
+            try:
+                src = Image.open(p).convert("RGB")
+            except Exception:
+                continue
+            sw, sh = src.size
+            if sw < 32 or sh < 32:
+                continue
+
+            if kind == "sky":
+                y0 = 0
+                y1 = int(sh * 0.45)
+            elif kind == "garden":
+                y0 = int(sh * 0.55)
+                y1 = sh
+            else:
+                y0 = int(sh * 0.18)
+                y1 = int(sh * 0.92)
+
+            y1 = max(y0 + 24, y1)
+            y1 = min(sh, y1)
+
+            pw = int(rng.uniform(sw * 0.18, sw * 0.52))
+            ph = int(rng.uniform((y1 - y0) * 0.22, (y1 - y0) * 0.65))
+            pw = max(24, min(sw, pw))
+            ph = max(24, min(y1 - y0, ph))
+
+            sx = int(rng.uniform(0, max(1, sw - pw)))
+            sy = int(rng.uniform(y0, max(y0 + 1, y1 - ph)))
+            patch = src.crop((sx, sy, sx + pw, sy + ph))
+
+            arr = np.asarray(patch.resize((48, 48), Image.Resampling.BILINEAR)).astype(np.float32) / 255.0
+            mx = arr.max(axis=2)
+            mn = arr.min(axis=2)
+            sat = float(np.mean((mx - mn) / (mx + 1e-8)))
+            mean = arr.mean(axis=(0, 1))
+            r, g, b = float(mean[0]), float(mean[1]), float(mean[2])
+            gray = (0.2126 * arr[:, :, 0] + 0.7152 * arr[:, :, 1] + 0.0722 * arr[:, :, 2]).astype(np.float32)
+            gx = np.zeros_like(gray)
+            gy = np.zeros_like(gray)
+            gx[:, 1:-1] = gray[:, 2:] - gray[:, :-2]
+            gy[1:-1, :] = gray[2:, :] - gray[:-2, :]
+            mag = np.sqrt(gx * gx + gy * gy)
+            edge_total = float((mag > 0.10).mean())
+            vert_edge = float((np.abs(gx) > 0.10).mean())
+
+            if kind == "garden":
+                if not (g > r + 0.06 and g > b + 0.05):
+                    continue
+            if kind == "flower":
+                if sat < 0.25 or mx.mean() < 0.30:
+                    continue
+            if kind == "city":
+                if edge_total < 0.12 or vert_edge < 0.08:
+                    continue
+            if kind == "sky":
+                if edge_total > 0.10:
+                    continue
+
+            return patch
+
+        p = str(rng.choice(np.array(candidates, dtype=object)))
+        try:
+            return Image.open(p).convert("RGB")
+        except Exception:
+            return None
+
+    def _build_masterpiece_init(self, candidates: List[str], rng: np.random.Generator, size: int) -> Image.Image:
+        sky_c = (170, 205, 240)
+        build_c = (240, 240, 240)
+        green_c = (120, 200, 140)
+        if self.style_memory is not None:
+            sky_c = tuple(map(int, self.style_memory.sky_color))
+            build_c = tuple(map(int, self.style_memory.building_color))
+            green_c = tuple(map(int, self.style_memory.greenery_color))
+
+        canvas = Image.new("RGB", (size, size), (24, 30, 40))
+        draw = ImageDraw.Draw(canvas)
+        horizon = int(size * float(rng.uniform(0.58, 0.70)))
+        for y in range(size):
+            t = y / float(max(1, size - 1))
+            if y < horizon:
+                k = y / float(max(1, horizon))
+                col = (
+                    int(sky_c[0] * (1 - k) + 255 * k),
+                    int(sky_c[1] * (1 - k) + 255 * k),
+                    int(sky_c[2] * (1 - k) + 255 * k),
+                )
+            else:
+                k = (y - horizon) / float(max(1, size - horizon))
+                col = (
+                    int(255 * (1 - k) + green_c[0] * k),
+                    int(255 * (1 - k) + green_c[1] * k),
+                    int(255 * (1 - k) + green_c[2] * k),
+                )
+            draw.line([(0, y), (size, y)], fill=col)
+
+        sky_layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        sdraw = ImageDraw.Draw(sky_layer)
+        for _ in range(int(rng.integers(8, 14))):
+            patch = self._sample_patch(candidates, rng=rng, kind="sky")
+            if patch is None:
+                continue
+            tw = int(rng.uniform(size * 0.18, size * 0.48))
+            th = int(rng.uniform(size * 0.10, size * 0.28))
+            patch = patch.resize((max(8, tw), max(8, th)), Image.Resampling.LANCZOS)
+            x = int(rng.uniform(-size * 0.05, size * 0.85))
+            y = int(rng.uniform(0, horizon - th * 0.35))
+            alpha = Image.new("L", patch.size, int(rng.uniform(45, 90)))
+            sky_layer.paste(patch, (x, y), alpha)
+        sky_layer = sky_layer.filter(ImageFilter.GaussianBlur(radius=max(1, int(size * 0.012))))
+
+        city_layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        for _ in range(int(rng.integers(10, 20))):
+            patch = self._sample_patch(candidates, rng=rng, kind="city")
+            if patch is None:
+                continue
+            tw = int(rng.uniform(size * 0.10, size * 0.34))
+            th = int(rng.uniform(size * 0.16, size * 0.58))
+            patch = patch.resize((max(8, tw), max(8, th)), Image.Resampling.LANCZOS)
+            angle = float(rng.uniform(-2.5, 2.5))
+            patch = patch.rotate(angle, resample=Image.Resampling.BICUBIC, expand=True)
+            x = int(rng.uniform(-size * 0.06, size * 0.92))
+            y = int(horizon - patch.height + rng.uniform(-size * 0.10, size * 0.12))
+            alpha = Image.new("L", patch.size, int(rng.uniform(120, 200)))
+            city_layer.paste(patch, (x, y), alpha)
+        city_layer = city_layer.filter(ImageFilter.GaussianBlur(radius=max(1, int(size * 0.003))))
+
+        garden_layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        for _ in range(int(rng.integers(6, 12))):
+            patch = self._sample_patch(candidates, rng=rng, kind="garden")
+            if patch is None:
+                continue
+            tw = int(rng.uniform(size * 0.14, size * 0.46))
+            th = int(rng.uniform(size * 0.10, size * 0.28))
+            patch = patch.resize((max(8, tw), max(8, th)), Image.Resampling.LANCZOS)
+            x = int(rng.uniform(-size * 0.04, size * 0.88))
+            y = int(rng.uniform(horizon + size * 0.06, size * 0.92))
+            alpha = Image.new("L", patch.size, int(rng.uniform(75, 140)))
+            garden_layer.paste(patch, (x, y), alpha)
+        garden_layer = garden_layer.filter(ImageFilter.GaussianBlur(radius=max(1, int(size * 0.006))))
+
+        skyline = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        bdraw = ImageDraw.Draw(skyline)
+        base_y = int(horizon + size * 0.02)
+        outline_c = (max(0, build_c[0] - 18), max(0, build_c[1] - 18), max(0, build_c[2] - 18))
+        glass_c = (int(sky_c[0] * 0.55 + 255 * 0.45), int(sky_c[1] * 0.55 + 255 * 0.45), int(sky_c[2] * 0.55 + 255 * 0.45))
+        x = int(size * 0.05)
+        while x < int(size * 0.95):
+            use_shape = self.shape_memory is not None and self.shape_memory.widths and self.shape_memory.heights
+            if use_shape:
+                w = int(np.clip(float(rng.choice(self.shape_memory.widths)), 0.03, 0.22) * size)
+                h = int(np.clip(float(rng.choice(self.shape_memory.heights)), 0.18, 0.70) * size)
+                spacing = int(np.clip(float(rng.choice(self.shape_memory.spacings or [0.014])), 0.004, 0.07) * size)
+                win_cols = int(rng.choice(self.shape_memory.window_cols or [6]))
+                win_rows = int(rng.choice(self.shape_memory.window_rows or [10]))
+            else:
+                w = int(rng.uniform(size * 0.05, size * 0.12))
+                h = int(rng.uniform(size * 0.20, size * 0.55))
+                spacing = int(rng.uniform(size * 0.010, size * 0.030))
+                win_cols = int(max(3, w // max(1, int(size * 0.02))))
+                win_rows = int(max(5, h // max(1, int(size * 0.03))))
+
+            y0 = base_y - h
+            x1 = min(size - 1, x + w)
+            bdraw.rounded_rectangle([x, y0, x1, base_y], radius=int(w * 0.12), fill=(*build_c, 120), outline=(*outline_c, 110), width=2)
+            win_cols = int(max(2, min(18, win_cols)))
+            win_rows = int(max(3, min(28, win_rows)))
+            for cx_i in range(win_cols):
+                for cy_i in range(win_rows):
+                    if rng.random() < 0.18:
+                        continue
+                    wx0 = x + int((cx_i + 0.2) * (w / win_cols))
+                    wy0 = y0 + int((cy_i + 0.25) * (h / win_rows))
+                    if wx0 >= x1 - 1 or wy0 >= base_y - 2:
+                        continue
+                    wx1 = min(x1 - 1, max(wx0 + 1, wx0 + int(w / win_cols * 0.45)))
+                    wy1 = min(base_y - 2, max(wy0 + 1, wy0 + int(h / win_rows * 0.38)))
+                    w_alpha = int(rng.uniform(70, 120))
+                    bdraw.rectangle([wx0, wy0, wx1, wy1], fill=(*glass_c, w_alpha))
+
+            # Subtle facade mullion lines to keep structures readable without harsh outlines.
+            for lx in range(x + int(w * 0.12), x1 - int(w * 0.08), max(4, int(w * 0.14))):
+                bdraw.line([(lx, y0 + 2), (lx, base_y - 2)], fill=(*glass_c, 48), width=1)
+            x += w + spacing
+
+        skyline = skyline.filter(ImageFilter.GaussianBlur(radius=max(1, int(size * 0.002))))
+
+        flowers = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        fdraw = ImageDraw.Draw(flowers)
+        for i in range(int(rng.integers(6, 12))):
+            cx = int(rng.uniform(size * 0.12, size * 0.88))
+            cy = int(rng.uniform(horizon + size * 0.08, size * 0.92))
+            r = float(rng.uniform(size * 0.028, size * 0.055))
+            petals = int(rng.integers(6, 10))
+            col = (int(rng.uniform(180, 255)), int(rng.uniform(120, 240)), int(rng.uniform(160, 255)))
+            for p_i in range(petals):
+                a0 = (p_i / petals) * math.tau + float(rng.uniform(-0.20, 0.20))
+                a1 = a0 + (math.tau / petals) * 0.55
+                a2 = a0 + (math.tau / petals) * 1.10
+                p0 = (cx + int(math.cos(a0) * r * 0.35), cy + int(math.sin(a0) * r * 0.35))
+                p1 = (cx + int(math.cos(a1) * r * 1.05), cy + int(math.sin(a1) * r * 1.05))
+                p2 = (cx + int(math.cos(a2) * r * 0.35), cy + int(math.sin(a2) * r * 0.35))
+                fdraw.polygon([p0, p1, p2], fill=(*col, 70))
+            fdraw.ellipse([cx - int(r * 0.25), cy - int(r * 0.25), cx + int(r * 0.25), cy + int(r * 0.25)], fill=(255, 245, 245, 90))
+        flowers = flowers.filter(ImageFilter.GaussianBlur(radius=max(1, int(size * 0.004))))
+
+        birds = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        b2 = ImageDraw.Draw(birds)
+        for _ in range(int(rng.integers(6, 12))):
+            x0 = float(rng.uniform(size * 0.10, size * 0.90))
+            y0 = float(rng.uniform(size * 0.10, horizon * 0.82))
+            s = float(rng.uniform(size * 0.014, size * 0.030))
+            pts = []
+            steps = int(rng.integers(9, 14))
+            for t in range(steps):
+                tt = t / max(1, steps - 1)
+                px = x0 + (tt - 0.5) * s * 6.0
+                py = y0 - (math.sin(tt * math.pi) * s * 1.7)
+                pts.append((int(px), int(py)))
+            b2.line(pts, fill=(20, 25, 34, 80), width=2)
+            pts2 = [(int(x0 + (x0 - px)), int(y0 + (y0 - py))) for (px, py) in pts]
+            b2.line(pts2, fill=(20, 25, 34, 80), width=2)
+        birds = birds.filter(ImageFilter.GaussianBlur(radius=max(1, int(size * 0.003))))
+
+        comp = canvas.convert("RGBA")
+        comp = Image.alpha_composite(comp, sky_layer)
+        comp = Image.alpha_composite(comp, city_layer)
+        comp = Image.alpha_composite(comp, skyline)
+        comp = Image.alpha_composite(comp, garden_layer)
+        comp = Image.alpha_composite(comp, flowers)
+        comp = Image.alpha_composite(comp, birds)
+
+        glow = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        gdraw = ImageDraw.Draw(glow)
+        for i in range(18):
+            a = int(70 - i * 3)
+            gdraw.ellipse(
+                [int(size * 0.28) - i * 10, int(horizon * 0.88) - i * 8, int(size * 0.86) + i * 10, int(horizon * 1.10) + i * 10],
+                fill=(255, 245, 235, max(0, a)),
+            )
+        glow = glow.filter(ImageFilter.GaussianBlur(radius=max(1, int(size * 0.035))))
+        comp = Image.alpha_composite(comp, glow)
+        comp = comp.filter(ImageFilter.GaussianBlur(radius=max(1, int(size * 0.0015))))
+        comp = comp.convert("RGB").filter(ImageFilter.UnsharpMask(radius=2, percent=135, threshold=2))
+        return comp
+
+    def brain_roulette(self, dataset_path: str, steps: int = 12, size: int = 512):
+        seed = int(np.random.randint(0, 2**31 - 1))
+        rng = self._rng(seed)
+        candidates = self._pick_city_candidates(dataset_path, rng=rng)
+        init_image = self._build_masterpiece_init(candidates, rng=rng, size=int(size))
+
+        prompt_pool = [
+            "beautiful futuristic city garden portrait, bright daylight, reflective glass skyscrapers, flowers and birds, greenery, cinematic composition, crisp clean lines, sharp architectural detail, high detail",
+            "utopian clean futuristic skyline with botanical gardens, birds in the sky, soft sunlight, reflective glass towers, sharp focus, high detail, clean composition",
+            "utopian metropolis garden, elegant skyscrapers, flowers, birds, cinematic light, ultra detailed, crisp, clean, sharp",
+            "futuristic city oasis portrait, glass spire towers, wide boulevard, lush garden flowers, birds, realistic lighting, sharp focus, high detail",
+        ]
+        prompt = str(rng.choice(prompt_pool))
+
+        negative_prompt = "cartoon, anime, lowres, blurry, soft focus, watercolor, impressionist, haze, fog, low contrast, noise, text, watermark, night, neon, cyberpunk, dystopian, dirty, grunge"
+        strength = float(rng.uniform(0.48, 0.64))
+        guidance = float(rng.uniform(7.5, 9.5))
+        steps = int(max(10, steps))
+
+        image, meta = self.brain_img2img(
+            init_image=init_image,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            seed=int(seed),
+            steps=int(steps),
+            strength=strength,
+            guidance_scale=guidance,
+            size=int(size),
+            realism="photo",
+        )
+
+        if meta.get("mode") == "diffusion_img2img" and int(steps) >= 12:
+            refine_steps = int(max(6, min(10, steps // 2)))
+            refine_strength = float(rng.uniform(0.18, 0.26))
+            refine_guidance = float(min(12.0, guidance + rng.uniform(0.8, 1.6)))
+            refine_prompt = prompt + ", sharp focus, crisp details, high contrast, clean edges"
+            image, meta = self.brain_img2img(
+                init_image=image,
+                prompt=refine_prompt,
+                negative_prompt=negative_prompt,
+                seed=int(seed) + 1,
+                steps=refine_steps,
+                strength=refine_strength,
+                guidance_scale=refine_guidance,
+                size=int(size),
+                realism="photo",
+            )
+            meta = {**meta, "refine": True, "refine_steps": refine_steps, "refine_strength": refine_strength, "refine_guidance_scale": refine_guidance}
+
+        meta = {
+            **meta,
+            "prompt": prompt,
+            "negative_prompt": negative_prompt,
+            "init": "patch_mosaic_masterpiece",
+            "initSourceCount": len(candidates),
+            "strength": strength,
+            "guidance_scale": guidance,
+        }
+        return image, meta
 
     def _load_style_memory(self, path: str) -> Optional[StyleMemory]:
         try:

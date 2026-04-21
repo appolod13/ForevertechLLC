@@ -65,17 +65,11 @@ export function FusionAI({ prompt, onImageGenerated }: FusionAIProps) {
     files.forEach(file => formData.append('files', file));
     formData.append('payload', JSON.stringify({ prompt, strength: 0.75, steps: 50 }));
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
-
     try {
-      const res = await fetch('http://localhost:8000/fuse', {
+      const res = await fetch('/api/fuse', {
         method: 'POST',
-        body: formData,
-        signal: controller.signal,
+        body: formData
       });
-
-      clearTimeout(timeoutId);
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ detail: 'Unknown server error' }));
@@ -88,7 +82,6 @@ export function FusionAI({ prompt, onImageGenerated }: FusionAIProps) {
       const { jobId } = await res.json();
       connectWebSocket(jobId);
     } catch (err) {
-      clearTimeout(timeoutId);
       if (err instanceof Error) {
         if (err.name === 'AbortError') {
           setError('Request timed out. Please check if the Fusion service is running.');
@@ -105,7 +98,30 @@ export function FusionAI({ prompt, onImageGenerated }: FusionAIProps) {
   };
 
   const connectWebSocket = (jobId: string) => {
-    const ws = new WebSocket(`ws://localhost:8000/progress/${jobId}`);
+    if (jobId === 'mock-job') {
+      setStatus('Simulating Fusion...');
+      setProgress(50);
+      setTimeout(() => {
+        setProgress(100);
+        setStatus('done');
+        const mockSvg = `data:image/svg+xml;base64,${btoa(
+          '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">' +
+            '<rect width="100%" height="100%" fill="#1a1a2e"/>' +
+            '<text x="50%" y="50%" font-family="system-ui" font-size="24" fill="#60a5fa" text-anchor="middle">' +
+              'Mock Fused Image' +
+            '</text>' +
+            '<text x="50%" y="60%" font-family="system-ui" font-size="16" fill="#9ca3af" text-anchor="middle">' +
+              '(Fusion Service Offline)' +
+            '</text>' +
+          '</svg>'
+        )}`;
+        onImageGenerated(mockSvg);
+        setIsFusing(false);
+        setIsOpen(false);
+      }, 2000);
+      return;
+    }
+    const ws = new WebSocket(`ws://127.0.0.1:8000/progress/${jobId}`);
     
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -113,7 +129,7 @@ export function FusionAI({ prompt, onImageGenerated }: FusionAIProps) {
       setProgress(data.progress);
 
       if (data.status === 'done') {
-        const imageUrl = `http://localhost:8000${data.result}`;
+        const imageUrl = `http://127.0.0.1:8000${data.result}`;
         onImageGenerated(imageUrl);
         setIsFusing(false);
         setIsOpen(false);

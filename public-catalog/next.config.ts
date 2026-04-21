@@ -15,6 +15,7 @@ const nextConfig: NextConfig = {
     ];
   },
   images: {
+    dangerouslyAllowSVG: true,
     remotePatterns: [
       {
         protocol: "https",
@@ -23,7 +24,7 @@ const nextConfig: NextConfig = {
       {
         protocol: "http",
         hostname: "**",
-      },
+      }
     ],
   },
 };

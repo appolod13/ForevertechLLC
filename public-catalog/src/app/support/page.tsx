@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Header } from '../../components/Header';
 import { CallAgent } from '../../components/CallAgent';
 import { WalletPanel } from '../../components/WalletPanel';
+import { LocalShopFinder } from '../../components/LocalShopFinder';
 
 interface SupportStatus {
   agentsAvailable: number;
@@ -230,6 +231,11 @@ export default function SupportPage() {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* Google Maps Shop Finder Tab */}
+            <div className="mt-12 pt-12 border-t border-gray-800">
+              <LocalShopFinder />
             </div>
           </>
         )}

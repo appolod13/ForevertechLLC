@@ -10,7 +10,7 @@ export default function BrainRandomizer({ onImageGenerated }: { onImageGenerated
     setIsGenerating(true);
     setError(null);
     try {
-      const res = await fetch('http://localhost:8000/brain/roulette', {
+      const res = await fetch('/api/brain/roulette', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dataset_path: dataset, steps: 20 })
@@ -20,16 +20,15 @@ export default function BrainRandomizer({ onImageGenerated }: { onImageGenerated
         throw new Error('Failed to generate from brain randomizer');
       }
 
-      const imageUrlPath = res.headers.get('X-Image-Url');
-      if (imageUrlPath) {
-        onImageGenerated(`http://localhost:8000${imageUrlPath}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      onImageGenerated(url);
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        setError(e.message);
       } else {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        onImageGenerated(url);
+        setError('An unknown error occurred');
       }
-    } catch (e: any) {
-      setError(e.message);
     } finally {
       setIsGenerating(false);
     }

@@ -25,8 +25,11 @@ export function ProductCustomizer({ initialImageUrl }: { initialImageUrl: string
   const [orderStatus, setOrderStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
 
   useEffect(() => {
-    fetch('http://localhost:3001/api/products')
-      .then(res => res.json())
+    fetch('/api/products')
+      .then(async res => {
+          if (!res.ok) throw new Error('Failed to fetch products');
+          return res.json();
+      })
       .then(data => {
         if (data.success) {
           setProducts(data.products);
@@ -37,7 +40,18 @@ export function ProductCustomizer({ initialImageUrl }: { initialImageUrl: string
           }
         }
       })
-      .catch(err => console.error(err))
+      .catch(err => {
+          console.error('Products fetch error:', err);
+          // Fallback static products in case API fails
+          const fallbackProducts = [
+            { id: 'shirt-1', name: 'Premium Tee', description: 'Cotton Tee', basePrice: 25.99, currency: 'usd', variants: ['S', 'M', 'L', 'XL'], colors: ['Black', 'White'], image: '' },
+            { id: 'mug-1', name: 'Ceramic Mug', description: '11oz Mug', basePrice: 15.99, currency: 'usd', variants: ['Standard'], colors: ['White', 'Black'], image: '' }
+          ];
+          setProducts(fallbackProducts);
+          setSelectedProduct(fallbackProducts[0]);
+          setSelectedVariant(fallbackProducts[0].variants[0]);
+          setSelectedColor(fallbackProducts[0].colors[0]);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -96,7 +110,7 @@ export function ProductCustomizer({ initialImageUrl }: { initialImageUrl: string
                     alt="Design" 
                     fill 
                     className="object-contain" 
-                    unoptimized={initialImageUrl.startsWith('http://localhost')}
+                    unoptimized={initialImageUrl.includes('127.0.0.1') || initialImageUrl.includes('localhost')}
                  />
              </div>
          )}

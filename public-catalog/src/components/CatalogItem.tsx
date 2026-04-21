@@ -1,8 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { format } from 'date-fns';
-import { ShoppingCart, Coins, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { ShoppingCart, Coins, ShieldCheck, AlertTriangle, ThumbsUp, ThumbsDown, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useCart } from '@/context/CartContext';
@@ -48,6 +48,52 @@ export function CatalogItem({
   const [isLoading, setIsLoading] = React.useState(true);
   const [hasError, setHasError] = useState(false);
   const [isFallback, setIsFallback] = useState(false);
+  const [likes, setLikes] = useState(Math.floor(Math.random() * 50) + 10);
+  const [isLiked, setIsLiked] = useState(false);
+  const [dislikeTime, setDislikeTime] = useState<number | null>(null);
+  const [isHidden, setIsHidden] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [selectedSize, setSelectedSize] = useState<'S'|'M'|'L'|'XL'|'XXL'>('L');
+
+  useEffect(() => {
+    // Check if it was disliked more than 30 mins ago
+    if (dislikeTime) {
+      const checkHidden = () => {
+        if (Date.now() - dislikeTime > 30 * 60 * 1000) {
+          setIsHidden(true);
+        }
+      };
+      checkHidden();
+      const interval = setInterval(checkHidden, 60000); // Check every minute
+      return () => clearInterval(interval);
+    }
+  }, [dislikeTime]);
+
+  const handleFeedback = async (type: 'like' | 'dislike') => {
+    try {
+      // Send feedback to backend to teach the AI
+      await fetch('http://localhost:3001/api/ai/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageId: id, type, prompt: metadata?.prompt || metadata?.title })
+      });
+      
+      if (type === 'like') {
+        if (!isLiked) {
+          setLikes(prev => prev + 1);
+          setIsLiked(true);
+          toast.success('You liked this design! The AI will learn from this.');
+        }
+      } else {
+        setDislikeTime(Date.now());
+        toast.info('You disliked this design. It will be hidden in 30 minutes.');
+      }
+    } catch (e) {
+      console.error('Feedback error:', e);
+    }
+  };
+
+  if (isHidden) return null;
 
   React.useEffect(() => {
     setImgSrc(getImageUrl(mediaUrl));
@@ -67,11 +113,12 @@ export function CatalogItem({
     setIsPurchasing(true);
     try {
       await addToCart({ 
-        id, 
-        title: metadata?.title || 'Digital Asset', 
+        id: `${id}-${selectedSize}`, 
+        title: `${metadata?.title || 'Digital Asset'} (Size: ${selectedSize})`, 
         price: priceUsd,
         quantity: 1,
         currency,
+        size: selectedSize,
         imageUrl: hasError ? undefined : imgSrc,
         description: safeContent,
         imageError: hasError,
@@ -116,6 +163,7 @@ export function CatalogItem({
             src={imgSrc}
             alt="Item thumbnail"
             fill
+            unoptimized
             className={cn(
               "object-cover transition-transform duration-500 group-hover:scale-110",
               isLoading ? "opacity-0" : "opacity-100"
@@ -177,17 +225,54 @@ export function CatalogItem({
       {/* Content Section */}
       <div className="flex flex-1 flex-col p-5">
         <div className="mb-4">
-          <h3 className="mb-2 text-xl font-bold text-white line-clamp-1">
-            {metadata?.title || 'Exclusive Digital Asset'}
-          </h3>
+          <div className="flex justify-between items-start">
+            <h3 className="mb-2 text-xl font-bold text-white line-clamp-1 flex-1">
+              {metadata?.title || 'Exclusive Digital Asset'}
+            </h3>
+            <button 
+              onClick={() => setShowPreview(true)}
+              className="ml-2 p-1.5 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+              title="Preview Image"
+            >
+              <Eye className="h-4 w-4" />
+            </button>
+          </div>
           <p className="text-sm text-zinc-400 line-clamp-3">
             {description}
           </p>
         </div>
 
+        {/* Feedback Section */}
+        <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 pb-4">
+          <button 
+            onClick={() => handleFeedback('like')}
+            className={cn("flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full transition-colors", 
+              isLiked ? "bg-primary/20 text-primary" : "bg-zinc-800/50 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+            )}
+          >
+            <ThumbsUp className="h-3.5 w-3.5" />
+            <span>{likes} Likes</span>
+          </button>
+          <button 
+            onClick={() => handleFeedback('dislike')}
+            className={cn("flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full transition-colors",
+              dislikeTime ? "bg-red-500/20 text-red-500" : "bg-zinc-800/50 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+            )}
+            title={dislikeTime ? "Will be hidden in 30 mins" : "Dislike to teach AI"}
+          >
+            <ThumbsDown className="h-3.5 w-3.5" />
+            <span>Dislike</span>
+          </button>
+          {dislikeTime && (
+            <span className="text-[10px] text-amber-500/80 animate-pulse ml-auto">
+              Hiding soon...
+            </span>
+          )}
+        </div>
+
         {/* Pricing */}
         <div className="mt-auto space-y-4">
-          <div className="flex items-end justify-between border-t border-zinc-800 pt-4">
+          <div className="flex items-end justify-between pt-1">
             <div>
               <p className="text-xs text-zinc-500 uppercase tracking-wider">Price</p>
               <div className="flex items-baseline gap-2">
@@ -202,6 +287,27 @@ export function CatalogItem({
                 <span className="text-xl font-bold text-amber-400">{fcPrice}</span>
                 <span className="text-xs text-amber-500">FC</span>
               </div>
+            </div>
+          </div>
+
+          {/* Size Selector */}
+          <div className="mb-3">
+            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">T-Shirt Size</p>
+            <div className="flex gap-2">
+              {['S', 'M', 'L', 'XL', 'XXL'].map((size) => (
+                <button
+                  key={size}
+                  onClick={() => setSelectedSize(size as any)}
+                  className={cn(
+                    "flex-1 py-1 text-xs font-semibold rounded-md border transition-colors",
+                    selectedSize === size 
+                      ? "bg-primary border-primary text-black" 
+                      : "bg-zinc-900 border-zinc-700 text-zinc-300 hover:border-primary/50"
+                  )}
+                >
+                  {size}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -228,6 +334,30 @@ export function CatalogItem({
           </div>
         </div>
       </div>
+
+      {/* Preview Modal */}
+      {showPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setShowPreview(false)}>
+          <div className="relative max-w-4xl w-full aspect-square md:aspect-video rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800" onClick={(e) => e.stopPropagation()}>
+            <Image
+              src={imgSrc}
+              alt="Preview"
+              fill
+              unoptimized
+              className="object-contain"
+            />
+            <button 
+              onClick={() => setShowPreview(false)}
+              className="absolute top-4 right-4 h-10 w-10 bg-black/50 hover:bg-black/80 text-white rounded-full flex items-center justify-center transition-colors"
+            >
+              &times;
+            </button>
+            <div className="absolute bottom-4 left-4 bg-black/60 px-4 py-2 rounded-lg text-sm text-white backdrop-blur-md">
+              <span className="font-semibold text-primary">{likes} Likes</span> - AI generated
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

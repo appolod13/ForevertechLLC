@@ -67,6 +67,8 @@ function StudioPageInner() {
   const [instagramEnabled, setInstagramEnabled] = useState(false);
   const [tiktokEnabled, setTiktokEnabled] = useState(false);
   const [youtubeEnabled, setYoutubeEnabled] = useState(false);
+  const [posterAttachedImage, setPosterAttachedImage] = useState<string | null>(null);
+
   const [calendarMonth, setCalendarMonth] = useState<number>(new Date().getMonth());
   const [calendarYear, setCalendarYear] = useState<number>(new Date().getFullYear());
   const [rangeStart, setRangeStart] = useState<string>('');
@@ -325,6 +327,7 @@ function StudioPageInner() {
     if (!item) return;
     setPostContent(item.text_content);
     setGeneratedImage(item.image_url);
+    setPosterAttachedImage(item.image_url);
   };
 
   const tokens = (s: string) => s.toLowerCase().split(/\W+/).filter(Boolean);
@@ -522,34 +525,31 @@ function StudioPageInner() {
         setPipelineStage('Prompt validation');
         setProgress(8);
 
-        const timeoutMs = testMode ? 5_000 : (quantumMode ? 120_000 : 60_000);
         const attemptStartedAt = Date.now();
         let tick: ReturnType<typeof setInterval> | null = null;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         try {
           setPipelineStage(quantumMode ? 'Quantum processing' : 'Rendering image');
 
           tick = setInterval(() => {
             const elapsedMs = Date.now() - attemptStartedAt;
-            const ratio = Math.min(1, elapsedMs / timeoutMs);
+            // Provide a visual progress indicator that slows down but never quite reaches 100%
+            const maxExpectedMs = quantumMode ? 120_000 : 60_000;
+            const ratio = Math.min(0.99, elapsedMs / maxExpectedMs);
             const base = 10;
             const cap = ipfsEnabled ? 88 : 94;
             const nextProgress = Math.min(cap, Math.round(base + ratio * (cap - base)));
             setProgress((p) => Math.max(p, nextProgress));
-            const remainingMs = Math.max(0, timeoutMs - elapsedMs);
+            const remainingMs = Math.max(0, maxExpectedMs - elapsedMs);
             setEtaSeconds(Math.ceil(remainingMs / 1000));
           }, 750);
 
           const res = await fetch(endpoint, {
              method: 'POST',
              headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify(payload),
-             signal: controller.signal
+             body: JSON.stringify(payload)
           });
 
-          clearTimeout(timeoutId);
           if (tick) clearInterval(tick);
 
           const raw: unknown = await res.json().catch(() => null);
@@ -583,7 +583,6 @@ function StudioPageInner() {
           break;
 
         } catch (err: unknown) {
-          clearTimeout(timeoutId);
           if (tick) clearInterval(tick);
           const errMsg =
             (typeof err === 'object' && err !== null && 'message' in err && typeof (err as { message?: unknown }).message === 'string')
@@ -618,24 +617,33 @@ function StudioPageInner() {
       }
 
       let imageUrl = '';
-      if (typeof successData.image_url === 'string') imageUrl = successData.image_url;
-      else if (typeof successData.imageUrl === 'string') imageUrl = successData.imageUrl;
-      else if (typeof successData.data === 'object' && successData.data !== null) {
-        const d = successData.data as Record<string, unknown>;
-        if (typeof d.image_url === 'string') imageUrl = d.image_url;
-        else if (typeof d.imageUrl === 'string') imageUrl = d.imageUrl;
-      }
-      
-      // Additional check for fallback structure that might be deeply nested or wrapped
-      if (!imageUrl && successData.data && (successData.data as any).data) {
-        const dd = (successData.data as any).data;
-        if (typeof dd.image_url === 'string') imageUrl = dd.image_url;
-        else if (typeof dd.imageUrl === 'string') imageUrl = dd.imageUrl;
-      }
+            if (typeof successData.image_url === 'string') imageUrl = successData.image_url;
+            else if (typeof successData.imageUrl === 'string') imageUrl = successData.imageUrl;
+            else if (typeof successData.data === 'object' && successData.data !== null) {
+              const d = successData.data as Record<string, unknown>;
+              if (typeof d.image_url === 'string') imageUrl = d.image_url;
+              else if (typeof d.imageUrl === 'string') imageUrl = d.imageUrl;
+            }
 
-      if (!imageUrl) {
-        throw new Error('Generation succeeded but returned no image URL');
-      }
+            // Additional check for fallback structure that might be deeply nested or wrapped
+            if (!imageUrl && successData.data && (successData.data as any).data) {
+              const dd = (successData.data as any).data;
+              if (typeof dd.image_url === 'string') imageUrl = dd.image_url;
+              else if (typeof dd.imageUrl === 'string') imageUrl = dd.imageUrl;
+            }
+
+            // Fallback for mock generation or when structure is completely different
+            if (!imageUrl && typeof successData === 'object' && successData !== null) {
+              const obj = successData as Record<string, unknown>;
+              if (obj.items && Array.isArray(obj.items) && obj.items.length > 0) {
+                 imageUrl = obj.items[0].image_url || obj.items[0].imageUrl;
+              }
+            }
+
+            if (!imageUrl) {
+              console.error("Failed to parse image URL from response:", successData);
+              throw new Error('Generation succeeded but returned no image URL');
+            }
 
       setGeneratedImage(imageUrl);
       setDraftImage('');
@@ -699,8 +707,9 @@ function StudioPageInner() {
     setIsPosting(true);
     setPostingStatus(null);
     try {
-      if (generatedImage) {
-        await validatePosterImage(generatedImage);
+      const mediaToPost = posterAttachedImage || generatedImage;
+      if (mediaToPost) {
+        await validatePosterImage(mediaToPost);
       }
       const platforms: string[] = [];
       if (twitterEnabled) platforms.push('twitter');
@@ -714,7 +723,7 @@ function StudioPageInner() {
         body: JSON.stringify({ 
           content: postContent,
           platforms,
-          metadata: { mediaUrl: generatedImage || undefined },
+          metadata: { mediaUrl: mediaToPost || undefined },
           userId: 'user-123',
           scheduledFor: scheduleAt || undefined,
           ipfs: ipfsEnabled
@@ -724,6 +733,7 @@ function StudioPageInner() {
       if (data.success) {
         setPostingStatus('success');
         setPostContent('');
+        setPosterAttachedImage(null);
       } else {
         const err = data.error;
         setPostingStatus(typeof err === 'string' ? err : (err ? JSON.stringify(err) : 'error'));
@@ -738,11 +748,18 @@ function StudioPageInner() {
 
   const resizeAndUpload = async (src: string, targetW: number, targetH: number, filename: string) => {
     const img = document.createElement('img');
-    img.crossOrigin = 'anonymous';
+    
+    let fetchSrc = src;
+    if (!src.startsWith('data:')) {
+      img.crossOrigin = 'anonymous';
+      // Route through local proxy to bypass CORS restrictions
+      fetchSrc = `/api/proxy-image?url=${encodeURIComponent(src)}`;
+    }
+    
     const loaded = await new Promise<boolean>((resolve) => {
       img.onload = () => resolve(true);
       img.onerror = () => resolve(false);
-      img.src = src;
+      img.src = fetchSrc;
     });
     if (!loaded) throw new Error('Image load failed');
     const canvas = document.createElement('canvas');
@@ -778,21 +795,29 @@ function StudioPageInner() {
     if (!url) {
       throw new Error('Empty image URL');
     }
-    let path = url;
-    try {
-      const parsed = new URL(url);
-      path = parsed.pathname;
-    } catch {
+    
+    if (!url.startsWith('data:')) {
+      let path = url;
+      try {
+        const parsed = new URL(url);
+        path = parsed.pathname;
+      } catch {
+      }
+      if (!/\.(png|jpe?g|webp)$/i.test(path)) {
+        throw new Error('Unsupported image format');
+      }
     }
-    if (!/\.(png|jpe?g|webp)$/i.test(path)) {
-      throw new Error('Unsupported image format');
-    }
+    
     const img = document.createElement('img');
-    img.crossOrigin = 'anonymous';
+    let fetchUrl = url;
+    if (!url.startsWith('data:')) {
+      img.crossOrigin = 'anonymous';
+      fetchUrl = `/api/proxy-image?url=${encodeURIComponent(url)}`;
+    }
     const loaded = await new Promise<boolean>((resolve) => {
       img.onload = () => resolve(true);
       img.onerror = () => resolve(false);
-      img.src = url;
+      img.src = fetchUrl;
     });
     if (!loaded) {
       throw new Error('Image validation failed');
@@ -809,13 +834,7 @@ function StudioPageInner() {
       setImportStatus(null);
       setImportProgress(25);
       if (testMode) {
-        const placeholder = '(Attached: Generated Image)';
-        const snippet = `${placeholder}: ${generatedImage}`;
-        const currentContent = postContent;
-        const finalContent = currentContent?.trim()
-          ? `${currentContent.trimEnd()}\n\n${snippet}`
-          : snippet;
-        setPostContent(finalContent);
+        setPosterAttachedImage(generatedImage);
         setImportProgress(100);
         setImportStatus('success');
         setTimeout(() => setImporting(false), 200);
@@ -825,18 +844,9 @@ function StudioPageInner() {
       const igUrl = await resizeAndUpload(original, 1080, 1080, `ig-${Date.now()}.jpg`);
       const primaryUrl = igUrl || original;
       await validatePosterImage(primaryUrl);
-      const currentContent = postContent;
-      const placeholder = '(Attached: Generated Image)';
-      const snippet = `${placeholder}: ${primaryUrl}`;
-      let finalContent: string;
-      if (currentContent.includes(placeholder)) {
-        finalContent = currentContent.replace(/\(Attached: Generated Image\)/g, snippet);
-      } else if (currentContent.trim()) {
-        finalContent = `${currentContent.trimEnd()}\n\n${snippet}`;
-      } else {
-        finalContent = snippet;
-      }
-      setPostContent(finalContent);
+      
+      setPosterAttachedImage(primaryUrl);
+      
       setImportProgress(40);
       const fbUrl = await resizeAndUpload(original, 1200, 630, `fb-${Date.now()}.jpg`);
       const twUrl = await resizeAndUpload(original, 1200, 675, `tw-${Date.now()}.jpg`);
@@ -850,20 +860,8 @@ function StudioPageInner() {
         prompt,
         priceUsd: 49.99
       };
-      const res = await fetch(`${MIRROR_API_URL}/api/post`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content: finalContent,
-          platforms: ['facebook','instagram','twitter'],
-          metadata: meta,
-          userId: 'user-123'
-        })
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || 'Post failed');
-      setImportProgress(90);
-      await fetch(`${MIRROR_API_URL}/api/catalog/posts`).catch(() => {});
+      // Note: We don't automatically POST to catalog here anymore to avoid double posting.
+      // The user will click "Post to All Channels" when they are ready.
       setImportProgress(100);
       setImportStatus('success');
     } catch (e: unknown) {
@@ -1097,16 +1095,16 @@ function StudioPageInner() {
                             >
                               Regenerate Image
                             </button>
-                            <button
-                              onClick={() => applyToPoster(idx)}
-                              className="px-3 py-2 rounded bg-purple-600 hover:bg-purple-500 text-sm font-semibold"
-                            >
-                              Apply to Poster
-                            </button>
+                              <button
+                                onClick={() => applyToPoster(idx)}
+                                className="px-3 py-2 rounded bg-purple-600 hover:bg-purple-500 text-sm font-semibold"
+                              >
+                                Apply to Poster
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <div className="mt-3 text-xs text-gray-400 break-words">
+                        <div className="mt-3 text-xs text-gray-400 break-words">
                         Provider: {String(item.generation_metadata?.provider)} • Ratio: {String(((item.generation_metadata['image'] as { ratio?: string } | undefined)?.ratio) || '')}
                       </div>
                     </div>
@@ -1282,6 +1280,25 @@ function StudioPageInner() {
                 value={postContent}
                 onChange={e => setPostContent(e.target.value)}
               />
+              {posterAttachedImage && (
+                <div className="relative mt-2 rounded-lg border border-gray-700 overflow-hidden bg-black/50 aspect-video max-w-sm">
+                  <img 
+                    src={posterAttachedImage} 
+                    alt="Attached preview" 
+                    className="w-full h-full object-contain" 
+                  />
+                  <button 
+                    onClick={() => setPosterAttachedImage(null)}
+                    className="absolute top-2 right-2 bg-black/60 hover:bg-red-600/80 text-white rounded-full p-1.5 transition-colors"
+                    title="Remove attachment"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                  </button>
+                  <div className="absolute bottom-2 left-2 bg-black/60 text-xs text-white px-2 py-1 rounded">
+                    Attached to Post
+                  </div>
+                </div>
+              )}
               <div className="rounded-xl border border-gray-700 bg-gray-900 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-semibold text-white">Live Chat</div>
@@ -1337,7 +1354,7 @@ function StudioPageInner() {
                     onClick={() => sendChat(generatedImage)}
                     className={`px-3 py-2 rounded-lg text-xs font-semibold border ${generatedImage ? 'border-purple-500/30 bg-purple-600 hover:bg-purple-500 text-white' : 'border-gray-800 bg-gray-800 text-gray-500 cursor-not-allowed'}`}
                   >
-                    Import Generated Asset
+                    Share Asset to Chat
                   </button>
                 </div>
               </div>

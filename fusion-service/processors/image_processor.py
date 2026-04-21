@@ -109,6 +109,7 @@ class ImageProcessor:
         canvas_size: int = 1024,
         shirt_color: Tuple[int, int, int] = (245, 245, 245),
         background_color: Tuple[int, int, int] = (245, 246, 248),
+        outline_only: bool = False,
     ) -> Image.Image:
         w = canvas_size
         h = canvas_size
@@ -250,21 +251,44 @@ class ImageProcessor:
         design_rgba = design.convert("RGBA")
         target = int(w * 0.34)
         design_rgba = ImageOps.fit(design_rgba, (target, target), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+        if not outline_only:
+            design_rgb = design_rgba.convert("RGB")
+            arr = np.asarray(design_rgb).astype(np.float32) / 255.0
+            arr = np.clip(arr ** 0.92, 0.0, 1.0)
+            arr = np.clip(0.5 + (arr - 0.5) * 1.12, 0.0, 1.0)
+            arr = np.clip(arr * 1.02 + 0.01, 0.0, 1.0)
+            design_rgba = Image.fromarray((arr * 255).astype(np.uint8), mode="RGB").convert("RGBA")
+
         print_mask = Image.new("L", (target, target), 0)
         pm = ImageDraw.Draw(print_mask)
-        pm.rounded_rectangle([0, 0, target - 1, target - 1], radius=int(target * 0.07), fill=255)
+        pm.rounded_rectangle([0, 0, target - 1, target - 1], radius=0, fill=255)
         alpha = design_rgba.getchannel("A")
         alpha = ImageChops.multiply(alpha, print_mask)
-        alpha = alpha.filter(ImageFilter.GaussianBlur(radius=0.8))
         design_rgba.putalpha(alpha)
 
         chest_x = cx - (target // 2)
         chest_y = int(h * 0.44) - (target // 2)
 
-        design_shadow = design_rgba.split()[-1].filter(ImageFilter.GaussianBlur(radius=6))
-        shadow_blob = Image.new("RGBA", design_rgba.size, (0, 0, 0, 40))
-        shadow_blob.putalpha(design_shadow)
-        shirt_layer.paste(shadow_blob, (chest_x + 3, chest_y + 6), shadow_blob)
+        if not outline_only:
+            print_mask_at = Image.new("L", (w, h), 0)
+            print_mask_at.paste(print_mask, (chest_x, chest_y))
+            flatten = Image.new("RGBA", (w, h), (255, 255, 255, 0))
+            flatten_alpha = print_mask_at.filter(ImageFilter.GaussianBlur(radius=1.2)).point(lambda p: int(p * 0.18))
+            flatten.putalpha(flatten_alpha)
+            shirt_layer = Image.alpha_composite(shirt_layer, flatten)
+
+            underbase = Image.new("RGBA", (target, target), (255, 255, 255, 0))
+            ub_alpha = print_mask.point(lambda p: int(p * 0.86))
+            underbase.putalpha(ub_alpha)
+            shirt_layer.paste(underbase, (chest_x, chest_y), underbase)
+        else:
+            # Outline prints: add only a subtle under-stroke (not a full white square) for visibility.
+            a = design_rgba.getchannel("A")
+            under_a = a.filter(ImageFilter.MaxFilter(size=5)).filter(ImageFilter.GaussianBlur(radius=0.8)).point(lambda p: int(p * 0.55))
+            under = Image.new("RGBA", (target, target), (255, 255, 255, 0))
+            under.putalpha(under_a)
+            shirt_layer.paste(under, (chest_x, chest_y), under)
+
         shirt_layer.paste(design_rgba, (chest_x, chest_y), design_rgba)
 
         drop = mask.filter(ImageFilter.GaussianBlur(radius=int(w * 0.032)))
@@ -276,3 +300,72 @@ class ImageProcessor:
 
         base = Image.alpha_composite(base, shirt_layer)
         return base.convert("RGB")
+
+    def to_outline_rgba(
+        self,
+        image: Image.Image,
+        line_color: Tuple[int, int, int] = (12, 16, 22),
+        thickness: int = 2,
+        threshold: float = 0.14,
+    ) -> Image.Image:
+        img = image.convert("RGB")
+        arr = np.asarray(img).astype(np.float32) / 255.0
+        gray = (0.2126 * arr[:, :, 0] + 0.7152 * arr[:, :, 1] + 0.0722 * arr[:, :, 2]).astype(np.float32)
+
+        gx = np.zeros_like(gray)
+        gy = np.zeros_like(gray)
+        gx[:, 1:-1] = gray[:, 2:] - gray[:, :-2]
+        gy[1:-1, :] = gray[2:, :] - gray[:-2, :]
+        mag = np.sqrt(gx * gx + gy * gy)
+
+        m = np.clip((mag - threshold) / max(1e-6, (0.40 - threshold)), 0.0, 1.0)
+        m = np.clip(m ** 0.65, 0.0, 1.0)
+        alpha = (m * 255.0).astype(np.uint8)
+
+        aimg = Image.fromarray(alpha, mode="L")
+        if thickness > 1:
+            aimg = aimg.filter(ImageFilter.MaxFilter(size=int(thickness * 2 + 1)))
+        aimg = aimg.filter(ImageFilter.GaussianBlur(radius=0.6))
+
+        rgba = Image.new("RGBA", img.size, (*line_color, 0))
+        rgba.putalpha(aimg)
+        return rgba
+
+    def to_outline_color_rgba(
+        self,
+        image: Image.Image,
+        thickness: int = 3,
+        threshold: float = 0.12,
+        saturation: float = 1.35,
+    ) -> Image.Image:
+        img = image.convert("RGB")
+        arr = np.asarray(img).astype(np.float32) / 255.0
+        gray = (0.2126 * arr[:, :, 0] + 0.7152 * arr[:, :, 1] + 0.0722 * arr[:, :, 2]).astype(np.float32)
+
+        gx = np.zeros_like(gray)
+        gy = np.zeros_like(gray)
+        gx[:, 1:-1] = gray[:, 2:] - gray[:, :-2]
+        gy[1:-1, :] = gray[2:, :] - gray[:-2, :]
+        mag = np.sqrt(gx * gx + gy * gy)
+
+        m = np.clip((mag - threshold) / max(1e-6, (0.35 - threshold)), 0.0, 1.0)
+        m = np.clip(m ** 0.60, 0.0, 1.0)
+        alpha = (m * 255.0).astype(np.uint8)
+        aimg = Image.fromarray(alpha, mode="L")
+        if thickness > 1:
+            aimg = aimg.filter(ImageFilter.MaxFilter(size=int(thickness * 2 + 1)))
+        aimg = aimg.filter(ImageFilter.GaussianBlur(radius=0.5))
+
+        mean = arr.mean(axis=2, keepdims=True)
+        col = np.clip(mean + (arr - mean) * float(saturation), 0.0, 1.0)
+        col = np.clip(col ** 0.92, 0.0, 1.0)
+
+        # Dark stroke behind to keep edges crisp on light shirts.
+        back_a = aimg.filter(ImageFilter.MaxFilter(size=7)).filter(ImageFilter.GaussianBlur(radius=0.8))
+        back = Image.new("RGBA", img.size, (12, 16, 22, 0))
+        back.putalpha(back_a.point(lambda p: int(p * 0.70)))
+
+        front = Image.fromarray((col * 255).astype(np.uint8), mode="RGB").convert("RGBA")
+        front.putalpha(aimg)
+
+        return Image.alpha_composite(back, front)

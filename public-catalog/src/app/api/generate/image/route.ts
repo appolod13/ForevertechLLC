@@ -1,4 +1,7 @@
 import { NextRequest } from "next/server";
+
+export const maxDuration = 300; // Allow API route to run for up to 5 minutes
+
 import { getApiKey, validateApiKey } from "@/lib/api/auth";
 import { rateLimitKey, consume } from "@/lib/api/rate-limit";
 import { ok, fail } from "@/lib/api/response";
@@ -121,7 +124,7 @@ async function tryAIGenerate(
   ipfs_upload: boolean,
   timeoutMs: number,
 ): Promise<AIResult> {
-  const base = (process.env.AI_IMAGE_GEN_URL || "http://localhost:5328").trim();
+  const base = (process.env.AI_IMAGE_GEN_URL || "http://127.0.0.1:5328").trim();
   const url = base.replace(/\/$/, "") + "/v1/images/generations";
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -153,7 +156,7 @@ async function tryAIGenerate(
     }
 
     const rawImageUrl = d.imageUrl.trim();
-    const publicQuantumBase = (process.env.NEXT_PUBLIC_QUANTUM_API_URL || "").trim().replace(/\/$/, "");
+    const publicQuantumBase = (process.env.NEXT_PUBLIC_QUANTUM_API_URL || base).trim().replace(/\/$/, "");
     const imageUrl =
       rawImageUrl.startsWith("/") && publicQuantumBase
         ? `${publicQuantumBase}${rawImageUrl}`
@@ -183,12 +186,12 @@ async function tryAIGenerate(
   }
 }
 
-async function tryFusionGenerate(prompt: string, width: number, height: number, negative_prompt?: string) {
-  const base = (process.env.FUSION_SERVICE_URL || "").trim();
+async function tryFusionGenerate(prompt: string, width: number, height: number, negative_prompt: string | undefined, timeoutMs: number) {
+  const base = (process.env.FUSION_SERVICE_URL || "http://127.0.0.1:8000").trim();
   if (!base) return null;
   const url = base.replace(/\/$/, "") + "/generate";
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 120_000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
       method: "POST",
@@ -201,10 +204,14 @@ async function tryFusionGenerate(prompt: string, width: number, height: number, 
     const data: unknown = await res.json();
     const d = isRecord(data) ? data : {};
     if (d.success === true && typeof d.imageUrl === "string") {
-      return { image_url: d.imageUrl as string, meta: isRecord(d.meta) ? (d.meta as Record<string, unknown>) : { provider: "fusion" } };
+      const rawImageUrl = (d.imageUrl as string).trim();
+      const publicFusionBase = (process.env.NEXT_PUBLIC_FUSION_API_URL || base).replace(/\/$/, "");
+      const imageUrl = rawImageUrl.startsWith("/") ? `${publicFusionBase}${rawImageUrl}` : rawImageUrl;
+      return { image_url: imageUrl, meta: isRecord(d.meta) ? (d.meta as Record<string, unknown>) : { provider: "fusion" } };
     }
     return null;
-  } catch {
+  } catch (e) {
+    console.error("Fusion Generate Error", e);
     return null;
   } finally {
     clearTimeout(timeout);
@@ -252,20 +259,21 @@ export async function POST(req: NextRequest) {
     const height = parsed.height ?? 512;
     logInfo("image.generate.request", { requestId, prompt: parsed.prompt, width, height, provider: parsed.provider || "auto", quantum_mode: parsed.quantum_mode, ipfs_upload: parsed.ipfs_upload });
     
-    const stdTimeoutMs = asPositiveInt(process.env.AI_IMAGE_TIMEOUT_STD_MS) ?? 30_000;
+    const stdTimeoutMs = asPositiveInt(process.env.AI_IMAGE_TIMEOUT_STD_MS) ?? 60_000;
     const quantumTimeoutMs = asPositiveInt(process.env.AI_IMAGE_TIMEOUT_QUANTUM_MS) ?? 120_000;
     const timeoutMs = parsed.quantum_mode ? quantumTimeoutMs : stdTimeoutMs;
 
     const cacheKey = cacheKeyFor({ prompt: parsed.prompt, negative_prompt: parsed.negative_prompt, width, height, provider: parsed.provider, quantum_mode: Boolean(parsed.quantum_mode) });
-    const cached = getCache(cacheKey);
-    if (cached) {
-      if (parsed.ipfs_upload && typeof cached.meta.ipfs_url !== "string") {
-        const ipfsMeta = await maybeUploadIpfs({ image_url: cached.image_url, requestId });
-        cached.meta = { ...cached.meta, ...ipfsMeta };
-        setCache(cacheKey, cached);
-      }
-      return ok({ image_url: cached.image_url, meta: cached.meta, requestId, cached: true });
-    }
+    // const cached = getCache(cacheKey);
+    // if (cached) {
+    //   if (parsed.ipfs_upload && typeof cached.meta.ipfs_url !== "string") {
+    //     const ipfsMeta = await maybeUploadIpfs({ image_url: cached.image_url, requestId });
+    //     cached.meta = { ...cached.meta, ...ipfsMeta };
+    //     setCache(cacheKey, cached);
+    //   }
+    //   logInfo("image.generate.success", { requestId, meta: cached.meta, note: "cached_response" });
+    //   return ok({ image_url: cached.image_url, meta: cached.meta, requestId, cached: true });
+    // }
 
     if (parsed.quantum_mode) {
       const aiService = await tryAIGenerate(
@@ -303,6 +311,7 @@ export async function POST(req: NextRequest) {
           const ipfsMeta = await maybeUploadIpfs({ image_url: degraded.image_url, requestId });
           Object.assign(meta, ipfsMeta);
         }
+        logInfo("image.generate.success", { requestId, meta, note: "degraded" });
         setCache(cacheKey, { createdAt: Date.now(), lastAccessAt: Date.now(), image_url: degraded.image_url, meta });
         return ok({
           image_url: degraded.image_url,
@@ -313,12 +322,13 @@ export async function POST(req: NextRequest) {
 
       const result = await generateImageForPlatform("mock", parsed.prompt, "twitter");
       const meta = { ...result.meta, fallback: true, degraded_from_quantum: true };
+      logInfo("image.generate.success", { requestId, meta, note: "quantum_mock_fallback" });
       setCache(cacheKey, { createdAt: Date.now(), lastAccessAt: Date.now(), image_url: result.image_url, meta });
       return ok({ image_url: result.image_url, meta, requestId });
     }
 
     // Try Fusion first if quantum_mode is false
-    const fusion = await tryFusionGenerate(parsed.prompt, width, height, parsed.negative_prompt);
+    const fusion = await tryFusionGenerate(parsed.prompt, width, height, parsed.negative_prompt, timeoutMs);
     if (fusion) {
       const meta = { ...(fusion.meta || {}) };
       if (parsed.ipfs_upload) {
@@ -352,6 +362,7 @@ export async function POST(req: NextRequest) {
     }
     const result = await generateImageForPlatform("mock", parsed.prompt, "twitter");
     const meta = { ...result.meta, fallback: true };
+    logInfo("image.generate.success", { requestId, meta, note: "mock_fallback" });
     setCache(cacheKey, { createdAt: Date.now(), lastAccessAt: Date.now(), image_url: result.image_url, meta });
     return ok({ image_url: result.image_url, meta, requestId });
   } catch (e) {

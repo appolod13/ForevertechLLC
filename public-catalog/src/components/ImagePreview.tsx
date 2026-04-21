@@ -123,13 +123,22 @@ export function ImagePreview({
               height: '100%'
             }}
           >
-            <Image
-              src={imageUrl}
-              alt="Generated Asset"
-              fill
-              className="object-contain"
-              unoptimized
-            />
+            {imageUrl.startsWith('data:image/svg+xml') ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={imageUrl}
+                alt="Generated Asset"
+                className="object-contain w-full h-full"
+              />
+            ) : (
+              <Image
+                src={imageUrl}
+                alt="Generated Asset"
+                fill
+                className="object-contain"
+                unoptimized
+              />
+            )}
           </div>
         ) : (
           <div className="text-gray-500 flex flex-col items-center gap-2">

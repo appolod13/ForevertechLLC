@@ -84,6 +84,7 @@ export function LatestAIImage({ overrideUrl }: { overrideUrl?: string }) {
             src={imageUrl}
             alt="Latest AI Generated Content"
             fill
+            unoptimized
             className={cn(
               "object-cover transition-opacity duration-700",
               loading ? "opacity-0" : "opacity-100"
