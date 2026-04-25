@@ -4,6 +4,9 @@ import uuid
 import asyncio
 from typing import Optional, List, Literal, Dict, Any
 from io import BytesIO
+import struct
+import zlib
+import binascii
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ValidationError
@@ -11,7 +14,10 @@ from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_
 from starlette.responses import Response, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import json
-from PIL import Image
+try:
+    from PIL import Image  # type: ignore
+except Exception:
+    Image = None  # type: ignore
 
 # --- Mocked AI Generation for compatibility with Python 3.14 ---
 # Removed torch, diffusers, etc. to allow the service to run locally.
@@ -20,6 +26,95 @@ app = FastAPI(title="Fusion Service (Mocked)")
 
 import random
 import glob
+
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+
+
+def _png_chunk(tag: bytes, data: bytes) -> bytes:
+    chunk = tag + data
+    return struct.pack("!I", len(data)) + chunk + struct.pack("!I", binascii.crc32(chunk) & 0xFFFFFFFF)
+
+
+def write_png_rgb(path: str, width: int, height: int, rgb: bytes) -> None:
+    if len(rgb) != width * height * 3:
+        raise ValueError("invalid_rgb_buffer")
+    rows = []
+    stride = width * 3
+    for y in range(height):
+        rows.append(b"\x00" + rgb[y * stride : (y + 1) * stride])
+    raw = b"".join(rows)
+    compressed = zlib.compress(raw, level=6)
+    ihdr = struct.pack("!IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    png = PNG_SIGNATURE + _png_chunk(b"IHDR", ihdr) + _png_chunk(b"IDAT", compressed) + _png_chunk(b"IEND", b"")
+    with open(path, "wb") as f:
+        f.write(png)
+
+
+def _blend_channel(dst: int, src: int, a: int) -> int:
+    return (dst * (255 - a) + src * a + 127) // 255
+
+
+def procedural_rgb(width: int, height: int, prompt: str, seed: int) -> bytes:
+    rng = random.Random(seed)
+    buf = bytearray(width * height * 3)
+
+    top = (rng.randint(5, 40), rng.randint(10, 60), rng.randint(30, 90))
+    bottom = (rng.randint(90, 180), rng.randint(90, 180), rng.randint(130, 220))
+    for y in range(height):
+        t = y / max(1, height - 1)
+        r = int(top[0] * (1 - t) + bottom[0] * t)
+        g = int(top[1] * (1 - t) + bottom[1] * t)
+        b = int(top[2] * (1 - t) + bottom[2] * t)
+        row_start = y * width * 3
+        for x in range(width):
+            i = row_start + x * 3
+            buf[i] = r
+            buf[i + 1] = g
+            buf[i + 2] = b
+
+    shape_count = max(12, min(80, (width * height) // 25000))
+    for _ in range(shape_count):
+        x0 = rng.randint(-width // 10, width)
+        y0 = rng.randint(-height // 10, height)
+        x1 = x0 + rng.randint(max(8, width // 40), max(12, width // 3))
+        y1 = y0 + rng.randint(max(8, height // 40), max(12, height // 3))
+        r = rng.randint(40, 255)
+        g = rng.randint(40, 255)
+        b = rng.randint(40, 255)
+        a = rng.randint(25, 110)
+        x_min = max(0, min(x0, x1))
+        x_max = min(width - 1, max(x0, x1))
+        y_min = max(0, min(y0, y1))
+        y_max = min(height - 1, max(y0, y1))
+
+        if rng.random() < 0.55:
+            cx = (x_min + x_max) / 2.0
+            cy = (y_min + y_max) / 2.0
+            rx = max(1.0, (x_max - x_min) / 2.0)
+            ry = max(1.0, (y_max - y_min) / 2.0)
+            inv_rx2 = 1.0 / (rx * rx)
+            inv_ry2 = 1.0 / (ry * ry)
+            for yy in range(y_min, y_max + 1):
+                dy = yy - cy
+                dy2 = (dy * dy) * inv_ry2
+                row_start = yy * width * 3
+                for xx in range(x_min, x_max + 1):
+                    dx = xx - cx
+                    if (dx * dx) * inv_rx2 + dy2 <= 1.0:
+                        i = row_start + xx * 3
+                        buf[i] = _blend_channel(buf[i], r, a)
+                        buf[i + 1] = _blend_channel(buf[i + 1], g, a)
+                        buf[i + 2] = _blend_channel(buf[i + 2], b, a)
+        else:
+            for yy in range(y_min, y_max + 1):
+                row_start = yy * width * 3
+                for xx in range(x_min, x_max + 1):
+                    i = row_start + xx * 3
+                    buf[i] = _blend_channel(buf[i], r, a)
+                    buf[i + 1] = _blend_channel(buf[i + 1], g, a)
+                    buf[i + 2] = _blend_channel(buf[i + 2], b, a)
+
+    return bytes(buf)
 
 class MockTrainer:
     device = "mock_cpu"
@@ -34,6 +129,8 @@ class MockTrainer:
         return "mock_pipe"
 
     def generate(self, pipe, prompt, strength, steps, seed):
+        if Image is None:
+            raise RuntimeError("pillow_missing")
         return Image.new("RGB", (512, 512), (160, 180, 220))
 
     def brain_roulette(self, dataset_path, steps, size):
@@ -43,6 +140,8 @@ class MockTrainer:
                 images.extend(glob.glob(os.path.join(dataset_path, ext)))
         
         if images:
+            if Image is None:
+                raise RuntimeError("pillow_missing")
             base_img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
             for i, img_path in enumerate(images):
                 try:
@@ -58,6 +157,8 @@ class MockTrainer:
             base_img = Image.alpha_composite(base_img, tint)
             final_img = base_img.convert("RGB")
         else:
+            if Image is None:
+                raise RuntimeError("pillow_missing")
             final_img = Image.new("RGB", (size, size), (255, 100, 100))
             
         return final_img, {"mode": "roulette", "dataset": dataset_path, "blended_count": len(images)}
@@ -140,19 +241,32 @@ async def generate_image(payload: GenerateRequest):
     REQUESTS.labels(endpoint="/generate").inc()
     start_time = time.time()
     job_id = str(uuid.uuid4())
-    
-    mock_image_url = f"https://picsum.photos/seed/{job_id}/{payload.width}/{payload.height}"
-    
+
+    width = int(payload.width) if payload.width else 512
+    height = int(payload.height) if payload.height else 512
+    width = max(64, min(1536, width))
+    height = max(64, min(1536, height))
+    seed = payload.seed if isinstance(payload.seed, int) and payload.seed != -1 else (abs(hash(payload.prompt)) % (2**31))
+
+    rgb = procedural_rgb(width, height, payload.prompt, seed)
+    os.makedirs("uploads", exist_ok=True)
+    filename = f"gen_{job_id}_{width}x{height}.png"
+    out_path = os.path.join("uploads", filename)
+    write_png_rgb(out_path, width, height, rgb)
+    image_url = f"/uploads/{filename}"
+
     latency = time.time() - start_time
     LATENCY.labels(device="mock_cpu").observe(latency)
     
     return {
         "success": True,
-        "imageUrl": mock_image_url,
+        "imageUrl": image_url,
         "meta": {
-            "provider": "fusion-service-mock",
+            "provider": "fusion-service-procedural",
             "latency": latency,
-            "mocked": True
+            "seed": seed,
+            "width": width,
+            "height": height
         }
     }
 
