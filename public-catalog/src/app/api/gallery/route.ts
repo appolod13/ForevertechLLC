@@ -14,6 +14,7 @@ export async function POST(request: Request) {
       userName: body.userName || 'Anonymous User',
       catalogName: body.catalogName || 'Default Catalog',
       userId: body.userId || 'anonymous',
+      deviceId: body.deviceId || undefined,
     });
     return NextResponse.json({ success: true, item: newItem });
   } catch (error) {

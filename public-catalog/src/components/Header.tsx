@@ -41,6 +41,9 @@ export function Header() {
           <Link href="/" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
             Latest Drops
           </Link>
+          <Link href="/about" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
+            About
+          </Link>
           <Link href="/governance" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
             Governance
           </Link>
@@ -121,6 +124,13 @@ export function Header() {
               onClick={() => setIsMobileMenuOpen(false)}
             >
               Latest Drops
+            </Link>
+            <Link 
+              href="/about" 
+              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              About
             </Link>
             <Link 
               href="/governance" 

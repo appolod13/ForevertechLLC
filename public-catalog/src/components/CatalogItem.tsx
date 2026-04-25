@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { format } from 'date-fns';
-import { ShoppingCart, Coins, ShieldCheck, AlertTriangle, ThumbsUp, ThumbsDown, Eye } from 'lucide-react';
+import { ShoppingCart, ShieldCheck, AlertTriangle, ThumbsUp, ThumbsDown, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useCart } from '@/context/CartContext';
@@ -33,7 +33,6 @@ export function CatalogItem({
     return typeof m?.priceUsd === 'number' ? m!.priceUsd! : 49.99;
   })()
 }: CatalogItemProps) {
-  const fcPrice = (priceUsd * 10).toFixed(0); // Mock conversion 1 USD = 10 FC
   const { addToCart } = useCart();
   
   // Handle image URL
@@ -71,11 +70,15 @@ export function CatalogItem({
 
   const handleFeedback = async (type: 'like' | 'dislike') => {
     try {
-      // Send feedback to backend to teach the AI
-      await fetch('http://localhost:3001/api/ai/feedback', {
+      const prompt = (() => {
+        const p = metadata?.prompt ?? metadata?.title;
+        return typeof p === 'string' ? p : (p ? JSON.stringify(p) : '');
+      })();
+
+      await fetch('/api/ai/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageId: id, type, prompt: metadata?.prompt || metadata?.title })
+        body: JSON.stringify({ imageId: id, type, prompt, mediaUrl: mediaUrl || undefined })
       });
       
       if (type === 'like') {
@@ -109,7 +112,7 @@ export function CatalogItem({
 
   if (isHidden) return null;
 
-  const handlePurchase = async (currency: 'usd' | 'fc') => {
+  const handlePurchase = async () => {
     setIsPurchasing(true);
     try {
       await addToCart({ 
@@ -117,7 +120,7 @@ export function CatalogItem({
         title: `${metadata?.title || 'Digital Asset'} (Size: ${selectedSize})`, 
         price: priceUsd,
         quantity: 1,
-        currency,
+        currency: 'usd',
         size: selectedSize,
         imageUrl: hasError ? undefined : imgSrc,
         description: safeContent,
@@ -133,7 +136,7 @@ export function CatalogItem({
           originalPrompt: metadata?.prompt || metadata?.title || 'Unknown Prompt'
         }
       });
-      toast.success(`Added to cart! (${currency.toUpperCase()})`);
+      toast.success('Added to cart!');
       
     } catch (e) {
       console.error('Purchase error:', e);
@@ -280,14 +283,6 @@ export function CatalogItem({
                 <span className="text-sm text-zinc-500">USD</span>
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-xs text-amber-500 uppercase tracking-wider">FC Price</p>
-              <div className="flex items-baseline gap-1 justify-end">
-                <Coins className="h-4 w-4 text-amber-400" />
-                <span className="text-xl font-bold text-amber-400">{fcPrice}</span>
-                <span className="text-xs text-amber-500">FC</span>
-              </div>
-            </div>
           </div>
 
           {/* Size Selector */}
@@ -312,24 +307,15 @@ export function CatalogItem({
           </div>
 
           {/* Actions */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <button 
-              onClick={() => handlePurchase('usd')}
+              onClick={handlePurchase}
               disabled={isPurchasing}
               className="flex items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              data-testid="buy-usd"
+              data-testid="buy-now"
             >
               {isPurchasing ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-black border-t-transparent" /> : <ShoppingCart className="h-4 w-4" />}
-              Buy Crypto
-            </button>
-            <button 
-              onClick={() => handlePurchase('fc')}
-              disabled={isPurchasing}
-              className="flex items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed"
-              data-testid="buy-fc"
-            >
-              {isPurchasing ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-black border-t-transparent" /> : <Coins className="h-4 w-4" />}
-              Buy w/ FC
+              Buy Now
             </button>
           </div>
         </div>

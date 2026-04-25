@@ -107,7 +107,7 @@ export function ProductCustomizer({ initialImageUrl }: { initialImageUrl: string
                  "relative z-10 transition-all",
                  selectedProduct?.id.includes('mug') 
                     ? "w-1/2 h-1/2 mix-blend-overlay opacity-90 shadow-2xl" 
-                    : "w-[35%] h-[35%] -mt-[15%] shadow-xl rounded-lg overflow-hidden bg-zinc-950/50 backdrop-blur-sm border border-white/10 p-1" 
+                    : "w-[35%] h-[35%] -mt-[15%] shadow-xl rounded-lg overflow-hidden bg-zinc-950/50 backdrop-blur-sm border border-white/10 p-1 mix-blend-multiply opacity-95" 
              )}>
                  <Image 
                     src={initialImageUrl} 

@@ -554,18 +554,49 @@ function StudioPageInner() {
         const userName = storedUser?.name || storedUser?.email || 'Anonymous Artist';
         const userId = storedUser?.id || 'anonymous';
         const catalogName = `${userName.split(' ')[0]}'s Catalog`;
+        let deviceId = localStorage.getItem('device_id');
+        if (!deviceId) {
+          deviceId = `dev_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+          localStorage.setItem('device_id', deviceId);
+        }
         
-        fetch('/api/gallery', {
+        const payload = {
+          imageUrl,
+          prompt,
+          userName,
+          catalogName,
+          userId,
+          deviceId,
+        };
+
+        const cacheKey = 'ft.gallery.cache';
+
+        const res = await fetch('/api/gallery', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body: JSON.stringify(payload)
+        });
+        const json = await res.json().catch(() => null);
+        const itemFromServer = json && json.success && json.item ? json.item : null;
+
+        try {
+          const existingRaw = localStorage.getItem(cacheKey);
+          const existing = existingRaw ? JSON.parse(existingRaw) : [];
+          const next = Array.isArray(existing) ? existing.slice(0) : [];
+          const localItem = itemFromServer || {
+            id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
             imageUrl,
             prompt,
             userName,
             catalogName,
-            userId
-          })
-        });
+            userId,
+            deviceId,
+            isFavorite: false,
+            createdAt: new Date().toISOString(),
+          };
+          next.unshift(localItem);
+          localStorage.setItem(cacheKey, JSON.stringify(next.slice(0, 250)));
+        } catch {}
       } catch (err) {
         console.error('Failed to save to gallery', err);
       }
@@ -998,6 +1029,7 @@ function StudioPageInner() {
 
             <FusionAI 
               prompt={prompt} 
+              baseImageUrl={generatedImage}
               onImageGenerated={(url) => setGeneratedImage(url)} 
             />
 

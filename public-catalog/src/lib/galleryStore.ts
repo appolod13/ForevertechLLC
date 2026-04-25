@@ -5,6 +5,7 @@ export interface GalleryItem {
   userName: string;
   catalogName: string;
   userId?: string;
+  deviceId?: string;
   isFavorite: boolean;
   createdAt: string;
 }

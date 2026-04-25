@@ -6,10 +6,11 @@ import { Sparkles, Upload, X, Loader2, Image as ImageIcon } from 'lucide-react';
 
 interface FusionAIProps {
   prompt: string;
+  baseImageUrl?: string | null;
   onImageGenerated: (url: string) => void;
 }
 
-export function FusionAI({ prompt, onImageGenerated }: FusionAIProps) {
+export function FusionAI({ prompt, baseImageUrl, onImageGenerated }: FusionAIProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -61,9 +62,29 @@ export function FusionAI({ prompt, onImageGenerated }: FusionAIProps) {
     setProgress(0);
     setError(null);
 
+    if (!baseImageUrl) {
+      setError('Generate an asset first, then add your image to fuse with it.');
+      setIsFusing(false);
+      return;
+    }
+
+    try {
+      setStatus('Blending with generated asset...');
+      setProgress(0.15);
+      const fused = await fuseClientSide({ baseImageUrl, files, prompt });
+      setProgress(1);
+      setStatus('done');
+      onImageGenerated(fused);
+      setIsFusing(false);
+      setIsOpen(false);
+      return;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Fusion failed');
+    }
+
     const formData = new FormData();
     files.forEach(file => formData.append('files', file));
-    formData.append('payload', JSON.stringify({ prompt, strength: 0.75, steps: 50 }));
+    formData.append('payload', JSON.stringify({ prompt, strength: 0.75, steps: 50, baseImageUrl }));
 
     try {
       const res = await fetch('/api/fuse', {
@@ -177,6 +198,18 @@ export function FusionAI({ prompt, onImageGenerated }: FusionAIProps) {
             </div>
 
             <div className="p-6 space-y-6">
+              {baseImageUrl && (
+                <div className="rounded-xl border border-gray-800 bg-gray-950/40 p-4">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-gray-300">
+                    <ImageIcon className="w-4 h-4 text-blue-400" />
+                    Using Generated Asset
+                  </div>
+                  <div className="mt-3 aspect-video relative overflow-hidden rounded-lg border border-gray-800 bg-black/40">
+                    <img src={normalizeUrl(baseImageUrl)} alt="Generated asset" className="w-full h-full object-contain" />
+                  </div>
+                </div>
+              )}
+
               {/* Drag and Drop Zone */}
               <div
                 onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-blue-500'); }}
@@ -250,7 +283,7 @@ export function FusionAI({ prompt, onImageGenerated }: FusionAIProps) {
               )}
 
               <button
-                disabled={isFusing || files.length === 0 || !prompt}
+                disabled={isFusing || files.length === 0 || !prompt || !baseImageUrl}
                 onClick={startFusion}
                 className="w-full py-4 rounded-xl font-bold bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-600 disabled:cursor-not-allowed text-white transition-all shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2"
               >
@@ -272,4 +305,223 @@ export function FusionAI({ prompt, onImageGenerated }: FusionAIProps) {
       )}
     </div>
   );
+}
+
+function blobFromDataUrl(dataUrl: string): Blob {
+  const comma = dataUrl.indexOf(',');
+  if (comma < 0) throw new Error('invalid_data_url');
+  const header = dataUrl.slice(0, comma);
+  const data = dataUrl.slice(comma + 1);
+  const mimeMatch = header.match(/data:([^;]+);base64/i);
+  const mime = mimeMatch?.[1] || 'application/octet-stream';
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+
+function normalizeUrl(url: string): string {
+  if (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:')) return url;
+  return new URL(url, window.location.href).toString();
+}
+
+async function loadBitmapFromUrl(url: string): Promise<ImageBitmap> {
+  const normalized = normalizeUrl(url);
+  if (normalized.startsWith('data:')) {
+    const blob = blobFromDataUrl(normalized);
+    return await createImageBitmap(blob);
+  }
+  const fetchUrl = (() => {
+    try {
+      if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+        const u = new URL(normalized);
+        if (u.origin !== window.location.origin) {
+          return `/api/proxy-image?url=${encodeURIComponent(normalized)}`;
+        }
+      }
+    } catch {
+    }
+    return normalized;
+  })();
+  const res = await fetch(fetchUrl);
+  if (!res.ok) throw new Error(`failed_to_fetch_base_image_${res.status}`);
+  const blob = await res.blob();
+  return await createImageBitmap(blob);
+}
+
+function drawCover(
+  ctx: CanvasRenderingContext2D,
+  source: CanvasImageSource,
+  dx: number,
+  dy: number,
+  dw: number,
+  dh: number,
+  sw: number,
+  sh: number,
+) {
+  const srcAspect = sw / sh;
+  const dstAspect = dw / dh;
+  let sx = 0;
+  let sy = 0;
+  let sww = sw;
+  let shh = sh;
+  if (srcAspect > dstAspect) {
+    sww = sh * dstAspect;
+    sx = (sw - sww) / 2;
+  } else {
+    shh = sw / dstAspect;
+    sy = (sh - shh) / 2;
+  }
+  ctx.drawImage(source, sx, sy, sww, shh, dx, dy, dw, dh);
+}
+
+function drawContain(
+  ctx: CanvasRenderingContext2D,
+  source: CanvasImageSource,
+  dx: number,
+  dy: number,
+  dw: number,
+  dh: number,
+  sw: number,
+  sh: number,
+) {
+  const srcAspect = sw / sh;
+  const dstAspect = dw / dh;
+  let w = dw;
+  let h = dh;
+  if (srcAspect > dstAspect) {
+    h = dw / srcAspect;
+  } else {
+    w = dh * srcAspect;
+  }
+  const x = dx + (dw - w) / 2;
+  const y = dy + (dh - h) / 2;
+  ctx.drawImage(source, x, y, w, h);
+}
+
+function clipRoundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+  ctx.clip();
+}
+
+function makeNoiseCanvas(size: number, seed: number) {
+  const c = document.createElement('canvas');
+  c.width = size;
+  c.height = size;
+  const ctx = c.getContext('2d');
+  if (!ctx) return c;
+  const img = ctx.createImageData(size, size);
+  let s = seed >>> 0;
+  for (let i = 0; i < img.data.length; i += 4) {
+    s ^= s << 13;
+    s ^= s >>> 17;
+    s ^= s << 5;
+    const v = (s >>> 0) & 0xff;
+    img.data[i] = v;
+    img.data[i + 1] = v;
+    img.data[i + 2] = v;
+    img.data[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+
+async function canvasToDataUrl(canvas: HTMLCanvasElement): Promise<string> {
+  const blob: Blob = await new Promise((resolve, reject) => {
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob_failed'))), 'image/png');
+  });
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('read_failed'));
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function fuseClientSide({ baseImageUrl, files, prompt }: { baseImageUrl: string; files: File[]; prompt: string }) {
+  const size = 1024;
+  const baseBitmap = await loadBitmapFromUrl(baseImageUrl);
+  const userBitmaps = await Promise.all(files.map(async (f) => await createImageBitmap(f)));
+
+  const design = document.createElement('canvas');
+  design.width = size;
+  design.height = size;
+  const dctx = design.getContext('2d');
+  if (!dctx) throw new Error('canvas_unavailable');
+  dctx.imageSmoothingEnabled = true;
+  dctx.imageSmoothingQuality = 'high';
+
+  drawCover(dctx, baseBitmap, 0, 0, size, size, baseBitmap.width, baseBitmap.height);
+
+  const baseAlpha = userBitmaps.length <= 1 ? 0.62 : 0.45;
+  for (let i = 0; i < userBitmaps.length; i++) {
+    const bm = userBitmaps[i];
+    dctx.save();
+    dctx.globalAlpha = baseAlpha * (0.92 ** i);
+    dctx.globalCompositeOperation = i === 0 ? 'overlay' : 'soft-light';
+    const pad = size * 0.08;
+    drawContain(dctx, bm, pad, pad, size - pad * 2, size - pad * 2, bm.width, bm.height);
+    dctx.restore();
+  }
+
+  const seed = (() => {
+    let h = 2166136261;
+    for (let i = 0; i < prompt.length; i++) h = (h ^ prompt.charCodeAt(i)) * 16777619;
+    return h >>> 0;
+  })();
+
+  const noise = makeNoiseCanvas(160, seed);
+  dctx.save();
+  dctx.globalAlpha = 0.18;
+  dctx.globalCompositeOperation = 'soft-light';
+  drawCover(dctx, noise, 0, 0, size, size, noise.width, noise.height);
+  dctx.restore();
+
+  dctx.save();
+  dctx.globalCompositeOperation = 'multiply';
+  dctx.globalAlpha = 0.14;
+  const grad = dctx.createLinearGradient(0, 0, 0, size);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.6, 'rgba(235,235,235,1)');
+  grad.addColorStop(1, 'rgba(210,210,210,1)');
+  dctx.fillStyle = grad;
+  dctx.fillRect(0, 0, size, size);
+  dctx.restore();
+
+  const out = document.createElement('canvas');
+  out.width = size;
+  out.height = size;
+  const octx = out.getContext('2d');
+  if (!octx) throw new Error('canvas_unavailable');
+  octx.imageSmoothingEnabled = true;
+  octx.imageSmoothingQuality = 'high';
+
+  const printW = Math.round(size * 0.64);
+  const printH = Math.round(size * 0.64);
+  const px = Math.round((size - printW) / 2);
+  const py = Math.round(size * 0.16);
+
+  octx.save();
+  clipRoundRect(octx, px, py, printW, printH, Math.round(size * 0.03));
+  drawCover(octx, design, px, py, printW, printH, size, size);
+  octx.restore();
+
+  octx.save();
+  octx.globalCompositeOperation = 'source-over';
+  octx.globalAlpha = 0.22;
+  octx.strokeStyle = 'rgba(0,0,0,0.35)';
+  octx.lineWidth = Math.max(2, Math.round(size * 0.004));
+  octx.beginPath();
+  octx.rect(px + 1, py + 1, printW - 2, printH - 2);
+  octx.stroke();
+  octx.restore();
+
+  return await canvasToDataUrl(out);
 }
