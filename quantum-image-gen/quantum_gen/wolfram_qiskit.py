@@ -658,7 +658,7 @@ def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum
         dist = np.sqrt(dx*dx + dy*dy) + 1.0
         
     # Create interference patterns
-    interference = np.sin(dist * prob * 0.5) + np.cos(angle * prob_2 * 10.0)
+    interference = np.sin(dist * prob * num_states * 0.12) + np.cos(angle * prob_2 * num_states * 6.0)
     
     # Calculate colors for active cells (base_val > 0.0)
     active_r = np.clip(base_r * (0.6 + 0.4 * interference) + 50, 0, 255)
@@ -686,9 +686,7 @@ def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum
     img_interf = Image.fromarray(interference_img).convert("RGBA")
     img_julia = Image.fromarray(julia_rgb).convert("RGBA")
     
-    # Drop the opacity of the interference layer to 15% so the Julia set 
-    # structure remains almost completely unadulterated.
-    img_interf.putalpha(40) 
+    img_interf.putalpha(140 if force_quantum else 40) 
     
     # Alpha composite puts interference on top of Julia
     blended = Image.alpha_composite(img_julia, img_interf).convert("RGB")
@@ -696,7 +694,7 @@ def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum
     # Increase the contrast slightly to make the Julia Set colors pop for t-shirts
     from PIL import ImageEnhance
     enhancer = ImageEnhance.Contrast(blended)
-    final_img = enhancer.enhance(1.4) # Slightly stronger contrast
+    final_img = enhancer.enhance(1.55 if force_quantum else 1.4)
             
     return final_img
 

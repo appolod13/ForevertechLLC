@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { ShoppingCart, Shirt, Coffee, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useCart } from '@/context/CartContext';
 
 interface Product {
   id: string;
@@ -14,6 +15,7 @@ interface Product {
   variants: string[];
   colors: string[];
   image: string;
+  printifySkus?: Record<string, string>;
 }
 
 export function ProductCustomizer({ initialImageUrl }: { initialImageUrl: string | null }) {
@@ -23,6 +25,7 @@ export function ProductCustomizer({ initialImageUrl }: { initialImageUrl: string
   const [selectedColor, setSelectedColor] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [orderStatus, setOrderStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
+  const { addToCart } = useCart();
 
   useEffect(() => {
     fetch('/api/products')
@@ -44,8 +47,7 @@ export function ProductCustomizer({ initialImageUrl }: { initialImageUrl: string
           console.error('Products fetch error:', err);
           // Fallback static products in case API fails
           const fallbackProducts = [
-            { id: 'shirt-1', name: 'Premium Tee', description: 'Cotton Tee', basePrice: 25.99, currency: 'usd', variants: ['S', 'M', 'L', 'XL'], colors: ['Black', 'White'], image: '' },
-            { id: 'mug-1', name: 'Ceramic Mug', description: '11oz Mug', basePrice: 15.99, currency: 'usd', variants: ['Standard'], colors: ['White', 'Black'], image: '' }
+            { id: 'shirt-1', name: 'Premium Tee', description: 'Cotton Tee', basePrice: 49.99, currency: 'usd', variants: ['S', 'M', 'L', 'XL'], colors: ['Black', 'White'], image: '' }
           ];
           setProducts(fallbackProducts);
           setSelectedProduct(fallbackProducts[0]);
@@ -55,38 +57,31 @@ export function ProductCustomizer({ initialImageUrl }: { initialImageUrl: string
       .finally(() => setLoading(false));
   }, []);
 
-  const handleOrder = async () => {
-    if (!selectedProduct) return;
+  const handleAddToCart = async () => {
+    if (!selectedProduct || !initialImageUrl) return;
     setOrderStatus('processing');
     try {
-        const res = await fetch('http://localhost:3001/api/orders', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                items: [{
-                    productId: selectedProduct.id,
-                    variant: selectedVariant,
-                    color: selectedColor,
-                    customImage: initialImageUrl,
-                    quantity: 1,
-                    price: selectedProduct.basePrice
-                }],
-                shippingAddress: {
-                    name: "Test User",
-                    line1: "123 Tech Lane",
-                    city: "San Francisco",
-                    country: "US"
-                },
-                totalAmount: selectedProduct.basePrice
-            })
+        const printifySku = selectedProduct.printifySkus?.[selectedVariant] || '';
+        await addToCart({
+            id: `${selectedProduct.id}-${selectedVariant}-${selectedColor}-${Date.now()}`,
+            title: `${selectedProduct.name} - ${selectedColor}`,
+            price: selectedProduct.basePrice,
+            quantity: 1,
+            imageUrl: initialImageUrl,
+            description: `Customized with your generated artwork. Size: ${selectedVariant}`,
+            currency: 'usd',
+            size: selectedVariant as ('S' | 'M' | 'L' | 'XL' | 'XXL'),
+            metadata: {
+                productId: selectedProduct.id,
+                color: selectedColor,
+                variant: selectedVariant,
+                printifySku
+            }
         });
-        const data = await res.json();
-        if (data.success) {
-            setOrderStatus('success');
-        } else {
-            setOrderStatus('error');
-        }
+        setOrderStatus('success');
+        setTimeout(() => setOrderStatus('idle'), 3000);
     } catch (e) {
+        console.error('Add to cart error:', e);
         setOrderStatus('error');
     }
   };
@@ -99,25 +94,31 @@ export function ProductCustomizer({ initialImageUrl }: { initialImageUrl: string
       <div className="relative aspect-square bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 flex items-center justify-center">
          {/* Product Base Layer */}
          <div className="absolute inset-0 flex items-center justify-center opacity-50">
-             {selectedProduct?.id.includes('mug') ? <Coffee size={300} className="text-zinc-700" /> : <Shirt size={400} className="text-zinc-700" />}
+             {selectedProduct?.id.includes('mug') ? (
+                 <Coffee className="w-[70%] h-[70%] text-zinc-700" />
+             ) : (
+                 <Shirt strokeWidth={1} className="w-[140%] h-[140%] min-w-[500px] min-h-[500px] text-zinc-700 -mt-[5%]" />
+             )}
          </div>
          
          {/* AI Image Overlay */}
          {initialImageUrl && (
-             <div className="relative w-1/2 h-1/2 shadow-2xl mix-blend-overlay opacity-90">
+             <div className={cn(
+                 "relative z-10 transition-all",
+                 selectedProduct?.id.includes('mug') 
+                    ? "w-1/2 h-1/2 mix-blend-overlay opacity-90 shadow-2xl" 
+                    : "w-[35%] h-[35%] -mt-[15%] shadow-xl rounded-lg overflow-hidden bg-zinc-950/50 backdrop-blur-sm border border-white/10 p-1" 
+             )}>
                  <Image 
                     src={initialImageUrl} 
                     alt="Design" 
                     fill 
                     className="object-contain" 
-                    unoptimized={initialImageUrl.includes('127.0.0.1') || initialImageUrl.includes('localhost')}
+                    unoptimized={initialImageUrl.startsWith('blob:') || initialImageUrl.includes('127.0.0.1') || initialImageUrl.includes('localhost')}
                  />
              </div>
          )}
          
-         <div className="absolute bottom-4 right-4 bg-black/80 px-4 py-2 rounded-full text-xs text-white backdrop-blur">
-             Preview Mode
-         </div>
       </div>
 
       {/* Controls */}
@@ -199,7 +200,7 @@ export function ProductCustomizer({ initialImageUrl }: { initialImageUrl: string
             </div>
             
             <button 
-                onClick={handleOrder}
+                onClick={handleAddToCart}
                 disabled={orderStatus === 'processing' || orderStatus === 'success'}
                 className={cn(
                     "w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all",
@@ -209,12 +210,12 @@ export function ProductCustomizer({ initialImageUrl }: { initialImageUrl: string
                 )}
             >
                 {orderStatus === 'processing' && <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-black"></div>}
-                {orderStatus === 'success' ? 'Order Placed!' : 'Add to Cart & Checkout'}
-                {orderStatus === 'idle' && <ArrowRight className="w-5 h-5" />}
+                {orderStatus === 'success' ? 'Added to Cart!' : 'Add to Cart'}
+                {orderStatus === 'idle' && <ShoppingCart className="w-5 h-5" />}
             </button>
             {orderStatus === 'success' && (
-                <p className="text-green-500 text-center mt-2 text-sm">
-                    Order confirmed! Check your email for tracking.
+                <p className="text-green-500 text-center mt-2 text-sm font-medium">
+                    Added to cart! You can view it in the Cart page.
                 </p>
             )}
         </div>

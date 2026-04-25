@@ -23,7 +23,6 @@ export async function GET(request: Request) {
 
     return new NextResponse(blob, { headers });
   } catch (error) {
-    console.error('Error in proxy-image:', error);
     return NextResponse.json({ error: 'Failed to proxy image' }, { status: 500 });
   }
 }

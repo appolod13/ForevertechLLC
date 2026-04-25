@@ -85,7 +85,7 @@ export function FusionAI({ prompt, onImageGenerated }: FusionAIProps) {
       if (err instanceof Error) {
         if (err.name === 'AbortError') {
           setError('Request timed out. Please check if the Fusion service is running.');
-        } else if (err.message === 'Failed to fetch') {
+        } else if (err.message === 'Failed to fetch' || err.message.includes('network')) {
           setError('Could not connect to Fusion service. Ensure it is running on port 8000.');
         } else {
           setError(err.message);

@@ -1,8 +1,5 @@
 import { NextResponse } from 'next/server';
-
-// Temporary mock in-memory store for carts (device_id -> cart items)
-// In a real app this would be a database
-const carts: Record<string, any[]> = {};
+import { getCart } from '@/lib/cartStore';
 
 export async function GET(request: Request) {
   try {
@@ -11,9 +8,10 @@ export async function GET(request: Request) {
     
     return NextResponse.json({
       success: true,
-      items: carts[deviceId] || []
+      items: getCart(deviceId)
     });
-  } catch (error) {
+  } catch (error: unknown) {
+    console.error('Cart fetch error:', error);
     return NextResponse.json({ success: false, items: [] });
   }
 }

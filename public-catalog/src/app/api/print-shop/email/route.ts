@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   try {
-    const { items, customerInfo } = await request.json();
+    const payload = await request.json();
+    const { items, customerInfo } = payload as { items: unknown[], customerInfo: Record<string, unknown> };
 
     // In a production environment, this would integrate with Resend, SendGrid, or Nodemailer.
     // For now, we simulate the email being sent to the local print shop.
@@ -15,14 +16,15 @@ export async function POST(request: Request) {
     console.log(`Shipping Address: ${customerInfo.address}, ${customerInfo.city} ${customerInfo.zip}`);
     console.log('\nItems to Print:');
     
-    items.forEach((item: any, index: number) => {
+    items.forEach((item: unknown, index: number) => {
+      const it = item as { title?: string; size?: string; quantity?: number; imageUrl?: string; metadata?: { prompt?: string } };
       console.log(`\n--- Item #${index + 1} ---`);
-      console.log(`Title: ${item.title}`);
-      console.log(`Size: ${item.size || 'L (Default)'}`);
-      console.log(`Quantity: ${item.quantity}`);
-      console.log(`Image URL: ${item.imageUrl}`);
-      if (item.metadata?.prompt) {
-        console.log(`AI Prompt used: "${item.metadata.prompt}"`);
+      console.log(`Title: ${it.title}`);
+      console.log(`Size: ${it.size || 'L (Default)'}`);
+      console.log(`Quantity: ${it.quantity}`);
+      console.log(`Image URL: ${it.imageUrl}`);
+      if (it.metadata?.prompt) {
+        console.log(`AI Prompt used: "${it.metadata.prompt}"`);
       }
     });
     console.log('=============================================\n');
@@ -32,7 +34,7 @@ export async function POST(request: Request) {
       message: 'Email successfully sent to the print shop.' 
     });
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error sending email to print shop:', error);
     return NextResponse.json({ success: false, error: 'Failed to send email' }, { status: 500 });
   }

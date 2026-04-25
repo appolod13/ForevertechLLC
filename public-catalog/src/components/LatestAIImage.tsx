@@ -52,7 +52,6 @@ export function LatestAIImage({ overrideUrl }: { overrideUrl?: string }) {
           setError(true);
         }
       } catch (err) {
-        console.error('Error loading AI image:', err);
         setError(true);
       } finally {
         setLoading(false);

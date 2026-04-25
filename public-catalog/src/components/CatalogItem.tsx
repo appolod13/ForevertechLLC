@@ -93,13 +93,13 @@ export function CatalogItem({
     }
   };
 
-  if (isHidden) return null;
-
   React.useEffect(() => {
     setImgSrc(getImageUrl(mediaUrl));
     setIsLoading(true);
     setHasError(false);
   }, [mediaUrl]);
+
+  const [isPurchasing, setIsPurchasing] = React.useState(false);
 
   // Truncate content
   const safeContent = content || '';
@@ -107,7 +107,7 @@ export function CatalogItem({
     ? safeContent.substring(0, 200) + '...' 
     : safeContent;
 
-  const [isPurchasing, setIsPurchasing] = React.useState(false);
+  if (isHidden) return null;
 
   const handlePurchase = async (currency: 'usd' | 'fc') => {
     setIsPurchasing(true);
@@ -297,7 +297,7 @@ export function CatalogItem({
               {['S', 'M', 'L', 'XL', 'XXL'].map((size) => (
                 <button
                   key={size}
-                  onClick={() => setSelectedSize(size as any)}
+                  onClick={() => setSelectedSize(size as 'S'|'M'|'L'|'XL'|'XXL')}
                   className={cn(
                     "flex-1 py-1 text-xs font-semibold rounded-md border transition-colors",
                     selectedSize === size 
@@ -345,6 +345,10 @@ export function CatalogItem({
               fill
               unoptimized
               className="object-contain"
+              onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+                const target = e.currentTarget;
+                target.src = 'https://via.placeholder.com/400x300?text=Preview+Not+Available';
+              }}
             />
             <button 
               onClick={() => setShowPreview(false)}

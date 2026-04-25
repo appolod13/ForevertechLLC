@@ -42,7 +42,7 @@ export async function GET() {
         ipfsHash: ipfsHash,
         metadata: {
           title: `Quantum Asset ${file.substring(0, 8)}`,
-          mediaUrl: `http://127.0.0.1:5328/images/${file}`,
+          mediaUrl: `/api/images/${file}`,
           priceUsd: 49.99
         }
       };

@@ -1,31 +1,29 @@
 import { NextResponse } from 'next/server';
-
-// Temporary mock in-memory store for carts
-// In a real app this would be imported from a shared db module
-const carts: Record<string, any[]> = {};
+import { getCart, setCart, CartItem } from '@/lib/cartStore';
 
 export async function POST(request: Request) {
   try {
     const payload = await request.json();
-    const { item, deviceId = 'anonymous' } = payload;
+    const { item, deviceId = 'anonymous' } = payload as { item: CartItem, deviceId?: string };
     
-    if (!carts[deviceId]) {
-      carts[deviceId] = [];
-    }
+    const cart = getCart(deviceId);
     
     // Check if item already exists
-    const existingIndex = carts[deviceId].findIndex(i => i.id === item.id);
+    const existingIndex = cart.findIndex(i => i.id === item.id);
     if (existingIndex >= 0) {
-      carts[deviceId][existingIndex].quantity += (item.quantity || 1);
+      cart[existingIndex].quantity += (item.quantity || 1);
     } else {
-      carts[deviceId].push(item);
+      cart.push(item);
     }
+    
+    setCart(deviceId, cart);
 
     return NextResponse.json({
       success: true,
       message: 'Item added to cart'
     });
-  } catch (error) {
-    return NextResponse.json({ success: false, error: 'Failed to add item' });
+  } catch (error: unknown) {
+    console.error('Cart add error:', error);
+    return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
   }
 }

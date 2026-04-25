@@ -47,6 +47,9 @@ export function Header() {
           <Link href="/studio" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
             Studio
           </Link>
+          <Link href="/scanner" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
+            Scanner
+          </Link>
           <Link href="/gallery" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
             Gallery
           </Link>
@@ -132,6 +135,13 @@ export function Header() {
               onClick={() => setIsMobileMenuOpen(false)}
             >
               Studio
+            </Link>
+            <Link 
+              href="/scanner" 
+              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Scanner
             </Link>
             <Link 
               href="/gallery" 

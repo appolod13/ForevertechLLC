@@ -211,7 +211,6 @@ export function CallAgent({ identity = 'support-agent-1' }: CallAgentProps) {
             }
             
             const data = await res.json();
-            console.log('Call Initiated:', data);
             setStatus('In Call (Mock)');
         } catch (e: unknown) {
             console.error('Call Error:', e);

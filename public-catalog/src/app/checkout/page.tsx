@@ -4,17 +4,16 @@ import { useState } from 'react';
 import { useCart } from '@/context/CartContext';
 import type { CartItem } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
-import { Loader2, CheckCircle2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 export default function CheckoutPage() {
-  const { items, total, clearCart, removePurchasedItems } = useCart();
+  const { items, total } = useCart();
   const { user, isLoading } = useAuth();
   const router = useRouter();
   
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
   const [guestMode, setGuestMode] = useState(false);
   
   const [formData, setFormData] = useState({
@@ -22,11 +21,11 @@ export default function CheckoutPage() {
     email: user?.email || '',
     phone: '',
     address: '',
+    address2: '',
     city: '',
+    region: '',
+    country: 'US',
     zip: '',
-    cardNumber: '',
-    expiry: '',
-    cvv: '',
     callOptIn: true
   });
 
@@ -38,79 +37,41 @@ export default function CheckoutPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsProcessing(true);
-    // Process payment
     try {
-      const payRes = await fetch('http://localhost:3001/api/payment/process-test', {
+      const deviceId = localStorage.getItem('device_id') || 'anonymous';
+      const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          card: { number: formData.cardNumber, expiry: formData.expiry, cvv: formData.cvv },
-          amount: total
-        })
-      });
-      const payType = payRes.headers.get('content-type');
-      if (!payType || !payType.includes('application/json')) {
-        throw new Error('Payment server returned invalid format');
-      }
-      const payData = await payRes.json();
-      if (!payRes.ok || !payData.success) {
-        throw new Error(payData.error || 'Payment failed');
-      }
-
-      const res = await fetch('http://localhost:3001/api/accounts/purchase', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          accountId: 'PURCHASE-' + Date.now(),
-          name: formData.name,
-          email: formData.email,
-          phone: formData.phone,
-          callOptIn: formData.callOptIn,
           items: items,
-          total: total,
-          transactionId: payData.transactionId
+          customerName: formData.name,
+          customerEmail: formData.email,
+          userId: user?.id || '',
+          deviceId,
+          metadata: {
+            phone: formData.phone,
+            address: formData.address,
+            address2: formData.address2,
+            city: formData.city,
+            region: formData.region,
+            country: formData.country,
+            zip: formData.zip
+          }
         })
       });
       
-      const contentType = res.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Server returned invalid format');
-      }
-
-      if (res.ok) {
-        const data = await res.json();
-        
-        // Notify the local print shop via email with sizing and images
-        try {
-          await fetch('/api/print-shop/email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              items: items,
-              customerInfo: formData
-            })
-          });
-        } catch (e) {
-          console.error('Failed to notify print shop:', e);
-        }
-
-        const purchasedIds = Array.isArray(data?.order?.items) ? data.order.items.map((i: { id: string }) => i.id) : [];
-        if (purchasedIds.length > 0) {
-          await removePurchasedItems(purchasedIds);
-        } else {
-          await clearCart();
-        }
-        setIsSuccess(true);
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to create checkout session');
+      
+      window.location.href = data.url;
     } catch (error) {
       console.error('Checkout failed', error);
-    } finally {
       setIsProcessing(false);
     }
   };
  
 
-  if (items.length === 0 && !isSuccess) {
+  if (items.length === 0) {
     return (
       <div className="container mx-auto px-4 py-24 text-center">
         <h1 className="text-2xl font-bold text-white mb-4">Cart is empty</h1>
@@ -127,7 +88,7 @@ export default function CheckoutPage() {
     );
   }
 
-  if (!user && !guestMode && !isSuccess) {
+  if (!user && !guestMode) {
     return (
       <div className="container mx-auto px-4 py-24 flex flex-col items-center justify-center">
         <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950/50 p-8 shadow-2xl backdrop-blur-sm text-center">
@@ -156,29 +117,6 @@ export default function CheckoutPage() {
             </button>
           </div>
         </div>
-      </div>
-    );
-  }
-
-  if (isSuccess) {
-    return (
-      <div className="container mx-auto px-4 py-24 flex flex-col items-center justify-center text-center max-w-lg">
-        <div className="rounded-full bg-emerald-500/10 p-6 mb-6">
-          <CheckCircle2 className="h-16 w-16 text-emerald-500" />
-        </div>
-        <h1 className="text-3xl font-bold text-white mb-2">Order Confirmed!</h1>
-        <p className="text-zinc-400 mb-8">
-          Thank you for your purchase, {formData.name}. We&apos;ve sent a confirmation email to {formData.email}.
-        </p>
-        <p className="text-green-500 mb-8">
-          Your cart has been cleared.
-        </p>
-        <Link 
-          href="/" 
-          className="rounded-full bg-white px-8 py-3 font-semibold text-zinc-950 hover:bg-zinc-200 transition-colors"
-        >
-          Continue Shopping
-        </Link>
       </div>
     );
   }
@@ -244,6 +182,31 @@ export default function CheckoutPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">Address Line 2</label>
+                  <input 
+                    type="text" 
+                    name="address2" 
+                    value={formData.address2} 
+                    onChange={handleChange}
+                    className="w-full rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-white focus:border-primary focus:outline-none"
+                    data-testid="input-address2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">Country (2-letter)</label>
+                  <input 
+                    type="text" 
+                    name="country" 
+                    value={formData.country} 
+                    onChange={handleChange}
+                    required 
+                    className="w-full rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-white focus:border-primary focus:outline-none"
+                    data-testid="input-country"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
                   <label className="block text-xs font-medium text-zinc-500 mb-1">City</label>
                   <input 
                     type="text" 
@@ -256,65 +219,29 @@ export default function CheckoutPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-zinc-500 mb-1">ZIP Code</label>
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">State / Region</label>
                   <input 
                     type="text" 
-                    name="zip" 
-                    value={formData.zip} 
+                    name="region" 
+                    value={formData.region} 
                     onChange={handleChange}
                     required 
                     className="w-full rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-white focus:border-primary focus:outline-none"
-                    data-testid="input-zip"
+                    data-testid="input-region"
                   />
                 </div>
               </div>
-            </div>
-          </div>
-
-          <div className="space-y-4 pt-6 border-t border-zinc-800">
-            <h2 className="text-xl font-semibold text-white">Payment Details</h2>
-            <div className="grid gap-4">
               <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1">Card Number</label>
+                <label className="block text-xs font-medium text-zinc-500 mb-1">ZIP Code</label>
                 <input 
                   type="text" 
-                  name="cardNumber" 
-                  value={formData.cardNumber} 
+                  name="zip" 
+                  value={formData.zip} 
                   onChange={handleChange}
                   required 
-                  placeholder="0000 0000 0000 0000"
                   className="w-full rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-white focus:border-primary focus:outline-none"
-                  data-testid="input-card"
+                  data-testid="input-zip"
                 />
-                <p className="text-[10px] text-zinc-500 mt-1">Test with Mac Credit Card: 4111 1111 1111 1111</p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-zinc-500 mb-1">Expiry Date</label>
-                  <input 
-                    type="text" 
-                    name="expiry" 
-                    value={formData.expiry} 
-                    onChange={handleChange}
-                    required 
-                    placeholder="MM/YY"
-                    className="w-full rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-white focus:border-primary focus:outline-none"
-                    data-testid="input-expiry"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-500 mb-1">CVV</label>
-                  <input 
-                    type="text" 
-                    name="cvv" 
-                    value={formData.cvv} 
-                    onChange={handleChange}
-                    required 
-                    placeholder="123"
-                    className="w-full rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-white focus:border-primary focus:outline-none"
-                    data-testid="input-cvv"
-                  />
-                </div>
               </div>
             </div>
           </div>
@@ -328,10 +255,10 @@ export default function CheckoutPage() {
             {isProcessing ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                Processing...
+                Redirecting to Stripe...
               </>
             ) : (
-              `Pay $${total.toFixed(2)}`
+              `Proceed to Payment ($${total.toFixed(2)})`
             )}
           </button>
         </form>

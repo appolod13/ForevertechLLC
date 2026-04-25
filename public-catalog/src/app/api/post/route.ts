@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { TwitterApi } from 'twitter-api-v2';
+import { cookies } from 'next/headers';
 
 export async function POST(request: Request) {
   try {
@@ -10,9 +11,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Missing content or platforms' }, { status: 400 });
     }
 
-    const { content, platforms, metadata } = payload;
+    const { content, platforms, metadata } = payload as { content: string, platforms: string[], metadata?: { mediaUrl?: string, [key: string]: unknown } };
     const mediaUrl = metadata?.mediaUrl;
-    const results: Record<string, any> = {};
+
+    const results: Record<string, unknown> = {};
 
     let hasErrors = false;
     let errorMessage = '';
@@ -21,8 +23,14 @@ export async function POST(request: Request) {
     if (platforms.includes('twitter')) {
       const appKey = process.env.TWITTER_API_KEY;
       const appSecret = process.env.TWITTER_API_SECRET;
-      const accessToken = process.env.TWITTER_ACCESS_TOKEN;
-      const accessSecret = process.env.TWITTER_ACCESS_SECRET;
+      
+      const cookieStore = await cookies();
+      const userToken = cookieStore.get('twitter_user_token')?.value;
+      const userSecret = cookieStore.get('twitter_user_secret')?.value;
+
+      // Fallback to global ENV tokens if no user token is present (for backwards compatibility/admin posting)
+      const accessToken = userToken || process.env.TWITTER_ACCESS_TOKEN;
+      const accessSecret = userSecret || process.env.TWITTER_ACCESS_SECRET;
 
       if (!appKey || !appSecret || !accessToken || !accessSecret) {
         hasErrors = true;
@@ -85,14 +93,27 @@ export async function POST(request: Request) {
           results.twitter = { success: true };
           console.log('Successfully posted to Twitter!');
 
-        } catch (e: any) {
-          console.error('Twitter API error:', e);
-          if (e.code === 403 || (e.message && e.message.includes('403'))) {
-            console.log('Twitter API returned 403. This is likely due to Free Tier restrictions on media uploads. Mocking success.');
-            results.twitter = { success: true, mock: true, note: 'Mocked due to 403 Forbidden on actual API' };
+        } catch (e: unknown) {
+          const err = e as { data?: unknown; code?: number; message?: string };
+          console.error('Twitter API error:', err?.data || err);
+          const errData = (err?.data || {}) as { reason?: string };
+          if (errData.reason === 'client-not-enrolled') {
+            hasErrors = true;
+            errorMessage = 'Twitter API Error: You must attach your Twitter Developer App to a Project in the Developer Portal to use v2 endpoints.';
+            results.twitter = { 
+              success: false, 
+              error: errorMessage 
+            };
+          } else if (err.code === 403 || (err.message && err.message.includes('403'))) {
+            hasErrors = true;
+            errorMessage = 'Twitter API Error (403): Free tier limits exceeded or credentials issue. Please check Twitter Developer Portal.';
+            results.twitter = { 
+              success: false, 
+              error: errorMessage 
+            };
           } else {
             hasErrors = true;
-            errorMessage = e.message || 'Twitter API request failed';
+            errorMessage = err.message || 'Twitter API request failed';
             results.twitter = { success: false, error: errorMessage };
           }
         }

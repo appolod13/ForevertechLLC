@@ -99,7 +99,7 @@ describe('FusionAI Component', () => {
 
     await waitFor(() => {
         expect(screen.getByText(/Initializing/i)).toBeInTheDocument();
-        expect(webSocketSpy).toHaveBeenCalledWith('ws://localhost:8000/progress/test-job-123');
+        expect(webSocketSpy).toHaveBeenCalledWith('ws://127.0.0.1:8000/progress/test-job-123');
     });
   });
 });

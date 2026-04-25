@@ -6,7 +6,19 @@ import Image from 'next/image';
 
 const API_BASE = process.env.CATALOG_API_BASE || process.env.NEXT_PUBLIC_CART_API_BASE || 'http://localhost:3001';
 
-async function getPosts() {
+type Post = {
+  id: string;
+  content: string;
+  mediaUrl?: string | null;
+  createdAt: string;
+  metadata?: {
+    platformMediaUrls?: Record<string, string>;
+  };
+  platform: string;
+  userId: string;
+};
+
+async function getPosts(): Promise<Post[]> {
   try {
     const res = await fetch(`${API_BASE}/api/catalog/posts`, { 
       cache: 'no-store' 
@@ -18,9 +30,9 @@ async function getPosts() {
     if (!contentType || !contentType.includes('application/json')) {
       throw new Error('Invalid response format');
     }
-    const data = await res.json();
+    const data = await res.json() as { posts?: Post[] };
     return data.posts || [];
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error fetching initial posts:', error);
     return [];
   }
@@ -109,7 +121,7 @@ export default async function Home() {
                   <span className="text-2xl font-bold text-primary">4</span>
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-2">Automated Print</h3>
-                <p className="text-zinc-400 text-sm">Checkout securely. Our AI Agent instantly emails the design to a local print shop for fulfillment.</p>
+                <p className="text-zinc-400 text-sm">Checkout securely. Your order is automatically sent to Printify for fulfillment and shipping.</p>
               </div>
             </div>
           </div>

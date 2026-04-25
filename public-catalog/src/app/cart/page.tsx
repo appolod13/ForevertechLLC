@@ -64,10 +64,8 @@ export default function CartPage() {
                     alt={item.title} 
                     fill 
                     className="object-cover"
+                    unoptimized={item.imageUrl.startsWith('blob:') || item.imageUrl.includes('localhost')}
                     onError={(e) => {
-                       // If image fails here too, fallback?
-                       // We can't easily change state here without a wrapper component or more complex logic.
-                       // For now, rely on CatalogItem's detection or simple replacement.
                        e.currentTarget.style.display = 'none';
                     }}
                   />

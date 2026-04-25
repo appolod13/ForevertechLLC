@@ -12,7 +12,7 @@ export async function GET() {
         const latest = files[0];
         return NextResponse.json({
           success: true,
-          imageUrl: `http://127.0.0.1:5328/images/${latest}`,
+          imageUrl: `/api/images/${latest}`,
           filename: latest
         });
       }

@@ -24,7 +24,6 @@ export async function POST(request: Request) {
     });
   } catch (error: unknown) {
     console.error('Brain roulette proxy error:', error);
-    // If the service is entirely down, return a mock SVG image instead of an error so the tool still "works"
     const mockSvg = `
       <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
         <rect width="100%" height="100%" fill="#1a1a2e"/>

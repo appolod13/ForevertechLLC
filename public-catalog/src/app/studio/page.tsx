@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
@@ -7,7 +6,6 @@ import { Header } from '../../components/Header';
 import { DataDashboardButton } from '../../components/DataDashboardButton';
 import { FusionAI } from '../../components/FusionAI';
 import BrainRandomizer from '../../components/BrainRandomizer';
-import { ImagePreview } from '../../components/ImagePreview';
 import { LatestAIImage } from '../../components/LatestAIImage';
 import { Send, Sparkles } from 'lucide-react';
 import styles from './page.module.css';
@@ -31,6 +29,7 @@ function StudioPageInner() {
   const [crossOptimizeError, setCrossOptimizeError] = useState<string | null>(null);
   const [crossOptimizeReports, setCrossOptimizeReports] = useState<Array<{ model: string; role: string; output: string; error?: string }> | null>(null);
   const [generatedImage, setGeneratedImage] = useState('');
+  const [generatedTextContent, setGeneratedTextContent] = useState('');
   const [draftImage, setDraftImage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -40,19 +39,7 @@ function StudioPageInner() {
     model: string;
     params: Record<string, unknown>;
   } | undefined>(undefined);
-  const [cfTopic, setCfTopic] = useState('');
-  const [cfPlatforms, setCfPlatforms] = useState({ linkedin: true, instagram: true, twitter: true });
-  const [cfProvider, setCfProvider] = useState<'mock' | 'dalle' | 'stablediffusion' | 'midjourney'>('mock');
-  const [cfSafety, setCfSafety] = useState(true);
-  const [cfAutoSocial, setCfAutoSocial] = useState(false);
-  const [cfItems, setCfItems] = useState<Array<{ platform: 'linkedin' | 'instagram' | 'twitter'; text_content: string; image_url: string; generation_metadata: Record<string, unknown> }>>([]);
-  const [cfLoading, setCfLoading] = useState(false);
-  const [cfError, setCfError] = useState<string | null>(null);
   const [catalogPosts, setCatalogPosts] = useState<Array<{ id: string; content: string }>>([]);
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
-  const [previewItems, setPreviewItems] = useState<Array<{ platform: 'linkedin' | 'instagram' | 'twitter'; text_content: string; image_url: string; generation_metadata: Record<string, unknown> }>>([]);
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [importStatus, setImportStatus] = useState<string | null>(null);
@@ -62,11 +49,16 @@ function StudioPageInner() {
   const [ipfsEnabled, setIpfsEnabled] = useState<boolean>(false);
   const [quantumMode, setQuantumMode] = useState<boolean>(false);
   const [postingStatus, setPostingStatus] = useState<string | null>(null);
-  const [twitterEnabled, setTwitterEnabled] = useState(true);
-  const [telegramEnabled, setTelegramEnabled] = useState(true);
-  const [instagramEnabled, setInstagramEnabled] = useState(false);
-  const [tiktokEnabled, setTiktokEnabled] = useState(false);
-  const [youtubeEnabled, setYoutubeEnabled] = useState(false);
+  
+  type SocialAccount = { authenticated: boolean; screenName?: string };
+  const [socialAccounts, setSocialAccounts] = useState<Record<string, SocialAccount | null>>({
+    twitter: null,
+    telegram: null,
+    instagram: null,
+    tiktok: null,
+    youtube: null
+  });
+
   const [posterAttachedImage, setPosterAttachedImage] = useState<string | null>(null);
 
   const [calendarMonth, setCalendarMonth] = useState<number>(new Date().getMonth());
@@ -98,6 +90,16 @@ function StudioPageInner() {
 
   useEffect(() => {
     setHydrated(true);
+    fetch('/api/auth/session')
+      .then(r => r.json())
+      .then(data => setSocialAccounts(data))
+      .catch(() => setSocialAccounts({
+        twitter: { authenticated: false },
+        telegram: { authenticated: false },
+        instagram: { authenticated: false },
+        tiktok: { authenticated: false },
+        youtube: { authenticated: false }
+      }));
   }, []);
 
   useEffect(() => {
@@ -221,140 +223,6 @@ function StudioPageInner() {
     };
     fetchCatalog();
   }, []);
-
-  const generateFactoryContent = async () => {
-    if (!cfTopic.trim()) return;
-    setCfLoading(true);
-    setCfError(null);
-    try {
-      const platforms = Object.entries(cfPlatforms)
-        .filter(([, v]) => v)
-        .map(([k]) => k) as Array<'linkedin' | 'instagram' | 'twitter'>;
-      const res = await fetch('/api/content-factory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic: cfTopic,
-          platforms,
-          imageProvider: cfProvider,
-          safetyEnabled: cfSafety,
-          autoSocialEnabled: cfAutoSocial,
-          mode: 'full',
-        }),
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error('fail');
-      setCfItems(data.items || []);
-    } catch {
-      setCfError('Failed to generate content');
-    } finally {
-      setCfLoading(false);
-    }
-  };
-
-  const openPreview = async () => {
-    if (!cfTopic.trim()) return;
-    setPreviewOpen(true);
-    setPreviewLoading(true);
-    setPreviewError(null);
-    try {
-      const platforms = Object.entries(cfPlatforms)
-        .filter(([, v]) => v)
-        .map(([k]) => k) as Array<'linkedin' | 'instagram' | 'twitter'>;
-      const res = await fetch('/api/content-factory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic: cfTopic,
-          platforms,
-          imageProvider: cfProvider,
-          safetyEnabled: cfSafety,
-          autoSocialEnabled: cfAutoSocial,
-          mode: 'full',
-        }),
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error('fail');
-      setPreviewItems(data.items || []);
-    } catch {
-      setPreviewError('Failed to generate preview');
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
-
-  const closePreview = () => {
-    setPreviewOpen(false);
-    setPreviewItems([]);
-    setPreviewError(null);
-    setPreviewLoading(false);
-  };
-
-  const regenerateImageFor = async (idx: number) => {
-    const item = cfItems[idx];
-    if (!item) return;
-    try {
-      const texts: Record<string, string> = {};
-      texts[item.platform] = item.text_content;
-      const res = await fetch('/api/content-factory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic: cfTopic || item.text_content,
-          platforms: [item.platform],
-          imageProvider: cfProvider,
-          safetyEnabled: cfSafety,
-          mode: 'image_only',
-          texts,
-        }),
-      });
-      const data = await res.json();
-      if (!data.success) return;
-      const updated = [...cfItems];
-      updated[idx] = data.items[0];
-      setCfItems(updated);
-    } catch {}
-  };
-
-  const updateCfText = (idx: number, text: string) => {
-    const updated = [...cfItems];
-    updated[idx] = { ...updated[idx], text_content: text };
-    setCfItems(updated);
-  };
-
-  const applyToPoster = (idx: number) => {
-    const item = cfItems[idx];
-    if (!item) return;
-    setPostContent(item.text_content);
-    setGeneratedImage(item.image_url);
-    setPosterAttachedImage(item.image_url);
-  };
-
-  const tokens = (s: string) => s.toLowerCase().split(/\W+/).filter(Boolean);
-  const similarityScore = (text: string) => {
-    const t = new Set(tokens(text));
-    const top5 = catalogPosts.slice(0, 20).map(p => tokens(p.content));
-    let score = 0;
-    for (const arr of top5) {
-      const s = new Set(arr);
-      let inter = 0;
-      s.forEach(x => { if (t.has(x)) inter++; });
-      const denom = Math.max(s.size + t.size - inter, 1);
-      score += inter / denom;
-    }
-    return score / Math.max(top5.length, 1);
-  };
-
-  const seasonBoost = (text: string) => {
-    const m = new Date().getMonth();
-    const tags = ['winter','spring','summer','autumn','fall'];
-    const has = tags.some(t => text.toLowerCase().includes(t));
-    return has ? (m >= 5 && m <= 7 ? 1.0 : 0.6) : 0.4;
-  };
-
-  const recommendationScore = (item: { text_content: string }) => {
-    return similarityScore(item.text_content) * 0.6 + seasonBoost(item.text_content) * 0.4;
-  };
 
   const buildDraftPreview = (text: string, w = 1024, h = 1024) => {
     try {
@@ -492,6 +360,7 @@ function StudioPageInner() {
     setIsGenerating(true);
     setGenerationError(null);
     setGeneratedImage('');
+    setGeneratedTextContent('');
     setDraftImage(buildDraftPreview(prompt));
     setGenerationAttempt(0);
     setLogs([]);
@@ -549,7 +418,7 @@ function StudioPageInner() {
              headers: { 'Content-Type': 'application/json' },
              body: JSON.stringify(payload)
           });
-
+          
           if (tick) clearInterval(tick);
 
           const raw: unknown = await res.json().catch(() => null);
@@ -626,8 +495,8 @@ function StudioPageInner() {
             }
 
             // Additional check for fallback structure that might be deeply nested or wrapped
-            if (!imageUrl && successData.data && (successData.data as any).data) {
-              const dd = (successData.data as any).data;
+            if (!imageUrl && successData.data && (successData.data as { data?: { image_url?: string; imageUrl?: string } }).data) {
+              const dd = (successData.data as { data: { image_url?: string; imageUrl?: string } }).data;
               if (typeof dd.image_url === 'string') imageUrl = dd.image_url;
               else if (typeof dd.imageUrl === 'string') imageUrl = dd.imageUrl;
             }
@@ -647,6 +516,59 @@ function StudioPageInner() {
 
       setGeneratedImage(imageUrl);
       setDraftImage('');
+      
+      // Generate associated content automatically
+      try {
+        setPipelineStage('Generating Post Content...');
+        setProgress(95);
+        const cfRes = await fetch('/api/content-factory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            topic: prompt,
+            platforms: ['twitter'],
+            imageProvider: 'mock',
+            safetyEnabled: true,
+            autoSocialEnabled: true,
+            mode: 'full',
+          }),
+        });
+        const cfData = await cfRes.json();
+        if (cfData.success && cfData.items && cfData.items.length > 0) {
+          setGeneratedTextContent(cfData.items[0].text_content);
+          addLog('Post content generated successfully. Ready to be sent to Multi-Channel Poster.', 'success', 'I_CF_SUCCESS');
+          setPipelineStage('Complete');
+          setProgress(100);
+        }
+      } catch (err) {
+        console.error('Failed to auto-generate content', err);
+        addLog('Failed to auto-generate content', 'warn', 'E_CF_FAILED');
+        setPipelineStage('Complete');
+        setProgress(100);
+      }
+      
+      // Save to Gallery
+      try {
+        const storedUserStr = localStorage.getItem('user');
+        const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+        const userName = storedUser?.name || storedUser?.email || 'Anonymous Artist';
+        const userId = storedUser?.id || 'anonymous';
+        const catalogName = `${userName.split(' ')[0]}'s Catalog`;
+        
+        fetch('/api/gallery', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageUrl,
+            prompt,
+            userName,
+            catalogName,
+            userId
+          })
+        });
+      } catch (err) {
+        console.error('Failed to save to gallery', err);
+      }
       
       const dataObj = (typeof successData.data === 'object' && successData.data !== null) ? (successData.data as Record<string, unknown>) : null;
       const metaObj =
@@ -684,8 +606,8 @@ function StudioPageInner() {
         addLog('Triggering automated build pipeline...', 'info', 'I_BUILD_TRIGGER');
         await fetch('/api/build', { method: 'POST' });
         addLog('Build pipeline triggered successfully', 'success', 'I_BUILD_SUCCESS');
-      } catch (buildErr) {
-        addLog('Failed to trigger build pipeline', 'warn', 'E_BUILD_FAILED');
+      } catch (buildErr: unknown) {
+        addLog('Failed to trigger build pipeline: ' + ((buildErr as Error).message || String(buildErr)), 'warn', 'E_BUILD_FAILED');
       }
 
     } catch (e: unknown) {
@@ -712,11 +634,11 @@ function StudioPageInner() {
         await validatePosterImage(mediaToPost);
       }
       const platforms: string[] = [];
-      if (twitterEnabled) platforms.push('twitter');
-      if (telegramEnabled) platforms.push('telegram');
-      if (instagramEnabled) platforms.push('instagram');
-      if (tiktokEnabled) platforms.push('tiktok');
-      if (youtubeEnabled) platforms.push('youtube');
+      if (socialAccounts.twitter?.authenticated) platforms.push('twitter');
+      if (socialAccounts.telegram?.authenticated) platforms.push('telegram');
+      if (socialAccounts.instagram?.authenticated) platforms.push('instagram');
+      if (socialAccounts.tiktok?.authenticated) platforms.push('tiktok');
+      if (socialAccounts.youtube?.authenticated) platforms.push('youtube');
       const res = await fetch(`${MIRROR_API_URL}/api/post`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -948,181 +870,16 @@ function StudioPageInner() {
           <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-8 rounded-xl border border-gray-700">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <Sparkles className="text-yellow-400" />
-                <h2 className="text-2xl font-bold">AI Content Factory</h2>
+                <Sparkles className="text-purple-400" />
+                <h2 className="text-2xl font-bold">AI Asset Generator</h2>
               </div>
               <DataDashboardButton />
-            </div>
-            <div className="space-y-4">
-              <input
-                className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 focus:ring-2 focus:ring-yellow-500 outline-none"
-                placeholder="Topic or Campaign"
-                value={cfTopic}
-                onChange={e => setCfTopic(e.target.value)}
-              />
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" className="w-4 h-4 accent-blue-500" checked={cfPlatforms.linkedin} onChange={e => setCfPlatforms(s => ({ ...s, linkedin: e.target.checked }))} />
-                  <span>LinkedIn</span>
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" className="w-4 h-4 accent-pink-500" checked={cfPlatforms.instagram} onChange={e => setCfPlatforms(s => ({ ...s, instagram: e.target.checked }))} />
-                  <span>Instagram</span>
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" className="w-4 h-4 accent-sky-500" checked={cfPlatforms.twitter} onChange={e => setCfPlatforms(s => ({ ...s, twitter: e.target.checked }))} />
-                  <span>X/Twitter</span>
-                </label>
-              </div>
-              <div className="flex items-center gap-3">
-                <select
-                  className="bg-gray-900 border border-gray-600 rounded-lg p-2 text-sm"
-                  value={cfProvider}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v === 'mock' || v === 'dalle' || v === 'stablediffusion' || v === 'midjourney') {
-                      setCfProvider(v);
-                    }
-                  }}
-                >
-                  <option value="mock">Mock</option>
-                  <option value="dalle">DALL·E 3</option>
-                  <option value="stablediffusion">Stable Diffusion</option>
-                  <option value="midjourney">Midjourney</option>
-                </select>
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" className="w-4 h-4 accent-green-500" checked={cfSafety} onChange={e => setCfSafety(e.target.checked)} />
-                  <span>Safety Filters</span>
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" className="w-4 h-4 accent-yellow-500" checked={cfAutoSocial} onChange={e => setCfAutoSocial(e.target.checked)} />
-                  <span>Auto Social Generator</span>
-                </label>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={openPreview}
-                  disabled={previewLoading || !cfTopic.trim()}
-                  className={`w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2 ${previewLoading || !cfTopic.trim() ? 'bg-gray-700 cursor-not-allowed' : 'bg-gray-600 hover:bg-gray-500'}`}
-                >
-                  {previewLoading ? 'Preparing Preview...' : 'Preview'}
-                </button>
-                <button
-                  onClick={generateFactoryContent}
-                  disabled={cfLoading || !cfTopic.trim()}
-                  className={`w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2 ${cfLoading || !cfTopic.trim() ? 'bg-gray-700 cursor-not-allowed' : 'bg-yellow-600 hover:bg-yellow-500'}`}
-                >
-                  {cfLoading ? 'Generating...' : 'Generate'}
-                </button>
-              </div>
-              {cfError && <div className="text-sm text-red-400">{cfError}</div>}
-            </div>
-            {previewOpen && (
-              <div
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="preview-title"
-                className="fixed inset-0 z-50 flex items-center justify-center p-4"
-              >
-                <div className="absolute inset-0 bg-black/70" onClick={closePreview} />
-                <div className="relative w-full max-w-4xl rounded-xl border border-gray-700 bg-gray-900 shadow-2xl">
-                  <div className="flex items-center justify-between p-4 border-b border-gray-700">
-                    <h3 id="preview-title" className="text-lg font-semibold">Preview</h3>
-                    <button
-                      onClick={closePreview}
-                      className="px-3 py-1 rounded bg-gray-800 hover:bg-gray-700 text-sm"
-                    >
-                      Back to Edit
-                    </button>
-                  </div>
-                  <div className="max-h-[70vh] overflow-auto p-4">
-                    {previewLoading && (
-                      <div className="flex items-center justify-center h-48 text-gray-400">
-                        <span className="animate-pulse">Loading preview...</span>
-                      </div>
-                    )}
-                    {!previewLoading && previewError && (
-                      <div className="text-sm text-red-400">{previewError}</div>
-                    )}
-                    {!previewLoading && !previewError && previewItems.length > 0 && (
-                      <div className="space-y-6">
-                        {previewItems.map((item, idx) => (
-                          <div key={`preview-${item.platform}-${idx}`} className="rounded-lg border border-gray-700 bg-gray-900">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-                              <div className="aspect-video md:aspect-square rounded border border-gray-700 overflow-hidden bg-black/40">
-                                <img src={item.image_url} alt="" className="object-contain w-full h-full" />
-                              </div>
-                              <div className="prose prose-invert max-w-none">
-                                <div className="text-sm text-gray-300 font-semibold capitalize mb-2">{item.platform}</div>
-                                <div className="text-sm whitespace-pre-wrap">{item.text_content}</div>
-                              </div>
-                            </div>
-                            <div className="px-4 pb-4 text-xs text-gray-400">
-                              Provider: {String(item.generation_metadata?.provider)} • Ratio: {String(((item.generation_metadata['image'] as { ratio?: string } | undefined)?.ratio) || '')}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-            {cfItems.length > 0 && (
-              <div className="mt-8 space-y-6">
-                {cfItems.map((item, idx) => {
-                  const score = recommendationScore(item);
-                  return (
-                    <div key={`${item.platform}-${idx}`} className="rounded-lg border border-gray-700 bg-gray-900 p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="text-sm text-gray-300 font-semibold capitalize">{item.platform}</div>
-                        <div className="text-xs text-gray-400">Score: {score.toFixed(2)}</div>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="aspect-video md:aspect-square rounded border border-gray-700 overflow-hidden bg-black/40">
-                          <img src={item.image_url} alt="" className="object-contain w-full h-full" />
-                        </div>
-                        <div>
-                          <textarea
-                            className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 h-40 text-sm"
-                            value={item.text_content}
-                            onChange={e => updateCfText(idx, e.target.value)}
-                          />
-                          <div className="mt-3 flex items-center gap-3">
-                            <button
-                              onClick={() => regenerateImageFor(idx)}
-                              className="px-3 py-2 rounded bg-blue-600 hover:bg-blue-500 text-sm font-semibold"
-                            >
-                              Regenerate Image
-                            </button>
-                              <button
-                                onClick={() => applyToPoster(idx)}
-                                className="px-3 py-2 rounded bg-purple-600 hover:bg-purple-500 text-sm font-semibold"
-                              >
-                                Apply to Poster
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="mt-3 text-xs text-gray-400 break-words">
-                        Provider: {String(item.generation_metadata?.provider)} • Ratio: {String(((item.generation_metadata['image'] as { ratio?: string } | undefined)?.ratio) || '')}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-8 rounded-xl border border-gray-700">
-            <div className="flex items-center gap-3 mb-6">
-              <Sparkles className="text-purple-400" />
-              <h2 className="text-2xl font-bold">AI Asset Generator</h2>
             </div>
             
             <div className="space-y-4">
               <textarea 
                 className="w-full bg-gray-900 border border-gray-600 rounded-lg p-4 h-32 focus:ring-2 focus:ring-purple-500 outline-none"
-                placeholder="Describe the image you want to generate..."
+                placeholder="Describe the image and post content you want to generate..."
                 value={prompt}
                 onChange={e => setPrompt(e.target.value)}
               />
@@ -1169,22 +926,11 @@ function StudioPageInner() {
                 disabled={isGenerating || !prompt}
                 className={`w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2 ${isGenerating || !prompt ? 'bg-gray-700 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-500'}`}
               >
-                {isGenerating ? 'Dreaming...' : 'Generate Asset'}
+                {isGenerating ? 'Dreaming...' : 'Generate Asset & Content'}
               </button>
             </div>
 
             <div className="mt-8 w-full flex flex-col gap-4">
-              <ImagePreview
-                imageUrl={generatedImage || draftImage || undefined}
-                isLoading={isGenerating}
-                error={generationError}
-                metadata={generationMetadata}
-                onRetry={generateImage}
-                onImport={generatedImage ? handleImportToPoster : undefined}
-                importing={importing}
-                importProgress={importProgress}
-                className="h-[500px] z-0"
-              />
               {isGenerating && (
                 <div className="w-full rounded-lg border border-gray-700 bg-gray-900 p-4">
                   <div className="flex items-center gap-3">
@@ -1264,10 +1010,23 @@ function StudioPageInner() {
               <div className="aspect-video relative rounded-xl overflow-hidden border border-gray-700 shadow-2xl">
                 <LatestAIImage key={lastGenTimestamp} overrideUrl={generatedImage} />
               </div>
+              {generatedImage && generatedTextContent && (
+                <button
+                  onClick={() => {
+                    setPostContent(generatedTextContent);
+                    setPosterAttachedImage(generatedImage);
+                    document.getElementById('multi-channel-poster')?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="mt-4 w-full py-3 rounded-lg font-bold bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center gap-2"
+                >
+                  <Send className="w-5 h-5" />
+                  Send to Multi-Channel Poster
+                </button>
+              )}
             </div>
           </div>
 
-          <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-8 rounded-xl border border-gray-700">
+          <div id="multi-channel-poster" className="bg-gradient-to-b from-gray-800 to-gray-900 p-8 rounded-xl border border-gray-700">
             <div className="flex items-center gap-3 mb-6">
               <Send className="text-blue-400" />
               <h2 className="text-2xl font-bold">Multi-Channel Poster</h2>
@@ -1369,26 +1128,51 @@ function StudioPageInner() {
               </div>
               
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 my-4">
-                <button
-                  onClick={() => setTwitterEnabled(v => !v)}
-                  className={`px-3 py-2 rounded-lg text-sm font-semibold border ${twitterEnabled ? 'bg-blue-600 border-blue-500' : 'bg-gray-800 border-gray-700'} transition`}
-                >Twitter: {twitterEnabled ? 'On' : 'Off'}</button>
-                <button
-                  onClick={() => setTelegramEnabled(v => !v)}
-                  className={`px-3 py-2 rounded-lg text-sm font-semibold border ${telegramEnabled ? 'bg-cyan-600 border-cyan-500' : 'bg-gray-800 border-gray-700'} transition`}
-                >Telegram: {telegramEnabled ? 'On' : 'Off'}</button>
-                <button
-                  onClick={() => setInstagramEnabled(v => !v)}
-                  className={`px-3 py-2 rounded-lg text-sm font-semibold border ${instagramEnabled ? 'bg-pink-600 border-pink-500' : 'bg-gray-800 border-gray-700'} transition`}
-                >Instagram: {instagramEnabled ? 'On' : 'Off'}</button>
-                <button
-                  onClick={() => setTiktokEnabled(v => !v)}
-                  className={`px-3 py-2 rounded-lg text-sm font-semibold border ${tiktokEnabled ? 'bg-green-600 border-green-500' : 'bg-gray-800 border-gray-700'} transition`}
-                >TikTok: {tiktokEnabled ? 'On' : 'Off'}</button>
-                <button
-                  onClick={() => setYoutubeEnabled(v => !v)}
-                  className={`px-3 py-2 rounded-lg text-sm font-semibold border ${youtubeEnabled ? 'bg-red-600 border-red-500' : 'bg-gray-800 border-gray-700'} transition`}
-                >YouTube: {youtubeEnabled ? 'On' : 'Off'}</button>
+                {['twitter', 'telegram', 'instagram', 'tiktok', 'youtube'].map((platform) => {
+                  const account = socialAccounts[platform];
+                  const labels: Record<string, string> = {
+                    twitter: 'Twitter', telegram: 'Telegram', instagram: 'Instagram', tiktok: 'TikTok', youtube: 'YouTube'
+                  };
+                  const colors: Record<string, string> = {
+                    twitter: 'bg-[#1DA1F2] border-[#1DA1F2]',
+                    telegram: 'bg-[#0088cc] border-[#0088cc]',
+                    instagram: 'bg-[#E1306C] border-[#E1306C]',
+                    tiktok: 'bg-[#000000] border-[#333333]',
+                    youtube: 'bg-[#FF0000] border-[#FF0000]'
+                  };
+                  
+                  if (account === null) {
+                    return <div key={platform} className="px-3 py-2 rounded-lg text-sm font-semibold border bg-gray-800 border-gray-700 animate-pulse text-transparent">Loading...</div>;
+                  }
+                  
+                  if (account.authenticated) {
+                    return (
+                      <div key={platform} className={`col-span-1 flex items-center justify-between px-3 py-2 rounded-lg text-sm border ${colors[platform]} bg-opacity-20`}>
+                        <span className="font-semibold truncate">@{account.screenName || platform}</span>
+                        <button 
+                          onClick={() => {
+                            fetch(`/api/auth/${platform}/logout`, { method: 'POST' }).then(() => {
+                              setSocialAccounts(prev => ({ ...prev, [platform]: { authenticated: false } }));
+                            });
+                          }} 
+                          className="text-xs text-gray-400 underline hover:text-gray-200 ml-2"
+                        >
+                          Logout
+                        </button>
+                      </div>
+                    );
+                  }
+                  
+                  return (
+                    <button
+                      key={platform}
+                      onClick={() => window.location.href = `/api/auth/${platform}/login`}
+                      className={`px-3 py-2 rounded-lg text-sm font-semibold border ${colors[platform]} text-white flex items-center justify-center gap-2 transition hover:opacity-80`}
+                    >
+                      Sign in to {labels[platform]}
+                    </button>
+                  );
+                })}
               </div>
 
               <div className="mt-4">

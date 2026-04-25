@@ -1,7 +1,5 @@
 import { NextRequest } from "next/server";
 
-export const maxDuration = 300; // Allow API route to run for up to 5 minutes
-
 import { getApiKey, validateApiKey } from "@/lib/api/auth";
 import { rateLimitKey, consume } from "@/lib/api/rate-limit";
 import { ok, fail } from "@/lib/api/response";
@@ -126,14 +124,11 @@ async function tryAIGenerate(
 ): Promise<AIResult> {
   const base = (process.env.AI_IMAGE_GEN_URL || "http://127.0.0.1:5328").trim();
   const url = base.replace(/\/$/, "") + "/v1/images/generations";
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ prompt, width, height, steps: 30, quantum_mode, ipfs_upload }),
-      signal: controller.signal,
       cache: "no-store",
     });
     const contentType = res.headers.get("content-type") || "";
@@ -177,12 +172,7 @@ async function tryAIGenerate(
       (isRecord(e) && typeof e.message === "string" && e.message) ||
       (e instanceof Error ? e.message : "") ||
       (typeof e === "string" ? e : "");
-    if (name === "AbortError") {
-      return { success: false, error: "timeout" };
-    }
     return { success: false, error: message || "network_error" };
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -190,14 +180,11 @@ async function tryFusionGenerate(prompt: string, width: number, height: number, 
   const base = (process.env.FUSION_SERVICE_URL || "http://127.0.0.1:8000").trim();
   if (!base) return null;
   const url = base.replace(/\/$/, "") + "/generate";
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ prompt, negative_prompt, width, height, steps: 30, seed: -1, guidance_scale: 7.5 }),
-      signal: controller.signal,
       cache: "no-store",
     });
     if (!res.ok) return null;
@@ -213,8 +200,6 @@ async function tryFusionGenerate(prompt: string, width: number, height: number, 
   } catch (e) {
     console.error("Fusion Generate Error", e);
     return null;
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -259,8 +244,8 @@ export async function POST(req: NextRequest) {
     const height = parsed.height ?? 512;
     logInfo("image.generate.request", { requestId, prompt: parsed.prompt, width, height, provider: parsed.provider || "auto", quantum_mode: parsed.quantum_mode, ipfs_upload: parsed.ipfs_upload });
     
-    const stdTimeoutMs = asPositiveInt(process.env.AI_IMAGE_TIMEOUT_STD_MS) ?? 60_000;
-    const quantumTimeoutMs = asPositiveInt(process.env.AI_IMAGE_TIMEOUT_QUANTUM_MS) ?? 120_000;
+    const stdTimeoutMs = asPositiveInt(process.env.AI_IMAGE_TIMEOUT_STD_MS) ?? 40_000;
+    const quantumTimeoutMs = asPositiveInt(process.env.AI_IMAGE_TIMEOUT_QUANTUM_MS) ?? 60_000;
     const timeoutMs = parsed.quantum_mode ? quantumTimeoutMs : stdTimeoutMs;
 
     const cacheKey = cacheKeyFor({ prompt: parsed.prompt, negative_prompt: parsed.negative_prompt, width, height, provider: parsed.provider, quantum_mode: Boolean(parsed.quantum_mode) });

@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
-
-const carts: Record<string, any[]> = {};
+import { clearCart } from '@/lib/cartStore';
 
 export async function POST(request: Request) {
   try {
     const payload = await request.json();
-    const { deviceId = 'anonymous' } = payload;
+    const { deviceId = 'anonymous' } = payload as { deviceId?: string };
     
-    carts[deviceId] = [];
+    clearCart(deviceId);
 
     return NextResponse.json({
       success: true,

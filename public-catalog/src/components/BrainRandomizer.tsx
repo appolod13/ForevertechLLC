@@ -22,6 +22,34 @@ export default function BrainRandomizer({ onImageGenerated }: { onImageGenerated
 
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
+      
+      // Save to Gallery
+      try {
+        const storedUserStr = localStorage.getItem('user');
+        const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+        const userName = storedUser?.name || storedUser?.email || 'Anonymous Artist';
+        const catalogName = `${userName.split(' ')[0]}'s Catalog`;
+        
+        // Convert blob to base64 for persistent gallery viewing
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = () => {
+          const base64data = reader.result;
+          fetch('/api/gallery', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              imageUrl: base64data,
+              prompt: `Randomized from ${dataset}`,
+              userName,
+              catalogName
+            })
+          }).catch(err => console.error('Failed to save to gallery', err));
+        };
+      } catch (err) {
+        console.error('Failed to setup gallery save', err);
+      }
+
       onImageGenerated(url);
     } catch (e: unknown) {
       if (e instanceof Error) {
@@ -66,10 +94,13 @@ export default function BrainRandomizer({ onImageGenerated }: { onImageGenerated
             className="w-full py-4 rounded-xl font-bold bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-500 hover:to-teal-500 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-all shadow-lg shadow-green-900/20 flex items-center justify-center gap-2"
           >
             {isGenerating ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Blending & Generating...
-              </>
+              <div className="flex flex-col items-center">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Blending & Generating...</span>
+                </div>
+                <span className="text-[10px] text-green-200 mt-1 font-normal opacity-80">(This uses heavy AI models and may take up to 5-10 minutes on CPU)</span>
+              </div>
             ) : (
               <>
                 <Sparkles className="w-5 h-5" />

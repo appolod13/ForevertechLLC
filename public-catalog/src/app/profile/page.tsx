@@ -5,11 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { ShoppingBag, Image as ImageIcon, Loader2 } from 'lucide-react';
+import type { OrderRecord } from '@/lib/cartStore';
 
 export default function ProfilePage() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
-  const [purchases, setPurchases] = useState<any[]>([]);
+  const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
@@ -19,21 +20,26 @@ export default function ProfilePage() {
   }, [user, isLoading, router]);
 
   useEffect(() => {
-    // Mock fetching previous purchases/saved images for the user
-    if (user) {
-      setTimeout(() => {
-        setPurchases([
-          {
-            id: 'mock-1',
-            title: 'Quantum Julia Set (Size: L)',
-            imageUrl: '/placeholder-future-city.svg',
-            date: new Date().toLocaleDateString(),
-            price: 49.99
-          }
-        ]);
+    if (!user) return;
+    const load = async () => {
+      setLoadingData(true);
+      try {
+        const deviceId = localStorage.getItem('device_id') || 'anonymous';
+        const params = new URLSearchParams();
+        if (user.id) params.set('userId', String(user.id));
+        if (deviceId) params.set('deviceId', deviceId);
+        const res = await fetch(`/api/orders?${params.toString()}`);
+        const data: unknown = await res.json().catch(() => null);
+        const d = (typeof data === 'object' && data !== null) ? (data as Record<string, unknown>) : {};
+        const list = Array.isArray(d.orders) ? (d.orders as OrderRecord[]) : [];
+        setOrders(list);
+      } catch {
+        setOrders([]);
+      } finally {
         setLoadingData(false);
-      }, 1000);
-    }
+      }
+    };
+    load();
   }, [user]);
 
   if (isLoading || !user) {
@@ -55,30 +61,40 @@ export default function ProfilePage() {
         <section>
           <h2 className="text-2xl font-semibold text-white mb-6 flex items-center gap-2">
             <ShoppingBag className="h-6 w-6 text-primary" />
-            Previous T-Shirt Purchases
+            Previous Purchases
           </h2>
           
           {loadingData ? (
             <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-zinc-500" /></div>
-          ) : purchases.length > 0 ? (
+          ) : orders.length > 0 ? (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {purchases.map((item) => (
-                <div key={item.id} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+              {orders.map((order) => {
+                const first = order.items[0];
+                const imageUrl = first?.imageUrl || '/placeholder-future-city.svg';
+                const title = first?.title || 'Purchase';
+                const date = new Date(order.createdAt).toLocaleDateString();
+                const price = typeof order.total === 'number' ? order.total : undefined;
+                return (
+                <div key={order.id} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
                   <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black mb-4">
-                    <Image src={item.imageUrl} alt={item.title} fill className="object-cover" unoptimized />
+                    <Image src={imageUrl} alt={title} fill className="object-cover" unoptimized />
                   </div>
-                  <h3 className="font-semibold text-white">{item.title}</h3>
+                  <h3 className="font-semibold text-white">{title}</h3>
                   <div className="mt-2 flex justify-between text-sm text-zinc-400">
-                    <span>{item.date}</span>
-                    <span className="text-white font-medium">${item.price}</span>
+                    <span>{date}</span>
+                    <span className="text-white font-medium">{typeof price === 'number' ? `$${price.toFixed(2)}` : ''}</span>
                   </div>
+                  {order.printifyOrderId && (
+                    <div className="mt-2 text-xs text-zinc-500">Printify: {order.printifyOrderId}</div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="rounded-xl border border-dashed border-zinc-800 p-12 text-center text-zinc-500">
-              You haven't purchased any T-Shirts yet.
-            </div>
+                You haven&apos;t purchased anything yet.
+              </div>
           )}
         </section>
 
