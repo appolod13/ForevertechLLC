@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import Image from 'next/image';
-import { ShoppingCart, Shirt, Coffee, ArrowRight } from 'lucide-react';
+import { ShoppingCart, Shirt, Coffee } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCart } from '@/context/CartContext';
 
@@ -18,13 +18,14 @@ interface Product {
   printifySkus?: Record<string, string>;
 }
 
-export function ProductCustomizer({ initialImageUrl }: { initialImageUrl: string | null }) {
+export function ProductCustomizer({ initialImageUrl, promptOverride }: { initialImageUrl: string | null; promptOverride?: string | null }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedVariant, setSelectedVariant] = useState<string>('');
   const [selectedColor, setSelectedColor] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [orderStatus, setOrderStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
+  const [view, setView] = useState<'front' | 'back'>('front');
   const { addToCart } = useCart();
 
   useEffect(() => {
@@ -57,6 +58,154 @@ export function ProductCustomizer({ initialImageUrl }: { initialImageUrl: string
       .finally(() => setLoading(false));
   }, []);
 
+  const PROMPT_STOPWORDS = useMemo(
+    () =>
+      new Set([
+        'a','an','the','and','or','but','with','without','to','of','in','on','for','from','by','at','as','is','are','was','were','be','been','being',
+        'this','that','these','those','it','its','your','my','our','their','you','me','we','they','them','i',
+        'image','design','shirt','tshirt','tee','print','graphic','art','logo','text','words','watermark','high','quality','ultra','hd','4k','8k'
+      ]),
+    [],
+  );
+
+  const PROMPT_STYLEWORDS = useMemo(
+    () =>
+      new Set([
+        'neon','cinematic','futuristic','cyberpunk','sci','scifi','sci-fi','photoreal','photorealistic','realistic','render','rendered',
+        'rainy','foggy','moody','dramatic','wide','closeup','close-up','portrait','landscape','macro','bokeh','volumetric','lighting','haze',
+        'ultra','high','quality','detailed','detail','sharp','8k','4k','hd'
+      ]),
+    [],
+  );
+
+  const resolvedPrompt = useMemo(() => {
+    if (typeof promptOverride === 'string' && promptOverride.trim()) return promptOverride.trim();
+    try {
+      const raw = localStorage.getItem('foreverteck.studio.lastImage');
+      if (!raw) return '';
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== 'object') return '';
+      const rec = parsed as { prompt?: unknown };
+      return typeof rec.prompt === 'string' ? rec.prompt.trim() : '';
+    } catch {
+      return '';
+    }
+  }, [promptOverride]);
+
+  const keyword = useMemo(() => {
+    const p = (resolvedPrompt || '').toLowerCase();
+    const tokens = p.match(/[a-z0-9]+/g) || [];
+    for (const t of tokens) {
+      if (t.length < 3) continue;
+      if (PROMPT_STOPWORDS.has(t)) continue;
+      if (PROMPT_STYLEWORDS.has(t)) continue;
+      const out = t.slice(0, 24);
+      return out ? out.slice(0, 1).toUpperCase() + out.slice(1) : 'Custom';
+    }
+    const counts = new Map<string, number>();
+    for (const t of tokens) {
+      if (t.length < 3) continue;
+      if (PROMPT_STOPWORDS.has(t)) continue;
+      counts.set(t, (counts.get(t) || 0) + 1);
+    }
+    let best = '';
+    let bestScore = -1;
+    for (const [t, c] of counts.entries()) {
+      const score = c * 100 + Math.min(t.length, 24);
+      if (score > bestScore) {
+        bestScore = score;
+        best = t;
+      }
+    }
+    const fallback = tokens.find((t) => t.length >= 3) || 'custom';
+    const out = (best || fallback).slice(0, 24);
+    return out ? out.slice(0, 1).toUpperCase() + out.slice(1) : 'Custom';
+  }, [PROMPT_STOPWORDS, PROMPT_STYLEWORDS, resolvedPrompt]);
+
+  const bannerText = useMemo(() => {
+    const p = (resolvedPrompt || '').toLowerCase();
+    const tokens = p.match(/[a-z0-9]+/g) || [];
+    const words: string[] = [];
+    for (const t of tokens) {
+      if (t.length < 3) continue;
+      if (PROMPT_STOPWORDS.has(t)) continue;
+      if (PROMPT_STYLEWORDS.has(t)) continue;
+      words.push(t.slice(0, 12));
+      if (words.length >= 12) break;
+    }
+    const phrase = words.length ? words.join(' ') : keyword;
+    return (phrase || 'CUSTOM').toUpperCase().slice(0, 96);
+  }, [PROMPT_STOPWORDS, PROMPT_STYLEWORDS, keyword, resolvedPrompt]);
+
+  const backWordSvgDataUrl = useMemo(() => {
+    const clean = (bannerText || 'CUSTOM')
+      .trim()
+      .replace(/\s+/g, ' ')
+      .replace(/[^A-Za-z0-9 ]/g, '')
+      .trim()
+      .slice(0, 96) || 'CUSTOM';
+    const width = 800;
+    const height = 2000;
+
+    const bgW = 520;
+    const bgH = 980;
+    const bgX = Math.floor((width - bgW) / 2);
+    const bgY = Math.floor((height - bgH) / 2);
+    const outerPad = 52;
+    const words = clean.split(' ').filter(Boolean).slice(0, 14);
+    if (!words.length) words.push('CUSTOM');
+
+    const seed = (() => {
+      let h = 2166136261;
+      for (let i = 0; i < clean.length; i++) {
+        h ^= clean.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return h >>> 0;
+    })();
+
+    const rng = (() => {
+      let a = seed || 1;
+      return () => {
+        a |= 0;
+        a = (a + 0x6d2b79f5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    })();
+
+    const cols = Math.min(4, Math.max(2, words.length >= 10 ? 3 : 2));
+    const rows = Math.max(1, Math.ceil(words.length / cols));
+    const cellW = Math.floor((bgW - outerPad * 2) / cols);
+    const cellH = Math.floor((bgH - outerPad * 2) / rows);
+
+    const tiles = words
+      .map((word, i) => {
+        const c = i % cols;
+        const r = Math.floor(i / cols);
+        const cellCx = bgX + outerPad + c * cellW + Math.floor(cellW / 2);
+        const cellCy = bgY + outerPad + r * cellH + Math.floor(cellH / 2);
+        const jitterX = Math.floor((rng() - 0.5) * cellW * 0.22);
+        const jitterY = Math.floor((rng() - 0.5) * cellH * 0.22);
+        const x = cellCx + jitterX;
+        const y = cellCy + jitterY;
+
+        const angle = Math.floor(-30 + rng() * 60);
+        const fontSizeBase = Math.floor(Math.min(54, Math.max(34, cellH * 0.26)));
+        const len = Math.max(1, word.length);
+        const fontSize = Math.max(30, Math.min(fontSizeBase, Math.floor(fontSizeBase + (10 - len) * 2)));
+        const strokeWidth = Math.max(2, Math.floor(fontSize * 0.1));
+        const textLength = Math.max(120, Math.floor(cellW * 0.84));
+
+        return `<g transform="translate(${x} ${y}) rotate(${angle})"><text x="0" y="0" text-anchor="middle" dominant-baseline="middle" font-family="Impact, Arial Black, Arial, sans-serif" font-size="${fontSize}" font-weight="900" fill="#f2f2f2" stroke="#d9d9d9" stroke-width="${strokeWidth}" paint-order="stroke" textLength="${textLength}" lengthAdjust="spacingAndGlyphs">${word}</text></g>`;
+      })
+      .join('');
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="${width}" height="${height}" fill="rgba(0,0,0,0)"/><rect x="${bgX}" y="${bgY}" width="${bgW}" height="${bgH}" fill="#ff1f5d"/>${tiles}</svg>`;
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  }, [bannerText]);
+
   const handleAddToCart = async () => {
     if (!selectedProduct || !initialImageUrl) return;
     setOrderStatus('processing');
@@ -71,11 +220,13 @@ export function ProductCustomizer({ initialImageUrl }: { initialImageUrl: string
             description: `Customized with your generated artwork. Size: ${selectedVariant}`,
             currency: 'usd',
             size: selectedVariant as ('S' | 'M' | 'L' | 'XL' | 'XXL'),
+            originalPrompt: resolvedPrompt,
             metadata: {
                 productId: selectedProduct.id,
                 color: selectedColor,
                 variant: selectedVariant,
-                printifySku
+                printifySku,
+                originalPrompt: resolvedPrompt
             }
         });
         setOrderStatus('success');
@@ -92,6 +243,29 @@ export function ProductCustomizer({ initialImageUrl }: { initialImageUrl: string
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
       {/* Preview Area */}
       <div className="relative aspect-square bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 flex items-center justify-center">
+         <div className="absolute left-4 top-4 z-20 flex overflow-hidden rounded-lg border border-zinc-700 bg-black/40 backdrop-blur">
+            <button
+              type="button"
+              onClick={() => setView('front')}
+              className={cn(
+                'px-3 py-2 text-xs font-semibold',
+                view === 'front' ? 'bg-white text-black' : 'text-zinc-200 hover:bg-white/10'
+              )}
+            >
+              Front
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('back')}
+              className={cn(
+                'px-3 py-2 text-xs font-semibold',
+                view === 'back' ? 'bg-white text-black' : 'text-zinc-200 hover:bg-white/10'
+              )}
+            >
+              Back
+            </button>
+         </div>
+
          {/* Product Base Layer */}
          <div className="absolute inset-0 flex items-center justify-center opacity-50">
              {selectedProduct?.id.includes('mug') ? (
@@ -102,7 +276,7 @@ export function ProductCustomizer({ initialImageUrl }: { initialImageUrl: string
          </div>
          
          {/* AI Image Overlay */}
-         {initialImageUrl && (
+         {view === 'front' && initialImageUrl && (
              <div className={cn(
                  "relative z-10 transition-all",
                  selectedProduct?.id.includes('mug') 
@@ -117,6 +291,18 @@ export function ProductCustomizer({ initialImageUrl }: { initialImageUrl: string
                     unoptimized={initialImageUrl.startsWith('blob:') || initialImageUrl.includes('127.0.0.1') || initialImageUrl.includes('localhost')}
                  />
              </div>
+         )}
+
+         {view === 'back' && (
+            <div className="relative z-10 h-[70%] w-[70%] rounded-md bg-black/0">
+              <Image
+                src={backWordSvgDataUrl}
+                alt={`Back banner: ${bannerText}`}
+                fill
+                className="object-contain"
+                unoptimized
+              />
+            </div>
          )}
          
       </div>

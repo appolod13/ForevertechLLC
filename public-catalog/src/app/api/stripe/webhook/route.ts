@@ -90,12 +90,214 @@ type PrintifyTemplateProduct = {
 let cachedTemplateProductId: string | undefined;
 let cachedLogoPreviewUrl: string | undefined;
 let cachedLogoPreviewUrlAt = 0;
-type BackStyle = 'landscape' | 'diagonal';
-const cachedBackPreviewUrls: Partial<Record<BackStyle, string>> = {};
-const cachedBackPreviewUrlsAt: Partial<Record<BackStyle, number>> = {};
+const cachedBackWordPreviewUrls = new Map<string, { url: string; at: number }>();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+const PROMPT_STOPWORDS = new Set([
+  'a','an','the','and','or','but','with','without','to','of','in','on','for','from','by','at','as','is','are','was','were','be','been','being',
+  'this','that','these','those','it','its','your','my','our','their','you','me','we','they','them','i',
+  'image','design','shirt','tshirt','tee','print','graphic','art','logo','text','words','watermark','high','quality','ultra','hd','4k','8k'
+]);
+
+const PROMPT_STYLEWORDS = new Set([
+  'neon','cinematic','futuristic','cyberpunk','sci','scifi','sci-fi','photoreal','photorealistic','realistic','render','rendered',
+  'rainy','foggy','moody','dramatic','wide','closeup','close-up','portrait','landscape','macro','bokeh','volumetric','lighting','haze',
+  'ultra','high','quality','detailed','detail','sharp','8k','4k','hd'
+]);
+
+function sanitizeKeyword(word: string): string {
+  const w = (word || '').trim().replace(/[^A-Za-z0-9]/g, '');
+  return w.slice(0, 18);
+}
+
+function sanitizeBannerText(text: string): string {
+  const t = (text || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/[^A-Za-z0-9 ]/g, '')
+    .trim();
+  return t.slice(0, 96);
+}
+
+function titleCaseWord(word: string): string {
+  const w = (word || '').trim();
+  if (!w) return '';
+  return w.slice(0, 1).toUpperCase() + w.slice(1);
+}
+
+function summarizePromptToOneWord(prompt: string): string {
+  const p = (prompt || '').toLowerCase();
+  const tokens = p.match(/[a-z0-9]+/g) || [];
+  for (const t of tokens) {
+    if (t.length < 3) continue;
+    if (PROMPT_STOPWORDS.has(t)) continue;
+    if (PROMPT_STYLEWORDS.has(t)) continue;
+    return t.slice(0, 24);
+  }
+
+  const counts = new Map<string, number>();
+
+  for (const t of tokens) {
+    if (t.length < 3) continue;
+    if (PROMPT_STOPWORDS.has(t)) continue;
+    counts.set(t, (counts.get(t) || 0) + 1);
+  }
+
+  let best = '';
+  let bestScore = -1;
+  for (const [t, c] of counts.entries()) {
+    const score = c * 100 + Math.min(t.length, 24);
+    if (score > bestScore) {
+      bestScore = score;
+      best = t;
+    }
+  }
+
+  const fallback = tokens.find((t) => t.length >= 3) || 'custom';
+  return (best || fallback).slice(0, 24);
+}
+
+function promptFromCartItem(item: CartItem, metadata: Record<string, unknown>): string {
+  const direct = (item as unknown as { originalPrompt?: unknown }).originalPrompt;
+  if (typeof direct === 'string' && direct.trim()) return direct;
+  const mp = metadata['originalPrompt'] ?? metadata['prompt'] ?? metadata['title'];
+  if (typeof mp === 'string' && mp.trim()) return mp;
+  if (mp) {
+    try {
+      return JSON.stringify(mp);
+    } catch {
+      return String(mp);
+    }
+  }
+  return '';
+}
+
+function keywordFromCartItem(item: CartItem, metadata: Record<string, unknown>): string {
+  const prompt = promptFromCartItem(item, metadata);
+  const one = titleCaseWord(summarizePromptToOneWord(prompt));
+  return one || 'Custom';
+}
+
+function summarizePromptToBannerText(prompt: string): string {
+  const p = (prompt || '').toLowerCase();
+  const tokens = p.match(/[a-z0-9]+/g) || [];
+  const words: string[] = [];
+  for (const t of tokens) {
+    if (t.length < 3) continue;
+    if (PROMPT_STOPWORDS.has(t)) continue;
+    if (PROMPT_STYLEWORDS.has(t)) continue;
+    words.push(t.slice(0, 12));
+    if (words.length >= 12) break;
+  }
+  if (!words.length) {
+    const one = summarizePromptToOneWord(prompt);
+    return one || 'CUSTOM';
+  }
+  return words.join(' ');
+}
+
+function bannerTextFromCartItem(item: CartItem, metadata: Record<string, unknown>): string {
+  const prompt = promptFromCartItem(item, metadata);
+  const phrase = summarizePromptToBannerText(prompt);
+  return phrase ? phrase.toUpperCase() : 'CUSTOM';
+}
+
+async function renderBackBannerBase64(text: string) {
+  const clean = sanitizeBannerText(text) || 'CUSTOM';
+  const display = clean.toUpperCase();
+  const width = 2000;
+  const height = 5200;
+  const bgW = 1400;
+  const bgH = 2400;
+  const bgX = Math.floor((width - bgW) / 2);
+  const bgY = Math.floor((height - bgH) / 2);
+  const outerPad = 140;
+  const words = display.split(' ').filter(Boolean).slice(0, 14);
+  if (!words.length) words.push('CUSTOM');
+
+  const seed = (() => {
+    let h = 2166136261;
+    for (let i = 0; i < display.length; i++) {
+      h ^= display.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  })();
+
+  const rng = (() => {
+    let a = seed || 1;
+    return () => {
+      a |= 0;
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  })();
+
+  const cols = Math.min(4, Math.max(2, words.length >= 10 ? 3 : 2));
+  const rows = Math.max(1, Math.ceil(words.length / cols));
+  const cellW = Math.floor((bgW - outerPad * 2) / cols);
+  const cellH = Math.floor((bgH - outerPad * 2) / rows);
+
+  const tiles = words
+    .map((word, i) => {
+      const c = i % cols;
+      const r = Math.floor(i / cols);
+      const cellCx = bgX + outerPad + c * cellW + Math.floor(cellW / 2);
+      const cellCy = bgY + outerPad + r * cellH + Math.floor(cellH / 2);
+      const jitterX = Math.floor((rng() - 0.5) * cellW * 0.22);
+      const jitterY = Math.floor((rng() - 0.5) * cellH * 0.22);
+      const x = cellCx + jitterX;
+      const y = cellCy + jitterY;
+
+      const angle = Math.floor(-30 + rng() * 60);
+      const fontSizeBase = Math.floor(Math.min(140, Math.max(84, cellH * 0.26)));
+      const len = Math.max(1, word.length);
+      const fontSize = Math.max(72, Math.min(fontSizeBase, Math.floor(fontSizeBase + (10 - len) * 2)));
+      const strokeWidth = Math.max(10, Math.floor(fontSize * 0.08));
+      const textLength = Math.max(160, Math.floor(cellW * 0.84));
+
+      return `<g transform="translate(${x} ${y}) rotate(${angle})"><text x="0" y="0" text-anchor="middle" dominant-baseline="middle" font-family="Impact, Arial Black, Arial, sans-serif" font-size="${fontSize}" font-weight="900" fill="#f2f2f2" stroke="#d9d9d9" stroke-width="${strokeWidth}" paint-order="stroke" textLength="${textLength}" lengthAdjust="spacingAndGlyphs">${word}</text></g>`;
+    })
+    .join('');
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="${width}" height="${height}" fill="rgba(0,0,0,0)"/><rect x="${bgX}" y="${bgY}" width="${bgW}" height="${bgH}" fill="#ff1f5d"/>${tiles}</svg>`;
+
+  const png = await sharp(Buffer.from(svg, 'utf8'))
+    .png({ compressionLevel: 9, adaptiveFiltering: true, palette: true })
+    .toBuffer();
+
+  return png.toString('base64');
+}
+
+async function getBackWordPreviewUrl(keyword: string) {
+  const ttlMs = 24 * 60 * 60 * 1000;
+  const kw = sanitizeBannerText(keyword) || 'CUSTOM';
+  const cacheKey = `collage_v4|${kw.toUpperCase()}`;
+  const cached = cachedBackWordPreviewUrls.get(cacheKey);
+  if (cached && Date.now() - cached.at < ttlMs) return cached.url;
+
+  const base64 = await renderBackBannerBase64(kw);
+  const fileSafe = (kw || 'CUSTOM').replace(/\s+/g, '-').replace(/[^A-Za-z0-9-]/g, '').slice(0, 48) || 'CUSTOM';
+  const previewUrl = await uploadImageToPrintify(`back-collage-v4-${fileSafe}.png`, base64);
+  cachedBackWordPreviewUrls.set(cacheKey, { url: previewUrl, at: Date.now() });
+  return previewUrl;
+}
+
+function buildPrintifyOrderLabel(sessionId: string, keyword: string): string {
+  const kw = sanitizeKeyword(keyword) || 'Custom';
+  const base = `${kw} ${sessionId}`;
+  return base.length > 100 ? base.slice(0, 100) : base;
+}
+
+function buildPrintifyFileName(keyword: string, itemId: string): string {
+  const kw = sanitizeKeyword(keyword) || 'Design';
+  const id = String(itemId || 'design').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24) || 'design';
+  return `${kw}_${id}.png`;
 }
 
 async function printifyFetch(path: string, init?: RequestInit) {
@@ -309,63 +511,6 @@ async function getCompanyLogoPreviewUrl(origin: string) {
   return previewUrl;
 }
 
-async function getBackDesignPreviewUrl(style: BackStyle) {
-  const ttlMs = 24 * 60 * 60 * 1000;
-  const cached = cachedBackPreviewUrls[style];
-  const cachedAt = cachedBackPreviewUrlsAt[style] || 0;
-  if (cached && Date.now() - cachedAt < ttlMs) return cached;
-
-  const customPath = (process.env.PRINTIFY_BACK_POSSIBLE_IMAGE_PATH || '').trim();
-  if (customPath) {
-    const origin = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3001';
-    const imageUrl =
-      customPath.startsWith('http://') || customPath.startsWith('https://') ? customPath : `${origin}${customPath}`;
-    const base64 = await fetchImageAsBase64(imageUrl);
-    const previewUrl = await uploadImageToPrintify(`back-possible-custom-${style}.png`, base64);
-    cachedBackPreviewUrls[style] = previewUrl;
-    cachedBackPreviewUrlsAt[style] = Date.now();
-    return previewUrl;
-  }
-
-  const svg =
-    style === 'landscape'
-      ? `
-<svg xmlns="http://www.w3.org/2000/svg" width="5200" height="1500" viewBox="0 0 5200 1500">
-  <rect width="5200" height="1500" fill="rgba(0,0,0,0)"/>
-  <g transform="translate(2600,750)">
-    <rect x="-2500" y="-520" width="5000" height="1040" rx="70" fill="#ff1f5d"/>
-    <text x="0" y="300" text-anchor="middle"
-      font-family="Impact, Arial Black, Arial, sans-serif"
-      font-size="820" font-weight="900" letter-spacing="18"
-      fill="#f2f2f2" stroke="#d9d9d9" stroke-width="32" paint-order="stroke">
-      POSSIBLE
-    </text>
-  </g>
-</svg>`.trim()
-      : `
-<svg xmlns="http://www.w3.org/2000/svg" width="4200" height="4200" viewBox="0 0 4200 4200">
-  <rect width="4200" height="4200" fill="rgba(0,0,0,0)"/>
-  <g transform="translate(2100,2100) rotate(-35)">
-    <rect x="-2800" y="-520" width="5600" height="1040" rx="70" fill="#ff1f5d"/>
-    <text x="0" y="300" text-anchor="middle"
-      font-family="Impact, Arial Black, Arial, sans-serif"
-      font-size="820" font-weight="900" letter-spacing="18"
-      fill="#f2f2f2" stroke="#d9d9d9" stroke-width="32" paint-order="stroke">
-      POSSIBLE
-    </text>
-  </g>
-</svg>`.trim();
-
-  const png = await sharp(Buffer.from(svg, 'utf8'))
-    .png({ compressionLevel: 9, adaptiveFiltering: true, palette: true })
-    .toBuffer();
-  const base64 = png.toString('base64');
-  const previewUrl = await uploadImageToPrintify(`back-possible-${style}.png`, base64);
-  cachedBackPreviewUrls[style] = previewUrl;
-  cachedBackPreviewUrlsAt[style] = Date.now();
-  return previewUrl;
-}
-
 function splitName(fullName: string) {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
   const first = parts[0] || 'Customer';
@@ -466,6 +611,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true });
   }
 
+  const firstItem = (cartItems as CartItem[])[0];
+  const firstMeta = firstItem?.metadata && isRecord(firstItem.metadata) ? firstItem.metadata : {};
+  const orderKeyword = keywordFromCartItem(firstItem || {}, firstMeta);
   const template = await getTemplateProduct(shopId);
   const templateBlueprintId = getNumber(template.blueprint_id);
   const templatePrintProviderId = getNumber(template.print_provider_id);
@@ -494,6 +642,7 @@ export async function POST(request: Request) {
   for (const item of cartItems as CartItem[]) {
     const quantity = Math.max(1, Number(item.quantity || 1));
     const metadata = item.metadata && isRecord(item.metadata) ? item.metadata : {};
+    const keyword = keywordFromCartItem(item, metadata);
     const rawPrintify = metadata['printify'];
     const printify: PrintifyItemMeta | null = isRecord(rawPrintify) ? (rawPrintify as PrintifyItemMeta) : null;
     const variant = typeof metadata['variant'] === 'string' ? metadata['variant'] : '';
@@ -539,7 +688,7 @@ export async function POST(request: Request) {
           : rawImageUrl;
 
     const base64 = await fetchImageAsBase64(absoluteImageUrl);
-    const previewUrl = await uploadImageToPrintify(`${item.id || 'design'}.png`, base64);
+    const previewUrl = await uploadImageToPrintify(buildPrintifyFileName(keyword, String(item.id || 'design')), base64);
     const transform = getTransformFromTemplate(template, variantId, placementKey);
     const desiredX = 0.5;
     const desiredY = 0.36;
@@ -606,32 +755,25 @@ export async function POST(request: Request) {
     try {
       const availablePlacements = getPlacementKeysForVariant(template, variantId);
       const backKey = pickBackPlacementKey(availablePlacements);
-      const backStyleRaw = typeof (metadata as Record<string, unknown>)['backStyle'] === 'string'
-        ? String((metadata as Record<string, unknown>)['backStyle'])
-        : '';
-      const backStyle: BackStyle = backStyleRaw === 'diagonal' ? 'diagonal' : 'landscape';
 
       if (backKey) {
-        const backPreviewUrl = await getBackDesignPreviewUrl(backStyle);
-        const backFinal =
-          backStyle === 'landscape'
-            ? { x: 0.5, y: 0.18, scale: 0.98, angle: 0 }
-            : { x: 0.5, y: 0.22, scale: 0.9, angle: 0 };
+        const bannerText = bannerTextFromCartItem(item, metadata);
+        const backPreviewUrl = await getBackWordPreviewUrl(bannerText);
 
         printAreas[backKey] = [
           {
             src: backPreviewUrl,
-            x: backFinal.x,
-            y: backFinal.y,
-            scale: backFinal.scale,
-            angle: backFinal.angle,
+            x: 0.5,
+            y: 0.5,
+            scale: 0.9,
+            angle: 0,
           },
         ];
       } else {
         console.error('No back placement found for variant', { variantId, availablePlacements });
       }
     } catch (e) {
-      console.error('Back design upload/placement failed', e);
+      console.error('Back word upload/placement failed', e);
     }
 
     lineItems.push({
@@ -648,7 +790,7 @@ export async function POST(request: Request) {
     method: 'POST',
     body: JSON.stringify({
       external_id: session.id,
-      label: session.id,
+      label: buildPrintifyOrderLabel(session.id, orderKeyword),
       line_items: lineItems,
       shipping_method: 1,
       is_printify_express: false,
@@ -659,13 +801,15 @@ export async function POST(request: Request) {
   })) as unknown;
 
   const key = userId || deviceId || 'anonymous';
+  const cartTotal = getCartLineItems(cartItems as CartItem[]).reduce((sum, li) => sum + (li.price || 0) * li.quantity, 0);
+  const sessionTotal = typeof session.amount_total === 'number' ? session.amount_total / 100 : null;
   const order: OrderRecord = {
     id: session.id,
     createdAt: new Date().toISOString(),
     status: 'submitted',
     stripeSessionId: session.id,
     printifyOrderId: isRecord(printifyOrder) ? getString(printifyOrder.id) || undefined : undefined,
-    total: getCartLineItems(cartItems as CartItem[]).reduce((sum, li) => sum + (li.price || 0) * li.quantity, 0),
+    total: typeof sessionTotal === 'number' && Number.isFinite(sessionTotal) ? sessionTotal : cartTotal,
     items: getCartLineItems(cartItems as CartItem[]),
   };
 
