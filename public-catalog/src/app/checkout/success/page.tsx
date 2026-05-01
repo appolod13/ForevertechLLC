@@ -5,12 +5,39 @@ import { useSearchParams } from 'next/navigation';
 import { CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null;
+}
+
+type ChainConfig = {
+  id: string;
+  name: string;
+  chainId: number;
+  enabled: boolean;
+  gaslessClaim: boolean;
+  contractAddress: string;
+  mintFunction: string;
+};
+
+type CryptoConfig = {
+  version: string;
+  primaryChainId: number;
+  chains: ChainConfig[];
+};
+
 function CheckoutSuccessInner() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');
   const [finalizeStatus, setFinalizeStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [printifyOrderId, setPrintifyOrderId] = useState<string>('');
   const didRun = useRef(false);
+  const [walletAddress, setWalletAddress] = useState('');
+  const [claimStatus, setClaimStatus] = useState<'idle' | 'claiming' | 'claimed' | 'error'>('idle');
+  const [claimError, setClaimError] = useState<string>('');
+  const [claimTxHash, setClaimTxHash] = useState<string>('');
+  const [metadataIpfsUrl, setMetadataIpfsUrl] = useState<string>('');
+  const [cryptoCfg, setCryptoCfg] = useState<CryptoConfig | null>(null);
+  const [selectedChainId, setSelectedChainId] = useState<number>(56);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -59,6 +86,34 @@ function CheckoutSuccessInner() {
     run();
   }, [sessionId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      const res = await fetch('/api/crypto/config', { cache: 'no-store' }).catch(() => null);
+      const json: unknown = res ? await res.json().catch(() => null) : null;
+      const ok = Boolean(res && res.ok && isRecord(json) && json.success === true && isRecord(json.data));
+      if (!ok) {
+        if (!cancelled) setCryptoCfg(null);
+        return;
+      }
+      const data = (json as Record<string, unknown>).data as Record<string, unknown>;
+      const cfg = data as unknown as CryptoConfig;
+      if (cancelled) return;
+      setCryptoCfg(cfg);
+      const enabledChains = Array.isArray(cfg.chains) ? cfg.chains.filter((c) => c && c.enabled) : [];
+      const preferred = enabledChains.find((c) => c.chainId === cfg.primaryChainId) || enabledChains[0] || null;
+      setSelectedChainId(preferred?.chainId ?? 56);
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const enabledChains = cryptoCfg?.chains?.filter((c) => c.enabled) || [];
+  const selectedChain = enabledChains.find((c) => c.chainId === selectedChainId) || null;
+  const canGaslessClaim = Boolean(selectedChain && selectedChain.gaslessClaim);
+
   if (!sessionId) {
     return (
       <div className="container mx-auto px-4 py-24 text-center">
@@ -96,6 +151,84 @@ function CheckoutSuccessInner() {
           ) : null}
         </div>
       )}
+
+      <div className="mb-8 w-full rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 text-left">
+        <div className="text-sm font-semibold text-white">Claim your NFT</div>
+        <div className="mt-1 text-xs text-zinc-400">
+          {selectedChain
+            ? selectedChain.gaslessClaim
+              ? `Gasless claim on ${selectedChain.name}.`
+              : `${selectedChain.name} requires gas (claim disabled here).`
+            : 'Select a chain to claim.'}
+        </div>
+        {enabledChains.length ? (
+          <div className="mt-3 grid gap-1">
+            <div className="text-xs text-zinc-500">Chain</div>
+            <select
+              className="w-full rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-sm text-white outline-none"
+              value={String(selectedChainId)}
+              onChange={(e) => setSelectedChainId(Number(e.target.value))}
+              disabled={claimStatus === 'claiming' || claimStatus === 'claimed'}
+            >
+              {enabledChains.map((c) => (
+                <option key={c.id || String(c.chainId)} value={String(c.chainId)}>
+                  {c.name} (chainId {c.chainId}){c.gaslessClaim ? ' • gasless' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+        <div className="mt-3 flex gap-2">
+          <input
+            className="flex-1 rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-sm text-white outline-none"
+            placeholder="0x..."
+            value={walletAddress}
+            onChange={(e) => setWalletAddress(e.target.value)}
+            disabled={claimStatus === 'claiming' || claimStatus === 'claimed'}
+          />
+          <button
+            className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-50"
+            disabled={!walletAddress.trim() || claimStatus === 'claiming' || claimStatus === 'claimed' || !canGaslessClaim}
+            onClick={async () => {
+              if (!sessionId) return;
+              setClaimStatus('claiming');
+              setClaimError('');
+              setClaimTxHash('');
+              setMetadataIpfsUrl('');
+              try {
+                const res = await fetch('/api/nft/claim', {
+                  method: 'POST',
+                  headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify({
+                    sessionId,
+                    walletAddress: walletAddress.trim(),
+                    chainId: selectedChainId,
+                    deviceId: localStorage.getItem('device_id') || '',
+                  }),
+                });
+                const json = await res.json().catch(() => null);
+                if (!res.ok || !json?.success) {
+                  setClaimStatus('error');
+                  setClaimError(String(json?.error || `HTTP_${res.status}`));
+                  return;
+                }
+                setClaimStatus('claimed');
+                setClaimTxHash(String(json.data?.txHash || ''));
+                setMetadataIpfsUrl(String(json.data?.metadataIpfsUrl || ''));
+              } catch (e: unknown) {
+                setClaimStatus('error');
+                setClaimError(e instanceof Error ? e.message : 'claim_failed');
+              }
+            }}
+          >
+            {claimStatus === 'claiming' ? 'Claiming…' : claimStatus === 'claimed' ? 'Claimed' : 'Claim'}
+          </button>
+        </div>
+        {claimError ? <div className="mt-2 text-xs text-red-300">{claimError}</div> : null}
+        {claimTxHash ? <div className="mt-2 text-xs text-zinc-400 break-all">Tx: {claimTxHash}</div> : null}
+        {metadataIpfsUrl ? <div className="mt-1 text-xs text-zinc-400 break-all">Metadata: {metadataIpfsUrl}</div> : null}
+      </div>
+
       <Link 
         href="/" 
         className="rounded-full bg-white px-8 py-3 font-semibold text-zinc-950 hover:bg-zinc-200 transition-colors"

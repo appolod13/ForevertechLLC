@@ -16,6 +16,7 @@ try:
 except ImportError:
     np = None
     plt = None
+    cm = None
     QuantumCircuit = None
 
 import os
@@ -512,10 +513,33 @@ def _analyze_prompt_energy(prompt):
 
 def generate_julia_set(width, height, c_x, c_y, zoom=1.0, max_iter=100, cmap_name="turbo"):
     """
-    Generates a mathematically pure Julia set fractal and applies a Matplotlib colormap.
+    Generates a mathematically pure Julia set fractal.
     """
-    if not np or not plt:
-        return np.zeros((height, width, 3), dtype=np.uint8)
+    if not np:
+        return None
+
+    def apply_simple_colormap(vals_01: "np.ndarray", name: str) -> "np.ndarray":
+        name = (name or "turbo").lower()
+        stops = {
+            "turbo": [(48, 18, 59), (59, 82, 139), (33, 145, 140), (96, 202, 96), (231, 228, 25), (180, 39, 46)],
+            "viridis": [(68, 1, 84), (59, 82, 139), (33, 145, 140), (94, 201, 97), (253, 231, 37)],
+            "plasma": [(12, 7, 134), (86, 1, 164), (156, 23, 158), (212, 73, 128), (246, 141, 76), (252, 216, 86)],
+            "magma": [(0, 0, 4), (28, 16, 68), (79, 18, 123), (129, 37, 129), (181, 54, 122), (229, 80, 100), (251, 135, 97), (252, 203, 134)],
+            "inferno": [(0, 0, 4), (31, 12, 72), (85, 15, 109), (136, 34, 106), (186, 54, 85), (227, 89, 51), (249, 140, 10), (252, 255, 164)],
+            "ocean": [(0, 12, 38), (0, 66, 98), (0, 133, 139), (0, 190, 170), (180, 255, 245)],
+            "rainbow": [(150, 0, 255), (0, 80, 255), (0, 220, 255), (0, 255, 120), (240, 255, 0), (255, 120, 0), (255, 0, 0)],
+        }.get(name)
+
+        if not stops:
+            stops = [(48, 18, 59), (59, 82, 139), (33, 145, 140), (96, 202, 96), (231, 228, 25), (180, 39, 46)]
+
+        stops_np = np.array(stops, dtype=np.float32) / 255.0
+        x = np.clip(vals_01, 0.0, 1.0) * (stops_np.shape[0] - 1)
+        i0 = np.floor(x).astype(np.int32)
+        i1 = np.clip(i0 + 1, 0, stops_np.shape[0] - 1)
+        t = (x - i0).astype(np.float32)[..., None]
+        rgb = (1.0 - t) * stops_np[i0] + t * stops_np[i1]
+        return (np.clip(rgb, 0.0, 1.0) * 255.0).astype(np.uint8)
 
     # Create a grid
     x = np.linspace(-1.5 / zoom, 1.5 / zoom, width)
@@ -561,47 +585,66 @@ def generate_julia_set(width, height, c_x, c_y, zoom=1.0, max_iter=100, cmap_nam
     # Normalize for colormap, shift it so the inner solid set gets the lowest color
     # and the chaotic borders get the bright colors
     smooth_norm = smooth / np.max(smooth) if np.max(smooth) > 0 else smooth
-    
-    # Apply colormap
-    try:
-        colormap = cm.get_cmap(cmap_name)
-    except ValueError:
-        colormap = cm.get_cmap("turbo")
-        
-    img_rgba = colormap(smooth_norm)
-    img_rgb = (img_rgba[:, :, :3] * 255).astype(np.uint8)
-    return img_rgb
+
+    if cm is not None:
+        try:
+            colormap = cm.get_cmap(cmap_name)
+        except Exception:
+            colormap = cm.get_cmap("turbo")
+        img_rgba = colormap(smooth_norm)
+        return (img_rgba[:, :, :3] * 255).astype(np.uint8)
+
+    return apply_simple_colormap(smooth_norm.astype(np.float32), cmap_name)
+
+
+def _pseudo_quantum_probs(prompt: str, num_states: int) -> "np.ndarray":
+    if not np:
+        return None
+    n = int(num_states)
+    n = max(8, min(256, n))
+    seed = _seed_from_text(prompt or "quantum-julia")
+    rng = np.random.default_rng(seed)
+    raw = rng.random(n, dtype=np.float32) + 1e-6
+    return raw / np.sum(raw)
 
 def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum=False):
     if _contains_future_city(prompt) and not force_quantum:
         return _future_city_concept(prompt, int(width), int(height), int(rule))
 
-    if not np or not QuantumCircuit:
-        return _future_city_concept(prompt + " (mock quantum)", int(width), int(height), int(rule))
+    if not force_quantum:
+        if not np or not QuantumCircuit:
+            return _future_city_concept(prompt + " (mock quantum)", int(width), int(height), int(rule))
 
     """
     Main function to generate a quantum-inspired image.
     """
     # 1. Generate Wolfram Pattern
     print(f"Generating Wolfram pattern (Rule {rule})...")
-    pattern = generate_wolfram_pattern(width, height, rule=rule, prompt=prompt)
-    
-    print("Mapping to Quantum Circuit...")
-    qc = map_pattern_to_quantum_circuit(pattern, num_qubits=6) # 6 qubits for complexity
-    
-    print("Simulating on Aer backend...")
-    counts = simulate_quantum_circuit(qc)
-    
-    print("Rendering image...")
-    total_shots = sum(counts.values()) if counts else 0
-    if total_shots <= 0:
-        # Fallback if simulation fails
-        print("Simulation failed, falling back to random distribution")
-        seed = _seed_from_text(prompt) if prompt else random.randint(0, 1000000)
-        return generate_random_quantum_distribution(int(width), int(height), seed)
+    pattern = generate_wolfram_pattern(width, height, rule=rule, prompt=prompt) if np else None
 
-    sorted_keys = sorted(counts.keys())
-    probs_np = np.array([counts[k] / total_shots for k in sorted_keys], dtype=np.float32)
+    probs_np = None
+    sorted_keys = None
+
+    if np and QuantumCircuit:
+        print("Mapping to Quantum Circuit...")
+        qc = map_pattern_to_quantum_circuit(pattern, num_qubits=6)  # 6 qubits for complexity
+
+        print("Simulating on Aer backend...")
+        counts = simulate_quantum_circuit(qc)
+
+        print("Rendering image...")
+        total_shots = sum(counts.values()) if counts else 0
+        if total_shots <= 0:
+            print("Simulation failed, falling back to pseudo-quantum distribution")
+        else:
+            sorted_keys = sorted(counts.keys())
+            probs_np = np.array([counts[k] / total_shots for k in sorted_keys], dtype=np.float32)
+
+    if probs_np is None:
+        if not np:
+            return _future_city_concept(prompt + " (mock quantum)", int(width), int(height), int(rule))
+        sorted_keys = [str(i) for i in range(64)]
+        probs_np = _pseudo_quantum_probs(prompt, len(sorted_keys))
 
     # 4. Extract Emotional Energy and Shape
     cmap_name, julia_cx, julia_cy, shape_type = _analyze_prompt_energy(prompt)
@@ -614,6 +657,8 @@ def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum
         
     print(f"Rendering Quantum Julia (cmap={cmap_name}, shape={shape_type})...")
     julia_rgb = generate_julia_set(width, height, julia_cx, julia_cy, zoom=1.35, max_iter=150, cmap_name=cmap_name)
+    if julia_rgb is None:
+        return _future_city_concept(prompt + " (mock quantum)", int(width), int(height), int(rule))
 
     # Non-linear rendering using quantum probabilities and spatial coordinates
     # This creates actual interference-like quantum patterns
@@ -623,7 +668,7 @@ def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum
     base_g = random.randint(50, 255)
     base_b = random.randint(50, 255)
     
-    num_states = len(sorted_keys)
+    num_states = len(sorted_keys) if sorted_keys is not None else int(probs_np.shape[0])
     
     # Vectorized computation for massive performance boost
     I, J = np.meshgrid(np.arange(height), np.arange(width), indexing='ij')
@@ -671,7 +716,12 @@ def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum
     bg_b = np.clip(120 * (prob + prob_2) * num_states, 0, 255)
     
     # Create the final image array using the pattern as a mask
-    mask = (pattern > 0.0)
+    if pattern is None:
+        seed = _seed_from_text(prompt) if prompt else random.randint(0, 1000000)
+        rng = np.random.default_rng(seed)
+        mask = rng.random((height, width), dtype=np.float32) > 0.7
+    else:
+        mask = (pattern > 0.0)
     
     # Interference layer
     r = np.where(mask, active_r, bg_r)
@@ -685,8 +735,9 @@ def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum
     # We'll apply the interference pattern as a subtle translucent overlay.
     img_interf = Image.fromarray(interference_img).convert("RGBA")
     img_julia = Image.fromarray(julia_rgb).convert("RGBA")
-    
-    img_interf.putalpha(140 if force_quantum else 40) 
+    if force_quantum:
+        img_interf = img_interf.filter(ImageFilter.GaussianBlur(radius=2))
+    img_interf.putalpha(90 if force_quantum else 40)
     
     # Alpha composite puts interference on top of Julia
     blended = Image.alpha_composite(img_julia, img_interf).convert("RGB")

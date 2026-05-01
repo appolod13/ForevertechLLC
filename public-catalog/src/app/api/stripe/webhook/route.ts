@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { addOrder, clearCart, getCart, type OrderLineItem, type OrderRecord } from '@/lib/cartStore';
+import { buildBackTextSvg, getPrintifyBackTextConfig } from '@/lib/printifyBackText';
+import { requestIbmQuantumProof, type QuantumProof } from '@/lib/quantumVerified';
 import sharp from 'sharp';
 
 function getStripeClient() {
@@ -200,72 +202,21 @@ function summarizePromptToBannerText(prompt: string): string {
 }
 
 function bannerTextFromCartItem(item: CartItem, metadata: Record<string, unknown>): string {
+  const cfg = getPrintifyBackTextConfig();
+  if (cfg.textMode === 'custom' && cfg.customText.trim()) {
+    const clean = sanitizeBannerText(cfg.customText) || 'CUSTOM';
+    return clean.toUpperCase();
+  }
   const prompt = promptFromCartItem(item, metadata);
   const phrase = summarizePromptToBannerText(prompt);
   return phrase ? phrase.toUpperCase() : 'CUSTOM';
 }
 
-async function renderBackBannerBase64(text: string) {
+async function renderBackBannerBase64(text: string, seedSalt?: string) {
+  const cfg = getPrintifyBackTextConfig();
   const clean = sanitizeBannerText(text) || 'CUSTOM';
-  const display = clean.toUpperCase();
-  const width = 2000;
-  const height = 5200;
-  const bgW = 1400;
-  const bgH = 2400;
-  const bgX = Math.floor((width - bgW) / 2);
-  const bgY = Math.floor((height - bgH) / 2);
-  const outerPad = 140;
-  const words = display.split(' ').filter(Boolean).slice(0, 14);
-  if (!words.length) words.push('CUSTOM');
-
-  const seed = (() => {
-    let h = 2166136261;
-    for (let i = 0; i < display.length; i++) {
-      h ^= display.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    return h >>> 0;
-  })();
-
-  const rng = (() => {
-    let a = seed || 1;
-    return () => {
-      a |= 0;
-      a = (a + 0x6d2b79f5) | 0;
-      let t = Math.imul(a ^ (a >>> 15), 1 | a);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  })();
-
-  const cols = Math.min(4, Math.max(2, words.length >= 10 ? 3 : 2));
-  const rows = Math.max(1, Math.ceil(words.length / cols));
-  const cellW = Math.floor((bgW - outerPad * 2) / cols);
-  const cellH = Math.floor((bgH - outerPad * 2) / rows);
-
-  const tiles = words
-    .map((word, i) => {
-      const c = i % cols;
-      const r = Math.floor(i / cols);
-      const cellCx = bgX + outerPad + c * cellW + Math.floor(cellW / 2);
-      const cellCy = bgY + outerPad + r * cellH + Math.floor(cellH / 2);
-      const jitterX = Math.floor((rng() - 0.5) * cellW * 0.22);
-      const jitterY = Math.floor((rng() - 0.5) * cellH * 0.22);
-      const x = cellCx + jitterX;
-      const y = cellCy + jitterY;
-
-      const angle = Math.floor(-30 + rng() * 60);
-      const fontSizeBase = Math.floor(Math.min(140, Math.max(84, cellH * 0.26)));
-      const len = Math.max(1, word.length);
-      const fontSize = Math.max(72, Math.min(fontSizeBase, Math.floor(fontSizeBase + (10 - len) * 2)));
-      const strokeWidth = Math.max(10, Math.floor(fontSize * 0.08));
-      const textLength = Math.max(160, Math.floor(cellW * 0.84));
-
-      return `<g transform="translate(${x} ${y}) rotate(${angle})"><text x="0" y="0" text-anchor="middle" dominant-baseline="middle" font-family="Impact, Arial Black, Arial, sans-serif" font-size="${fontSize}" font-weight="900" fill="#f2f2f2" stroke="#d9d9d9" stroke-width="${strokeWidth}" paint-order="stroke" textLength="${textLength}" lengthAdjust="spacingAndGlyphs">${word}</text></g>`;
-    })
-    .join('');
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="${width}" height="${height}" fill="rgba(0,0,0,0)"/><rect x="${bgX}" y="${bgY}" width="${bgW}" height="${bgH}" fill="#ff1f5d"/>${tiles}</svg>`;
+  const salted = seedSalt ? { ...cfg, version: `${cfg.version}|${seedSalt}` } : cfg;
+  const svg = buildBackTextSvg(clean, salted);
 
   const png = await sharp(Buffer.from(svg, 'utf8'))
     .png({ compressionLevel: 9, adaptiveFiltering: true, palette: true })
@@ -274,16 +225,19 @@ async function renderBackBannerBase64(text: string) {
   return png.toString('base64');
 }
 
-async function getBackWordPreviewUrl(keyword: string) {
+async function getBackWordPreviewUrl(keyword: string, seedSalt?: string) {
+  const cfg = getPrintifyBackTextConfig();
   const ttlMs = 24 * 60 * 60 * 1000;
   const kw = sanitizeBannerText(keyword) || 'CUSTOM';
-  const cacheKey = `collage_v4|${kw.toUpperCase()}`;
+  const saltKey = seedSalt ? `|q|${seedSalt}` : '';
+  const cacheKey = `collage_v4|${cfg.version}${saltKey}|${kw.toUpperCase()}`;
   const cached = cachedBackWordPreviewUrls.get(cacheKey);
   if (cached && Date.now() - cached.at < ttlMs) return cached.url;
 
-  const base64 = await renderBackBannerBase64(kw);
+  const base64 = await renderBackBannerBase64(kw, seedSalt);
   const fileSafe = (kw || 'CUSTOM').replace(/\s+/g, '-').replace(/[^A-Za-z0-9-]/g, '').slice(0, 48) || 'CUSTOM';
-  const previewUrl = await uploadImageToPrintify(`back-collage-v4-${fileSafe}.png`, base64);
+  const saltTag = seedSalt ? `-q-${seedSalt.slice(0, 8)}` : '';
+  const previewUrl = await uploadImageToPrintify(`back-collage-v4-${cfg.version}${saltTag}-${fileSafe}.png`, base64);
   cachedBackWordPreviewUrls.set(cacheKey, { url: previewUrl, at: Date.now() });
   return previewUrl;
 }
@@ -542,12 +496,14 @@ function getCartLineItems(cartItems: CartItem[]): OrderLineItem[] {
         : typeof anyItem.image === 'string'
           ? anyItem.image
           : undefined;
+    const metadata = isRecord(anyItem.metadata) ? (anyItem.metadata as Record<string, unknown>) : undefined;
     out.push({
       id: getString(anyItem.id) || undefined,
       title: title || undefined,
       quantity,
       price: Number.isFinite(price) ? price : undefined,
       imageUrl,
+      metadata,
     });
   }
   return out;
@@ -596,6 +552,33 @@ export async function POST(request: Request) {
   const session = event.data.object as Stripe.Checkout.Session;
   const deviceId = getString(session.metadata?.deviceId) || 'anonymous';
   const userId = getString(session.metadata?.userId);
+  const quantumVerifiedRequested = getString(session.metadata?.quantumVerified) === '1';
+  const quantumFeeCents =
+    typeof session.metadata?.quantumFeeCents === 'string' && session.metadata.quantumFeeCents.trim()
+      ? Math.max(0, Math.min(50_000, Math.trunc(Number(session.metadata.quantumFeeCents))))
+      : 0;
+  let quantumProof: QuantumProof | null = null;
+  let quantumRefunded = false;
+  let quantumVerified = quantumVerifiedRequested;
+
+  if (quantumVerifiedRequested) {
+    try {
+      quantumProof = await requestIbmQuantumProof({ orderId: session.id, purpose: 'seed', timeoutMs: 6000 });
+    } catch {
+      quantumProof = null;
+      quantumVerified = false;
+      const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : '';
+      if (paymentIntentId && quantumFeeCents > 0) {
+        try {
+          const stripeClient = getStripeClient();
+          await stripeClient.refunds.create({ payment_intent: paymentIntentId, amount: quantumFeeCents });
+          quantumRefunded = true;
+        } catch {
+          quantumRefunded = false;
+        }
+      }
+    }
+  }
   const origin =
     getString(session.metadata?.origin) ||
     (process.env.NEXT_PUBLIC_SITE_URL || '') ||
@@ -674,7 +657,17 @@ export async function POST(request: Request) {
       throw new Error('Missing Printify mapping (need sku or blueprintId/printProviderId/variantId)');
     }
 
-    const rawImageUrl = typeof item.imageUrl === 'string' ? item.imageUrl : typeof item.image === 'string' ? item.image : '';
+    const itemMeta = isRecord(item.metadata) ? item.metadata : {};
+    const ipfsGateway =
+      typeof itemMeta.ipfs_gateway === 'string' && itemMeta.ipfs_gateway.trim()
+        ? itemMeta.ipfs_gateway.trim()
+        : typeof itemMeta.ipfs_url === 'string' && itemMeta.ipfs_url.startsWith('ipfs://')
+          ? itemMeta.ipfs_url.replace('ipfs://', 'https://ipfs.io/ipfs/')
+          : '';
+
+    const rawImageUrl =
+      ipfsGateway ||
+      (typeof item.imageUrl === 'string' ? item.imageUrl : typeof item.image === 'string' ? item.image : '');
 
     if (!rawImageUrl || rawImageUrl.startsWith('blob:')) {
       throw new Error('Cart item imageUrl is missing or not accessible for upload');
@@ -758,7 +751,7 @@ export async function POST(request: Request) {
 
       if (backKey) {
         const bannerText = bannerTextFromCartItem(item, metadata);
-        const backPreviewUrl = await getBackWordPreviewUrl(bannerText);
+        const backPreviewUrl = await getBackWordPreviewUrl(bannerText, quantumProof?.seed);
 
         printAreas[backKey] = [
           {
@@ -810,6 +803,9 @@ export async function POST(request: Request) {
     stripeSessionId: session.id,
     printifyOrderId: isRecord(printifyOrder) ? getString(printifyOrder.id) || undefined : undefined,
     total: typeof sessionTotal === 'number' && Number.isFinite(sessionTotal) ? sessionTotal : cartTotal,
+    quantumVerified,
+    quantumRefunded,
+    quantumProof: quantumProof || undefined,
     items: getCartLineItems(cartItems as CartItem[]),
   };
 

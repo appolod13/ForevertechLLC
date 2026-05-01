@@ -3,6 +3,7 @@ import { CatalogGrid } from '@/components/CatalogGrid';
 import { TwitterFeed } from '@/components/TwitterFeed';
 import { LatestAIImage } from '@/components/LatestAIImage';
 import Image from 'next/image';
+import Link from 'next/link';
 
 const API_BASE = process.env.CATALOG_API_BASE || process.env.NEXT_PUBLIC_CART_API_BASE || 'http://localhost:3001';
 
@@ -17,6 +18,18 @@ type Post = {
   platform: string;
   userId: string;
 };
+
+function resolvePostMediaUrl(post: Post | undefined): string | null {
+  if (!post) return null;
+  const raw =
+    post.mediaUrl ||
+    (post.metadata?.platformMediaUrls ? Object.values(post.metadata.platformMediaUrls)[0] : null) ||
+    null;
+  if (!raw) return null;
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+  if (raw.startsWith('Qm') || raw.startsWith('bafy')) return `https://ipfs.io/ipfs/${raw}`;
+  return `${API_BASE}${raw.startsWith('/') ? '' : '/'}${raw}`;
+}
 
 async function getPosts(): Promise<Post[]> {
   try {
@@ -40,6 +53,9 @@ async function getPosts(): Promise<Post[]> {
 
 export default async function Home() {
   const initialPosts = await getPosts();
+  const heroPost = initialPosts[0];
+  const heroImageUrl = resolvePostMediaUrl(heroPost);
+  const heroText = (heroPost?.content || '').trim();
 
   return (
     <div className="min-h-screen bg-black text-white selection:bg-primary/30">
@@ -48,24 +64,52 @@ export default async function Home() {
         {/* Hero Section */}
         <section className="container mx-auto px-4 pt-8">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-            {/* Main Hero - Future City */}
+            {/* Main Hero - Latest Drop */}
             <div className="relative col-span-1 md:col-span-2 aspect-video w-full overflow-hidden rounded-2xl border border-zinc-800 shadow-2xl shadow-primary/10 group">
-              <Image
-                src="/placeholder-future-city.svg"
-                alt="ForeverTech Future City"
-                fill
-                priority
-                className="object-cover transition-transform duration-700 group-hover:scale-105"
-                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 66vw, 800px"
-              />
+              {heroImageUrl ? (
+                <Image
+                  src={heroImageUrl}
+                  alt="Latest community drop"
+                  fill
+                  priority
+                  className="object-cover transition-transform duration-700 group-hover:scale-105"
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 66vw, 800px"
+                />
+              ) : (
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.20),transparent_55%),radial-gradient(ellipse_at_bottom,rgba(16,185,129,0.12),transparent_55%)]" />
+              )}
+              <div className="absolute top-4 left-4 z-10">
+                <span className="inline-flex items-center rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white backdrop-blur-md border border-white/10">
+                  Latest Drop
+                </span>
+              </div>
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex items-end p-8">
                 <div className="max-w-xl">
                   <h1 className="text-3xl md:text-5xl font-bold text-white tracking-tight drop-shadow-lg mb-2">
-                    The Future of <span className="text-primary">Decentralized</span> Tech
+                    Turn Prompts into <span className="text-primary">Wearable</span> Art
                   </h1>
                   <p className="text-zinc-300 text-sm md:text-base line-clamp-2">
-                    Build your decentralized presence with IPFS hosting, blockchain verification, and Web3 monetization.
+                    Generate an original design, fuse it with your own image, preview it on merch, and check out in minutes.
                   </p>
+                  <div className="mt-5 flex flex-wrap items-center gap-3">
+                    <Link
+                      href="/studio"
+                      className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200 transition-colors"
+                    >
+                      Create in Studio
+                    </Link>
+                    <Link
+                      href="/gallery"
+                      className="inline-flex items-center justify-center rounded-lg bg-black/40 px-4 py-2 text-sm font-semibold text-white hover:bg-black/55 border border-white/10 backdrop-blur-md transition-colors"
+                    >
+                      View Your Gallery
+                    </Link>
+                  </div>
+                  {heroText && (
+                    <div className="mt-4 text-xs text-zinc-400 line-clamp-2">
+                      {heroText}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

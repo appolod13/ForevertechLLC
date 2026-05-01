@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ShoppingBag, Menu, X, User } from 'lucide-react';
@@ -8,10 +8,29 @@ import { LiveBadge } from './LiveBadge';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null;
+}
+
 export function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { itemCount } = useCart();
   const { user, logout } = useAuth();
+  const [showAdmin, setShowAdmin] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      const res = await fetch('/api/admin/me', { cache: 'no-store' }).catch(() => null);
+      const json: unknown = res ? await res.json().catch(() => null) : null;
+      const ok = Boolean(res && res.ok && isRecord(json) && json.success === true);
+      if (!cancelled) setShowAdmin(ok);
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-md">
@@ -41,6 +60,11 @@ export function Header() {
           <Link href="/" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
             Latest Drops
           </Link>
+          {showAdmin ? (
+            <Link href="/admin" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
+              Admin
+            </Link>
+          ) : null}
           <Link href="/about" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
             About
           </Link>
@@ -117,6 +141,16 @@ export function Header() {
                  Login / Register
                </Link>
             )}
+
+            {showAdmin ? (
+              <Link
+                href="/admin"
+                className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Admin
+              </Link>
+            ) : null}
 
             <Link 
               href="/" 

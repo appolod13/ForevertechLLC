@@ -24,12 +24,14 @@ export function LocalShopFinder() {
   const [isSearching, setIsSearching] = useState(false);
   const [results, setResults] = useState<Shop[]>([]);
   const [addedShops, setAddedShops] = useState<Set<string>>(new Set());
+  const [mapsQuery, setMapsQuery] = useState<string>('');
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
     
     setIsSearching(true);
+    setMapsQuery(query.trim());
     // Simulate network delay for Google Maps API search
     setTimeout(() => {
       // Filter mock results loosely based on query or just return all
@@ -63,6 +65,9 @@ export function LocalShopFinder() {
       alert('Network error while adding contact.');
     }
   };
+
+  const embedUrl = mapsQuery ? `https://www.google.com/maps?q=${encodeURIComponent(mapsQuery)}&output=embed` : '';
+  const openUrl = mapsQuery ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}` : '';
 
   return (
     <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 mt-8">
@@ -99,30 +104,30 @@ export function LocalShopFinder() {
       {/* Simulated Map & Results Area */}
       {results.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Simulated Google Maps Iframe Area */}
           <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden min-h-[400px] relative">
-            <div className="absolute inset-0 bg-[url('https://maps.googleapis.com/maps/api/staticmap?center=New+York,NY&zoom=13&size=600x400&maptype=roadmap&style=feature:all|element:labels|visibility:off&style=feature:water|color:0x1a1a1a&style=feature:landscape|color:0x2a2a2a&style=feature:poi|color:0x333333&style=feature:road|color:0x444444')] bg-cover bg-center opacity-50 mix-blend-luminosity"></div>
-            
-            {/* Map Markers */}
-            {results.map((shop, i) => (
-              <div 
-                key={`marker-${shop.id}`} 
-                className="absolute flex flex-col items-center"
-                style={{ 
-                  left: `${20 + (i * 25)}%`, 
-                  top: `${30 + (i % 2 === 0 ? 20 : -10)}%` 
-                }}
-              >
-                <div className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded shadow-lg shadow-red-900/50 mb-1 z-10 whitespace-nowrap">
-                  {shop.name}
-                </div>
-                <MapPin className="w-8 h-8 text-red-500 fill-red-500/20" />
+            {embedUrl ? (
+              <iframe
+                title="Google Maps"
+                src={embedUrl}
+                className="absolute inset-0 h-full w-full"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-400">
+                Search to load Google Maps
               </div>
-            ))}
-            
-            <div className="absolute bottom-2 left-2 bg-white/10 backdrop-blur-md px-2 py-1 rounded text-xs text-gray-300 font-mono">
-              Google Maps (Simulated)
-            </div>
+            )}
+            {openUrl && (
+              <a
+                href={openUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="absolute bottom-3 left-3 bg-black/60 hover:bg-black/70 text-white text-xs font-semibold px-3 py-2 rounded-lg border border-white/10 backdrop-blur-md transition-colors"
+              >
+                Open in Google Maps
+              </a>
+            )}
           </div>
 
           {/* Results List */}
@@ -141,6 +146,15 @@ export function LocalShopFinder() {
                 <p className="text-gray-300 text-sm font-mono flex items-center gap-2 mb-4">
                   <Phone className="w-3 h-3" /> {shop.phone}
                 </p>
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${shop.name} ${shop.address}`)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mb-3 inline-flex items-center gap-2 text-sm text-blue-300 hover:text-blue-200"
+                >
+                  <MapPin className="w-4 h-4" />
+                  View on Google Maps
+                </a>
 
                 <button
                   onClick={() => addToSupportContacts(shop)}

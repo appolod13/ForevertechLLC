@@ -5,8 +5,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Header } from '../../components/Header';
 import { CallAgent } from '../../components/CallAgent';
-import { WalletPanel } from '../../components/WalletPanel';
-import { LocalShopFinder } from '../../components/LocalShopFinder';
 
 interface SupportStatus {
   agentsAvailable: number;
@@ -119,15 +117,12 @@ export default function SupportPage() {
         {viewMode === 'agent' ? (
           <div className="flex flex-col items-center w-full">
             <h2 className="text-2xl font-bold mb-6 text-blue-400">Agent Voice Console</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 w-full max-w-5xl">
+            <div className="grid grid-cols-1 gap-8 w-full max-w-5xl">
               <div className="flex flex-col items-center">
                 <CallAgent identity="support-agent-1" />
                 <div className="mt-8 w-full max-w-md text-sm text-gray-500 bg-black/20 p-4 rounded-lg">
                   <p><strong>Note:</strong> System is using Test Credentials. Real payments are simulated.</p>
                 </div>
-              </div>
-              <div>
-                <WalletPanel />
               </div>
             </div>
           </div>
@@ -231,11 +226,6 @@ export default function SupportPage() {
                   )}
                 </div>
               </div>
-            </div>
-
-            {/* Google Maps Shop Finder Tab */}
-            <div className="mt-12 pt-12 border-t border-gray-800">
-              <LocalShopFinder />
             </div>
           </>
         )}

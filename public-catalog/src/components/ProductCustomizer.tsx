@@ -211,6 +211,23 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
     setOrderStatus('processing');
     try {
         const printifySku = selectedProduct.printifySkus?.[selectedVariant] || '';
+        const ipfs = (() => {
+          try {
+            const raw = localStorage.getItem('foreverteck.studio.lastImage');
+            if (!raw) return null;
+            const parsed: unknown = JSON.parse(raw);
+            const rec = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+            const meta = rec && typeof rec.meta === 'object' && rec.meta !== null ? (rec.meta as Record<string, unknown>) : null;
+            if (!meta) return null;
+            return meta;
+          } catch {
+            return null;
+          }
+        })();
+        const ipfs_url = ipfs && typeof ipfs.ipfs_url === 'string' ? ipfs.ipfs_url : undefined;
+        const ipfs_gateway = ipfs && typeof ipfs.ipfs_gateway === 'string' ? ipfs.ipfs_gateway : undefined;
+        const ipfs_cid = ipfs && typeof ipfs.ipfs_cid === 'string' ? ipfs.ipfs_cid : undefined;
+        const ipfs_status = ipfs && typeof ipfs.ipfs_status === 'string' ? ipfs.ipfs_status : undefined;
         await addToCart({
             id: `${selectedProduct.id}-${selectedVariant}-${selectedColor}-${Date.now()}`,
             title: `${selectedProduct.name} - ${selectedColor}`,
@@ -226,7 +243,11 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
                 color: selectedColor,
                 variant: selectedVariant,
                 printifySku,
-                originalPrompt: resolvedPrompt
+                originalPrompt: resolvedPrompt,
+                ipfs_url,
+                ipfs_gateway,
+                ipfs_cid,
+                ipfs_status
             }
         });
         setOrderStatus('success');

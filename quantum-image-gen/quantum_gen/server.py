@@ -51,7 +51,7 @@ def generate(req: GenerationRequest):
 
     rule = int(_request_id(prompt, width, height, req.quantum_mode), 16) % 128
     img = generate_quantum_image(prompt, width, height, rule=rule, force_quantum=req.quantum_mode)
-    provider = "quantum_v1" if req.quantum_mode else "standard_v1"
+    provider = "quantum_julia_v1" if req.quantum_mode else "standard_v1"
 
     rid = _request_id(prompt, width, height, req.quantum_mode)
     filename = f"{_now_tag()}_{rid}_{width}x{height}.png"

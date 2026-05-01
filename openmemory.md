@@ -1,5 +1,6 @@
 ## Overview
 - Repo contains multiple subprojects; relevant service: fusion-service (FastAPI microservice for image “fusion” + generation).
+- public-catalog is a Next.js (App Router) web app that handles the customer catalog + checkout + admin control center.
 
 ## Architecture
 - FastAPI app entry: fusion-service/main.py
@@ -33,6 +34,14 @@
 
 ## Patterns
 - “Build” expectation: use Python 3.11 to satisfy torch==2.2.0 wheels on macOS; add pytest-asyncio to run async tests.
+
+## public-catalog (Next.js)
+- App: public-catalog/src/app (Next.js 16 App Router, runs on port 3001)
+- Admin Control Center: /admin (login via /admin/login; cookie session ft_admin_session; env ADMIN_EMAIL/ADMIN_PASSWORD/ADMIN_SESSION_SECRET)
+- Config stores (in-memory per server instance): src/lib/aiGeneratorsConfig.ts, cryptoConfig.ts, shippingConfig.ts, printifyBackText.ts
+- Checkout + fulfillment: /api/checkout (Stripe session) → /api/stripe/webhook (creates Printify order, uploads assets, stores OrderRecord in cartStore)
+- NFT claim (gasless): /checkout/success UI calls /api/nft/claim (server-mint); chain list exposed via /api/crypto/config
+- Quantum Verified: /api/quantum/status + src/lib/quantumVerified.ts (IBM seed/proof service via IBM_QUANTUM_SEED_SERVICE_URL)
 
 ## User Defined Namespaces
 - [Leave blank - user populates]

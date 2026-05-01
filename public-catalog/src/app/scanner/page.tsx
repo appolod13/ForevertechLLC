@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { Header } from '../../components/Header';
 import { Camera, RefreshCw, AlertCircle, Link as LinkIcon, Download } from 'lucide-react';
 import Image from 'next/image';
+import { LocalShopFinder } from '@/components/LocalShopFinder';
 
 interface Screenshot {
   filename: string;
@@ -131,6 +132,8 @@ export default function ScannerPage() {
             </div>
           )}
         </div>
+
+        <LocalShopFinder />
 
         {/* Gallery Grid */}
         {loading && screenshots.length === 0 ? (

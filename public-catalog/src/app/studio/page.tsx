@@ -12,6 +12,10 @@ import styles from './page.module.css';
 
 import { MIRROR_API_URL } from '@/lib/utils';
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null;
+}
+
 export default function StudioPage() {
   return (
     <Suspense fallback={null}>
@@ -514,6 +518,28 @@ function StudioPageInner() {
               throw new Error('Generation succeeded but returned no image URL');
             }
 
+      const successRec = isRecord(successData) ? (successData as Record<string, unknown>) : {};
+      const dataObjTmp = isRecord(successRec['data']) ? (successRec['data'] as Record<string, unknown>) : null;
+      const metaObjTmp =
+        isRecord(successRec['meta'])
+          ? (successRec['meta'] as Record<string, unknown>)
+          : dataObjTmp && isRecord(dataObjTmp['meta'])
+            ? (dataObjTmp['meta'] as Record<string, unknown>)
+            : {};
+
+      const ipfsGatewayVal = metaObjTmp['ipfs_gateway'];
+      const ipfsUrlVal = metaObjTmp['ipfs_url'];
+      const ipfsGatewayRaw =
+        typeof ipfsGatewayVal === 'string' && ipfsGatewayVal.trim()
+          ? ipfsGatewayVal.trim()
+          : typeof ipfsUrlVal === 'string' && ipfsUrlVal.startsWith('ipfs://')
+            ? ipfsUrlVal.replace('ipfs://', 'https://ipfs.io/ipfs/')
+            : '';
+
+      if (ipfsEnabled && ipfsGatewayRaw && (ipfsGatewayRaw.startsWith('http://') || ipfsGatewayRaw.startsWith('https://'))) {
+        imageUrl = ipfsGatewayRaw;
+      }
+
       setGeneratedImage(imageUrl);
       setDraftImage('');
       
@@ -951,6 +977,9 @@ function StudioPageInner() {
                   <input type="checkbox" className="w-4 h-4 accent-green-500" checked={ipfsEnabled} onChange={e => setIpfsEnabled(e.target.checked)} />
                   <span className={ipfsEnabled ? 'text-green-300 font-semibold' : 'text-gray-300'}>IPFS Upload</span>
                 </label>
+              </div>
+              <div className="text-xs text-gray-400">
+                IPFS Upload saves your generated image to IPFS and provides a shareable, public link. Turn this on if you want a more reliable link for printing and sharing. Uploading can take longer. Avoid using private or sensitive images.
               </div>
               <button 
                 onClick={generateImage}
