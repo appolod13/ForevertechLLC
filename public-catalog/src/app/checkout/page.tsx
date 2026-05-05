@@ -12,6 +12,28 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
 }
 
+type CryptoPaymentToken = {
+  id: string;
+  enabled: boolean;
+  chainId: number;
+  symbol: string;
+  name: string;
+  kind: 'native' | 'erc20' | 'btc';
+  address: string;
+  decimals: number;
+};
+
+type CryptoPaymentsConfig = {
+  enabled: boolean;
+  confirmations: number;
+  receiveAddresses: Array<{ chainId: number; address: string }>;
+  tokens: CryptoPaymentToken[];
+};
+
+type CryptoConfig = {
+  payments?: CryptoPaymentsConfig;
+};
+
 export default function CheckoutPage() {
   const { items, total } = useCart();
   const { user, isLoading } = useAuth();
@@ -28,6 +50,23 @@ export default function CheckoutPage() {
   const [shippingOptionId, setShippingOptionId] = useState<string>('');
   const [shippingLoading, setShippingLoading] = useState(false);
   const [shippingError, setShippingError] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'crypto'>('card');
+  const [cryptoCfg, setCryptoCfg] = useState<CryptoConfig | null>(null);
+  const [cryptoTokenId, setCryptoTokenId] = useState<string>('');
+  const [cryptoCheckout, setCryptoCheckout] = useState<{
+    checkoutId: string;
+    amountUsd: number;
+    chainId: number;
+    token: { id: string; symbol: string; name: string; kind: string; decimals: number; address: string };
+    receiveAddress: string;
+    amount: string;
+    amountAtomic: string;
+    paymentUri: string;
+    confirmations: number;
+  } | null>(null);
+  const [cryptoTxHash, setCryptoTxHash] = useState('');
+  const [cryptoStatus, setCryptoStatus] = useState<'idle' | 'creating' | 'awaiting_tx' | 'confirming' | 'confirmed' | 'error'>('idle');
+  const [cryptoError, setCryptoError] = useState<string>('');
 
   const shippingUsd = useMemo(() => {
     const opt = shippingOptions.find(o => o.id === shippingOptionId) || shippingOptions[0];
@@ -58,6 +97,37 @@ export default function CheckoutPage() {
   };
 
   const itemCount = useMemo(() => items.reduce((sum, it) => sum + (it.quantity || 1), 0), [items]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      const res = await fetch('/api/crypto/config', { cache: 'no-store' }).catch(() => null);
+      const json: unknown = res ? await res.json().catch(() => null) : null;
+      const ok = Boolean(res && res.ok && isRecord(json) && json.success === true && isRecord(json.data));
+      if (!ok) {
+        if (!cancelled) setCryptoCfg(null);
+        return;
+      }
+      const data = (json as Record<string, unknown>).data as Record<string, unknown>;
+      const cfg = data as unknown as CryptoConfig;
+      if (cancelled) return;
+      setCryptoCfg(cfg);
+      const enabled = cfg?.payments?.enabled === true;
+      const tokens = enabled && Array.isArray(cfg?.payments?.tokens) ? cfg.payments!.tokens.filter((t) => t && t.enabled) : [];
+      if (!cryptoTokenId && tokens.length) {
+        setCryptoTokenId(tokens[0]!.id);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [cryptoTokenId]);
+
+  const enabledCryptoTokens = useMemo(() => {
+    const tokens = cryptoCfg?.payments?.enabled ? (cryptoCfg?.payments?.tokens || []).filter((t) => t.enabled) : [];
+    return tokens.slice().sort((a, b) => (a.chainId - b.chainId) || a.symbol.localeCompare(b.symbol));
+  }, [cryptoCfg]);
 
   useEffect(() => {
     let cancelled = false;
@@ -162,13 +232,49 @@ export default function CheckoutPage() {
     setIsProcessing(true);
     try {
       const deviceId = localStorage.getItem('device_id') || 'anonymous';
-      const res = await fetch('/api/checkout', {
+      const shippingId = shippingOptionId || (shippingOptions[0]?.id || '');
+      if (paymentMethod === 'card') {
+        const res = await fetch('/api/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            items: items,
+            quantumVerified,
+            shippingOptionId: shippingId,
+            shippingCountry: formData.country,
+            customerName: formData.name,
+            customerEmail: formData.email,
+            userId: user?.id || '',
+            deviceId,
+            metadata: {
+              phone: formData.phone,
+              address: formData.address,
+              address2: formData.address2,
+              city: formData.city,
+              region: formData.region,
+              country: formData.country,
+              zip: formData.zip
+            }
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to create checkout session');
+        window.location.href = data.url;
+        return;
+      }
+
+      setCryptoError('');
+      setCryptoCheckout(null);
+      setCryptoTxHash('');
+      setCryptoStatus('creating');
+      const res = await fetch('/api/crypto/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          items: items,
           quantumVerified,
-          shippingOptionId: shippingOptionId || (shippingOptions[0]?.id || ''),
+          tokenId: cryptoTokenId,
+          shippingOptionId: shippingId,
           shippingCountry: formData.country,
           customerName: formData.name,
           customerEmail: formData.email,
@@ -185,11 +291,19 @@ export default function CheckoutPage() {
           }
         })
       });
-      
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to create checkout session');
-      
-      window.location.href = data.url;
+      const json: unknown = await res.json().catch(() => null);
+      const ok = isRecord(json) && json.success === true && isRecord(json.data);
+      if (!res.ok || !ok) {
+        const err = isRecord(json) && typeof json.error === 'string' ? json.error : `HTTP_${res.status}`;
+        setCryptoStatus('error');
+        setCryptoError(String(err));
+        setIsProcessing(false);
+        return;
+      }
+      const data = (json as Record<string, unknown>).data as Record<string, unknown>;
+      setCryptoCheckout(data as any);
+      setCryptoStatus('awaiting_tx');
+      setIsProcessing(false);
     } catch (error) {
       console.error('Checkout failed', error);
       setIsProcessing(false);
@@ -404,6 +518,121 @@ export default function CheckoutPage() {
             )}
           </div>
 
+          <div className="space-y-3">
+            <h2 className="text-xl font-semibold text-white">Payment Method</h2>
+            <div className="grid gap-2">
+              <label className="flex items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-900/30 p-3 text-sm cursor-pointer">
+                <span className="text-zinc-200">Card (Stripe)</span>
+                <input
+                  type="radio"
+                  checked={paymentMethod === 'card'}
+                  onChange={() => setPaymentMethod('card')}
+                  className="h-4 w-4 accent-primary"
+                  disabled={isProcessing}
+                />
+              </label>
+              <label className="flex items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-900/30 p-3 text-sm cursor-pointer">
+                <span className="text-zinc-200">Crypto</span>
+                <input
+                  type="radio"
+                  checked={paymentMethod === 'crypto'}
+                  onChange={() => setPaymentMethod('crypto')}
+                  className="h-4 w-4 accent-primary"
+                  disabled={isProcessing}
+                />
+              </label>
+            </div>
+
+            {paymentMethod === 'crypto' ? (
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 text-sm">
+                <div className="text-zinc-300">Choose a token and generate payment instructions.</div>
+                <div className="mt-3 grid gap-2">
+                  <div className="text-xs text-zinc-500">Token</div>
+                  <select
+                    className="w-full rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-sm text-white outline-none"
+                    value={cryptoTokenId}
+                    onChange={(e) => setCryptoTokenId(e.target.value)}
+                    disabled={isProcessing || cryptoStatus === 'confirming' || cryptoStatus === 'confirmed'}
+                  >
+                    {enabledCryptoTokens.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.symbol} • chainId {t.chainId} {t.kind === 'erc20' ? '• token' : '• native'}
+                      </option>
+                    ))}
+                    {!enabledCryptoTokens.length ? <option value="">No crypto tokens enabled</option> : null}
+                  </select>
+                </div>
+
+                {cryptoError ? <div className="mt-3 text-xs text-red-300">{cryptoError}</div> : null}
+
+                {cryptoCheckout ? (
+                  <div className="mt-4 grid gap-2 rounded-lg border border-white/10 bg-black/30 p-3">
+                    <div className="text-xs text-zinc-500">Send</div>
+                    <div className="font-semibold text-white">
+                      {cryptoCheckout.amount} {cryptoCheckout.token.symbol} (chainId {cryptoCheckout.chainId})
+                    </div>
+                    <div className="text-xs text-zinc-500">To</div>
+                    <div className="break-all font-mono text-xs text-zinc-300">{cryptoCheckout.receiveAddress}</div>
+                    {cryptoCheckout.paymentUri ? (
+                      <a className="text-xs text-primary underline" href={cryptoCheckout.paymentUri}>
+                        Open in wallet
+                      </a>
+                    ) : null}
+
+                    <div className="mt-2 grid gap-1">
+                      <div className="text-xs text-zinc-500">Transaction hash</div>
+                      <input
+                        className="w-full rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-xs text-white outline-none font-mono"
+                        placeholder="0x..."
+                        value={cryptoTxHash}
+                        onChange={(e) => setCryptoTxHash(e.target.value)}
+                        disabled={cryptoStatus === 'confirming' || cryptoStatus === 'confirmed'}
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      className="mt-2 w-full rounded-lg bg-white px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-50"
+                      disabled={!cryptoTxHash.trim() || cryptoStatus === 'confirming' || cryptoStatus === 'confirmed'}
+                      onClick={async () => {
+                        if (!cryptoCheckout) return;
+                        setCryptoStatus('confirming');
+                        setCryptoError('');
+                        try {
+                          const res = await fetch('/api/crypto/confirm', {
+                            method: 'POST',
+                            headers: { 'content-type': 'application/json' },
+                            body: JSON.stringify({ checkoutId: cryptoCheckout.checkoutId, txHash: cryptoTxHash.trim() }),
+                          });
+                          const json: unknown = await res.json().catch(() => null);
+                          const ok = isRecord(json) && json.success === true && isRecord(json.data);
+                          if (!res.ok || !ok) {
+                            const err = isRecord(json) && typeof json.error === 'string' ? json.error : `HTTP_${res.status}`;
+                            setCryptoStatus('error');
+                            setCryptoError(String(err));
+                            return;
+                          }
+                          const data = (json as Record<string, unknown>).data as Record<string, unknown>;
+                          const confirmed = data.confirmed === true;
+                          if (!confirmed) {
+                            setCryptoStatus('awaiting_tx');
+                            return;
+                          }
+                          setCryptoStatus('confirmed');
+                        } catch (e: unknown) {
+                          setCryptoStatus('error');
+                          setCryptoError(e instanceof Error ? e.message : 'confirm_failed');
+                        }
+                      }}
+                    >
+                      {cryptoStatus === 'confirming' ? 'Confirming…' : cryptoStatus === 'confirmed' ? 'Confirmed' : 'Confirm payment & create order'}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
           <button 
             type="submit" 
             disabled={isProcessing || (shippingOptions.length > 0 && !(shippingOptionId || shippingOptions[0]?.id))}
@@ -413,10 +642,12 @@ export default function CheckoutPage() {
             {isProcessing ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                Redirecting to Stripe...
+                {paymentMethod === 'card' ? 'Redirecting to Stripe...' : 'Preparing crypto payment...'}
               </>
             ) : (
-              `Proceed to Payment ($${grandTotal.toFixed(2)})`
+              paymentMethod === 'card'
+                ? `Proceed to Payment ($${grandTotal.toFixed(2)})`
+                : `Generate Crypto Payment ($${grandTotal.toFixed(2)})`
             )}
           </button>
         </form>

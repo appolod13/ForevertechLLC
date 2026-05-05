@@ -260,15 +260,21 @@ async function printifyFetch(path: string, init?: RequestInit) {
     throw new Error('Missing PRINTIFY_API_TOKEN');
   }
 
-  const res = await fetch(`https://api.printify.com${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'User-Agent': 'public-catalog',
-      'content-type': 'application/json',
-      ...(init?.headers || {}),
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`https://api.printify.com${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'User-Agent': 'public-catalog',
+        'content-type': 'application/json',
+        ...(init?.headers || {}),
+      },
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e || '');
+    throw new Error(`Printify network error: ${path}${msg ? ` (${msg})` : ''}`);
+  }
 
   const text = await res.text();
   if (!res.ok) {
@@ -279,7 +285,13 @@ async function printifyFetch(path: string, init?: RequestInit) {
 }
 
 async function fetchImageAsBase64(url: string) {
-  const res = await fetch(url);
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e || '');
+    throw new Error(`Image fetch network error: ${url}${msg ? ` (${msg})` : ''}`);
+  }
   if (!res.ok) {
     throw new Error(`Failed to fetch image (${res.status}): ${url}`);
   }
@@ -375,13 +387,21 @@ function getVariantIdFromTemplate(template: PrintifyTemplateProduct, sku: string
     throw new Error('Printify template product is missing variants');
   }
 
+  let fallbackVariantId: number | null = null;
   for (const v of variantsRaw as PrintifyTemplateVariant[]) {
     if (!isRecord(v)) continue;
     const vSku = getString(v.sku);
-    if (vSku && vSku === sku) {
-      const id = getNumber(v.id);
-      if (Number.isFinite(id)) return id;
+    const candidateId = getNumber(v.id);
+    if (fallbackVariantId === null && Number.isFinite(candidateId)) {
+      fallbackVariantId = candidateId;
     }
+    if (vSku && vSku === sku) {
+      if (Number.isFinite(candidateId)) return candidateId;
+    }
+  }
+
+  if (typeof fallbackVariantId === 'number' && Number.isFinite(fallbackVariantId)) {
+    return fallbackVariantId;
   }
 
   throw new Error(`Could not find template variant for sku: ${sku}`);
@@ -517,8 +537,9 @@ export async function POST(request: Request) {
   const payload = await request.text();
 
   let event: Stripe.Event;
+  let allowDevBypass = false;
   try {
-    const allowDevBypass =
+    allowDevBypass =
       process.env.NODE_ENV !== 'production' && request.headers.get('x-dev-bypass') === '1' && isSameOrigin(request);
 
     if (allowDevBypass) {
@@ -545,21 +566,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  if (event.type !== 'checkout.session.completed') {
-    return NextResponse.json({ received: true });
-  }
+  try {
+    if (event.type !== 'checkout.session.completed') {
+      return NextResponse.json({ received: true });
+    }
 
-  const session = event.data.object as Stripe.Checkout.Session;
-  const deviceId = getString(session.metadata?.deviceId) || 'anonymous';
-  const userId = getString(session.metadata?.userId);
-  const quantumVerifiedRequested = getString(session.metadata?.quantumVerified) === '1';
-  const quantumFeeCents =
-    typeof session.metadata?.quantumFeeCents === 'string' && session.metadata.quantumFeeCents.trim()
-      ? Math.max(0, Math.min(50_000, Math.trunc(Number(session.metadata.quantumFeeCents))))
-      : 0;
-  let quantumProof: QuantumProof | null = null;
-  let quantumRefunded = false;
-  let quantumVerified = quantumVerifiedRequested;
+    const session = event.data.object as Stripe.Checkout.Session;
+    const deviceId = getString(session.metadata?.deviceId) || 'anonymous';
+    const userId = getString(session.metadata?.userId);
+    const quantumVerifiedRequested = getString(session.metadata?.quantumVerified) === '1';
+    const quantumFeeCents =
+      typeof session.metadata?.quantumFeeCents === 'string' && session.metadata.quantumFeeCents.trim()
+        ? Math.max(0, Math.min(50_000, Math.trunc(Number(session.metadata.quantumFeeCents))))
+        : 0;
+    let quantumProof: QuantumProof | null = null;
+    let quantumRefunded = false;
+    let quantumVerified = quantumVerifiedRequested;
 
   if (quantumVerifiedRequested) {
     try {
@@ -813,5 +835,10 @@ export async function POST(request: Request) {
 
   clearCart(deviceId);
 
-  return NextResponse.json({ received: true });
+    return NextResponse.json({ received: true });
+  } catch (error: unknown) {
+    console.error('stripe.webhook.error', error);
+    const message = error instanceof Error ? error.message : String(error || 'unknown_error');
+    return NextResponse.json({ error: message, devBypass: allowDevBypass }, { status: 500 });
+  }
 }

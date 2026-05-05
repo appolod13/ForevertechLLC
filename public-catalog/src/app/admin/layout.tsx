@@ -26,7 +26,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     (async () => {
-      const res = await fetch("/api/admin/me", { cache: "no-store" }).catch(() => null);
+      const res = await fetch("/api/admin/me", {
+        cache: "no-store",
+        headers: process.env.NODE_ENV !== "production" ? { "x-dev-bypass": "1" } : undefined,
+        credentials: "include",
+      }).catch(() => null);
       const json = res ? await res.json().catch(() => null) : null;
       if (!res || !res.ok || !json?.success) {
         router.replace(redirectTo);

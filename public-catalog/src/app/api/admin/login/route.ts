@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminCookieName, adminCookieOptions, createAdminSessionToken, validateAdminCredentials } from "@/lib/adminAuth";
 
+export const runtime = "nodejs";
+
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({} as unknown));
   const b = body as { email?: unknown; password?: unknown };

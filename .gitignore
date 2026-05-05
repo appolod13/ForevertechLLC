@@ -8,3 +8,6 @@ fusion-service/uploads/
 fusion-service/tests/tmp_*/
 fusion-service/**/__pycache__/
 
+**/.env
+**/.env.*
+!**/.env.example

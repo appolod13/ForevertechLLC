@@ -8,6 +8,7 @@ declare global {
   var cartStore: Record<string, CartItem[]>;
   var orderStore: Record<string, OrderRecord[]>;
   var nftClaimStore: Record<string, { claimedAt: string; chainId: number; walletAddress: string; txHash: string; tokenId?: string; metadataIpfsUrl?: string }>;
+  var cryptoCheckoutStore: Record<string, CryptoCheckoutRecord>;
 }
 
 if (!global.cartStore) {
@@ -49,6 +50,43 @@ if (!global.orderStore) {
 
 if (!global.nftClaimStore) {
   global.nftClaimStore = {};
+}
+
+export type CryptoCheckoutRecord = {
+  id: string;
+  createdAt: string;
+  status: 'pending' | 'confirmed';
+  deviceId: string;
+  userId?: string;
+  amountUsd: number;
+  chainId: number;
+  tokenId: string;
+  tokenSymbol: string;
+  tokenKind: 'native' | 'erc20' | 'btc';
+  tokenAddress?: string;
+  tokenDecimals: number;
+  expectedAmount: string;
+  expectedAmountAtomic: string;
+  receiveAddress: string;
+  txHash?: string;
+  printifyOrderId?: string;
+  shipping: {
+    customerName: string;
+    email: string;
+    phone: string;
+    country: string;
+    region: string;
+    address1: string;
+    address2?: string;
+    city: string;
+    zip: string;
+    shippingOptionId?: string;
+  };
+  items: CartItem[];
+};
+
+if (!global.cryptoCheckoutStore) {
+  global.cryptoCheckoutStore = {};
 }
 
 export const getCarts = () => global.cartStore;
@@ -94,4 +132,16 @@ export const setNftClaim = (
   const sid = String(stripeSessionId || '').trim();
   if (!sid) return;
   global.nftClaimStore[sid] = value;
+};
+
+export const getCryptoCheckout = (id: string) => {
+  const cid = String(id || '').trim();
+  if (!cid) return null;
+  return global.cryptoCheckoutStore[cid] || null;
+};
+
+export const setCryptoCheckout = (checkout: CryptoCheckoutRecord) => {
+  const cid = String(checkout?.id || '').trim();
+  if (!cid) return;
+  global.cryptoCheckoutStore[cid] = checkout;
 };

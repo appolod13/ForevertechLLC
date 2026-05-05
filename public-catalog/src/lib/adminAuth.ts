@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import type { NextRequest } from "next/server";
 
 type SessionPayload = { email: string; iat: number; exp: number; nonce: string };
@@ -19,8 +19,15 @@ function fromBase64url(s: string): Buffer {
 
 function secret(): string {
   const s = (process.env.ADMIN_SESSION_SECRET || "").trim();
-  if (!s) throw new Error("missing_ADMIN_SESSION_SECRET");
-  return s;
+  if (s) return s;
+  if (process.env.NODE_ENV !== "production") {
+    const g = globalThis as unknown as { __ftAdminDevSecret?: string };
+    if (!g.__ftAdminDevSecret) {
+      g.__ftAdminDevSecret = base64url(randomBytes(32));
+    }
+    return g.__ftAdminDevSecret;
+  }
+  throw new Error("missing_ADMIN_SESSION_SECRET");
 }
 
 function sign(data: string): string {
