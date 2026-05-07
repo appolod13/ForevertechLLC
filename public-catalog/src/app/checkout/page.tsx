@@ -34,6 +34,18 @@ type CryptoConfig = {
   payments?: CryptoPaymentsConfig;
 };
 
+type CryptoCheckoutPayload = {
+  checkoutId: string;
+  amountUsd: number;
+  chainId: number;
+  token: { id: string; symbol: string; name: string; kind: string; decimals: number; address: string };
+  receiveAddress: string;
+  amount: string;
+  amountAtomic: string;
+  paymentUri: string;
+  confirmations: number;
+};
+
 export default function CheckoutPage() {
   const { items, total } = useCart();
   const { user, isLoading } = useAuth();
@@ -53,17 +65,7 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'crypto'>('card');
   const [cryptoCfg, setCryptoCfg] = useState<CryptoConfig | null>(null);
   const [cryptoTokenId, setCryptoTokenId] = useState<string>('');
-  const [cryptoCheckout, setCryptoCheckout] = useState<{
-    checkoutId: string;
-    amountUsd: number;
-    chainId: number;
-    token: { id: string; symbol: string; name: string; kind: string; decimals: number; address: string };
-    receiveAddress: string;
-    amount: string;
-    amountAtomic: string;
-    paymentUri: string;
-    confirmations: number;
-  } | null>(null);
+  const [cryptoCheckout, setCryptoCheckout] = useState<CryptoCheckoutPayload | null>(null);
   const [cryptoTxHash, setCryptoTxHash] = useState('');
   const [cryptoStatus, setCryptoStatus] = useState<'idle' | 'creating' | 'awaiting_tx' | 'confirming' | 'confirmed' | 'error'>('idle');
   const [cryptoError, setCryptoError] = useState<string>('');
@@ -82,6 +84,7 @@ export default function CheckoutPage() {
     name: user?.name || '',
     email: user?.email || '',
     phone: '',
+    qrUrl: '',
     address: '',
     address2: '',
     city: '',
@@ -246,6 +249,7 @@ export default function CheckoutPage() {
             customerEmail: formData.email,
             userId: user?.id || '',
             deviceId,
+            qrUrl: formData.qrUrl,
             metadata: {
               phone: formData.phone,
               address: formData.address,
@@ -280,6 +284,7 @@ export default function CheckoutPage() {
           customerEmail: formData.email,
           userId: user?.id || '',
           deviceId,
+          qrUrl: formData.qrUrl,
           metadata: {
             phone: formData.phone,
             address: formData.address,
@@ -301,7 +306,7 @@ export default function CheckoutPage() {
         return;
       }
       const data = (json as Record<string, unknown>).data as Record<string, unknown>;
-      setCryptoCheckout(data as any);
+      setCryptoCheckout(data as unknown as CryptoCheckoutPayload);
       setCryptoStatus('awaiting_tx');
       setIsProcessing(false);
     } catch (error) {
@@ -407,6 +412,19 @@ export default function CheckoutPage() {
                   className="w-full rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-white focus:border-primary focus:outline-none"
                   data-testid="input-phone"
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-500 mb-1">QR Link (optional)</label>
+                <input
+                  type="url"
+                  name="qrUrl"
+                  value={formData.qrUrl}
+                  onChange={handleChange}
+                  placeholder="https://yourbusiness.com"
+                  className="w-full rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-white focus:border-primary focus:outline-none"
+                  data-testid="input-qr-url"
+                />
+                <div className="mt-1 text-[11px] text-zinc-500">This link will be encoded into the QR stamp on the back.</div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-zinc-500 mb-1">Address</label>

@@ -27,6 +27,7 @@ export default function StudioPage() {
 function StudioPageInner() {
   const searchParams = useSearchParams();
   const testMode = (searchParams?.get('test') || '') === '1';
+  const scannedBackText = (searchParams?.get('back') || '').trim();
   const [hydrated, setHydrated] = useState(false);
   const [prompt, setPrompt] = useState('Cinematic wide establishing shot of a vast futuristic megacity at golden hour, dense urban grid filled with thousands of warm amber lights in the foreground, distant layered mountains and a sharp jagged peak on the horizon, a cluster of ultra-tall sleek curved glass-and-metal skyscrapers dominating the right side with vertical electric-blue illuminated seams, atmospheric haze and volumetric light, soft bloom, high detail, realistic materials, epic scale, warm peach sunset sky with a large soft cloud mass in the upper left, sharp architecture silhouettes, ultra high quality sci‑fi concept art, photoreal lighting, 1024x1024');
   const [crossOptimizeLoading, setCrossOptimizeLoading] = useState(false);
@@ -91,6 +92,14 @@ function StudioPageInner() {
     const time = t.toISOString().split('T')[1]?.slice(0, 8) || t.toISOString();
     setLogs((prev) => [...prev, { time, msg, type, code }]);
   };
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!scannedBackText) return;
+    setGeneratedTextContent(scannedBackText);
+    setPostContent((prev) => (prev && prev.trim() ? prev : scannedBackText));
+    addLog(`Scanned back text: ${scannedBackText}`, 'success', 'qr_scan');
+  }, [hydrated, scannedBackText]);
 
   useEffect(() => {
     setHydrated(true);

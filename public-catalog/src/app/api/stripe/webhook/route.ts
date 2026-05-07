@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { addOrder, clearCart, getCart, type OrderLineItem, type OrderRecord } from '@/lib/cartStore';
-import { buildBackTextSvg, getPrintifyBackTextConfig } from '@/lib/printifyBackText';
+import { getPrintifyBackTextConfig, renderBackAbstractPngBuffer, renderBackTextPngBuffer } from '@/lib/printifyBackText';
 import { requestIbmQuantumProof, type QuantumProof } from '@/lib/quantumVerified';
 import sharp from 'sharp';
+import QRCode from 'qrcode';
+import path from 'path';
+import { readFile } from 'fs/promises';
 
 function getStripeClient() {
   const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -93,6 +96,7 @@ let cachedTemplateProductId: string | undefined;
 let cachedLogoPreviewUrl: string | undefined;
 let cachedLogoPreviewUrlAt = 0;
 const cachedBackWordPreviewUrls = new Map<string, { url: string; at: number }>();
+let cachedForevertechLogoJpg: Buffer | null | undefined;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -122,6 +126,35 @@ function sanitizeBannerText(text: string): string {
     .replace(/[^A-Za-z0-9 ]/g, '')
     .trim();
   return t.slice(0, 96);
+}
+
+function normalizeCustomerQrUrl(input: unknown): string {
+  const raw = typeof input === 'string' ? input.trim() : '';
+  if (!raw) return '';
+  const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(raw) ? raw : `https://${raw}`;
+  let u: URL;
+  try {
+    u = new URL(withScheme);
+  } catch {
+    return '';
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+  const href = u.toString();
+  return href.length > 350 ? href.slice(0, 350) : href;
+}
+
+function fnv1a32Hex(input: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+function buildBackSeedSalt(params: { sessionId: string; itemId: string; imageUrl: string; quantumSeed?: string | null }) {
+  const s = `${params.sessionId}|${params.itemId}|${params.imageUrl}|${params.quantumSeed || ''}`;
+  return fnv1a32Hex(s);
 }
 
 function titleCaseWord(word: string): string {
@@ -216,28 +249,268 @@ async function renderBackBannerBase64(text: string, seedSalt?: string) {
   const cfg = getPrintifyBackTextConfig();
   const clean = sanitizeBannerText(text) || 'CUSTOM';
   const salted = seedSalt ? { ...cfg, version: `${cfg.version}|${seedSalt}` } : cfg;
-  const svg = buildBackTextSvg(clean, salted);
-
-  const png = await sharp(Buffer.from(svg, 'utf8'))
-    .png({ compressionLevel: 9, adaptiveFiltering: true, palette: true })
-    .toBuffer();
+  const png = await renderBackTextPngBuffer(clean, salted);
 
   return png.toString('base64');
 }
 
-async function getBackWordPreviewUrl(keyword: string, seedSalt?: string) {
+async function renderBackAbstractBase64(seedText: string, seedSalt?: string) {
+  const cfg = getPrintifyBackTextConfig();
+  const clean = sanitizeBannerText(seedText) || 'CUSTOM';
+  const salted = seedSalt ? { ...cfg, version: `${cfg.version}|${seedSalt}` } : cfg;
+  const png = await renderBackAbstractPngBuffer(clean, salted);
+  return png.toString('base64');
+}
+
+function getBackMode(): 'collage' | 'qr_stamp' {
+  const raw = (process.env.PRINTIFY_BACK_MODE || '').trim().toLowerCase();
+  if (raw === 'collage') return 'collage';
+  return 'qr_stamp';
+}
+
+function getBackStyle(): 'words' | 'abstract' {
+  const raw = (process.env.PRINTIFY_BACK_STYLE || '').trim().toLowerCase();
+  if (raw === 'abstract') return 'abstract';
+  return 'words';
+}
+
+function buildBackQrTargetUrl(origin: string, bannerText: string, qrUrl?: string) {
+  const custom = normalizeCustomerQrUrl(qrUrl);
+  if (custom) return custom;
+  const clean = (sanitizeBannerText(bannerText) || 'CUSTOM').toUpperCase();
+  const u = new URL('/studio', origin);
+  u.searchParams.set('back', clean);
+  u.searchParams.set('src', 'shirt');
+  return u.toString();
+}
+
+function clampByte(n: number) {
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(255, Math.round(n)));
+}
+
+function rgbToHex(rgb: { r: number; g: number; b: number }) {
+  const to2 = (v: number) => clampByte(v).toString(16).padStart(2, '0');
+  return `#${to2(rgb.r)}${to2(rgb.g)}${to2(rgb.b)}`;
+}
+
+function parseColorToRgb(input: string): { r: number; g: number; b: number } | null {
+  const s = (input || '').trim();
+  const hex = s.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (hex) {
+    const h = hex[1].toLowerCase();
+    if (h.length === 3) {
+      const r = parseInt(h[0] + h[0], 16);
+      const g = parseInt(h[1] + h[1], 16);
+      const b = parseInt(h[2] + h[2], 16);
+      return { r, g, b };
+    }
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    return { r, g, b };
+  }
+
+  const rgb = s.match(/^rgba?\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})(?:\s*,\s*([0-9.]+)\s*)?\)$/i);
+  if (rgb) {
+    return { r: clampByte(Number(rgb[1])), g: clampByte(Number(rgb[2])), b: clampByte(Number(rgb[3])) };
+  }
+
+  return null;
+}
+
+async function removeExactColorToAlpha(params: { input: Buffer; rgb: { r: number; g: number; b: number } }) {
+  const { data, info } = await sharp(params.input).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const out = Buffer.from(data);
+  const r0 = clampByte(params.rgb.r);
+  const g0 = clampByte(params.rgb.g);
+  const b0 = clampByte(params.rgb.b);
+  for (let i = 0; i < out.length; i += info.channels) {
+    const r = out[i];
+    const g = out[i + 1];
+    const b = out[i + 2];
+    if (r === r0 && g === g0 && b === b0) out[i + 3] = 0;
+  }
+  return sharp(out, { raw: info }).png().toBuffer();
+}
+
+async function removeNearWhiteToAlpha(input: Buffer) {
+  const { data, info } = await sharp(input).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const out = Buffer.from(data);
+  for (let i = 0; i < out.length; i += info.channels) {
+    const r = out[i];
+    const g = out[i + 1];
+    const b = out[i + 2];
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    if (max >= 252 && max - min <= 8) out[i + 3] = 0;
+  }
+  return sharp(out, { raw: info }).png().toBuffer();
+}
+
+async function getForevertechLogoJpg(): Promise<Buffer | null> {
+  if (cachedForevertechLogoJpg !== undefined) return cachedForevertechLogoJpg;
+  try {
+    const p = path.join(process.cwd(), 'public', 'images', 'Forevertech_logo.jpg');
+    cachedForevertechLogoJpg = await readFile(p);
+    return cachedForevertechLogoJpg;
+  } catch {
+    cachedForevertechLogoJpg = null;
+    return null;
+  }
+}
+
+async function buildQrStampPng(params: { url: string; stampSide: number; backgroundColor?: string }) {
+  const stampSide = Math.max(220, Math.trunc(params.stampSide));
+  const qrSide = Math.max(160, stampSide - 72);
+  const logoJpg = await getForevertechLogoJpg();
+  const bgRgb = parseColorToRgb(params.backgroundColor || '') || { r: 255, g: 31, b: 93 };
+  const bgHex = rgbToHex(bgRgb);
+  const qrFull = await QRCode.toBuffer(params.url, {
+    errorCorrectionLevel: 'H',
+    width: qrSide,
+    margin: 2,
+    color: { dark: '#26000f', light: bgHex },
+  });
+
+  const qrModulesOnly = await removeExactColorToAlpha({ input: qrFull, rgb: bgRgb });
+
+  const border = Math.max(12, Math.round(stampSide * 0.04));
+  const innerPad = Math.max(14, Math.round(stampSide * 0.06));
+  const corner = Math.max(18, Math.round(stampSide * 0.14));
+
+  const stampBg = await sharp({
+    create: {
+      width: stampSide,
+      height: stampSide,
+      channels: 4,
+      background: { r: bgRgb.r, g: bgRgb.g, b: bgRgb.b, alpha: 0.98 },
+    },
+  })
+    .png()
+    .toBuffer();
+
+  const frame = await sharp(stampBg)
+    .composite([
+      {
+        input: Buffer.from(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="${stampSide}" height="${stampSide}"><rect x="${border / 2}" y="${border / 2}" width="${stampSide - border}" height="${stampSide - border}" rx="${corner}" ry="${corner}" fill="rgba(255,255,255,0)" stroke="rgba(255,255,255,0.10)" stroke-width="${border}"/><rect x="${border / 2}" y="${border / 2}" width="${stampSide - border}" height="${stampSide - border}" rx="${corner}" ry="${corner}" fill="rgba(255,255,255,0)" stroke="rgba(255,255,255,0.22)" stroke-width="${Math.max(2, Math.round(border * 0.22))}"/></svg>`,
+        ),
+        left: 0,
+        top: 0,
+      },
+    ])
+    .png()
+    .toBuffer();
+
+  const qrLeft = Math.floor((stampSide - qrSide) / 2);
+  const qrTop = Math.floor((stampSide - qrSide) / 2);
+
+  let logoFull: Buffer | null = null;
+  if (logoJpg) {
+    const logoSized = await sharp(logoJpg)
+      .resize(qrSide, qrSide, { fit: 'contain', withoutEnlargement: true, background: { r: bgRgb.r, g: bgRgb.g, b: bgRgb.b, alpha: 0 } })
+      .png()
+      .toBuffer();
+    logoFull = await removeNearWhiteToAlpha(logoSized);
+  }
+
+  const shadow = await sharp({
+    create: {
+      width: stampSide,
+      height: stampSide,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite([
+      {
+        input: Buffer.from(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="${stampSide}" height="${stampSide}"><rect x="${border}" y="${border}" width="${stampSide - border * 2}" height="${stampSide - border * 2}" rx="${corner}" ry="${corner}" fill="rgba(0,0,0,0.32)"/></svg>`,
+        ),
+        left: 0,
+        top: 0,
+      },
+    ])
+    .blur(Math.max(6, Math.round(stampSide * 0.03)))
+    .png()
+    .toBuffer();
+
+  const out = await sharp({
+    create: { width: stampSide + 24, height: stampSide + 24, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+  })
+    .composite([
+      { input: shadow, left: 18, top: 18 },
+      { input: frame, left: 8, top: 8 },
+      ...(logoFull ? [{ input: logoFull, left: 8 + qrLeft, top: 8 + qrTop }] : []),
+      { input: qrModulesOnly, left: 8 + qrLeft, top: 8 + qrTop },
+    ])
+    .png()
+    .toBuffer();
+
+  return out;
+}
+
+async function renderBackQrStampBase64(params: { origin: string; text: string; seedSalt?: string; backStyle: 'words' | 'abstract'; qrUrl?: string }) {
+  const cfg = getPrintifyBackTextConfig();
+  const clean = sanitizeBannerText(params.text) || 'CUSTOM';
+  const salted = params.seedSalt ? { ...cfg, version: `${cfg.version}|${params.seedSalt}` } : cfg;
+
+  const r = cfg.render;
+  const width = r.width;
+  const height = r.height;
+  const bgW = Math.min(r.bgW, width);
+  const bgH = Math.min(r.bgH, height);
+  const bgX = Math.floor((width - bgW) / 2);
+  const bgY = Math.floor((height - bgH) / 2);
+
+  const stampSide = Math.max(420, Math.min(680, Math.round(bgW * 0.34)));
+  const margin = Math.max(36, Math.round(bgW * 0.04));
+  const left = Math.max(0, bgX + bgW - stampSide - margin);
+  const top = Math.max(0, bgY + bgH - stampSide - margin);
+
+  const targetUrl = buildBackQrTargetUrl(params.origin, clean, params.qrUrl);
+  const stamp = await buildQrStampPng({ url: targetUrl, stampSide, backgroundColor: cfg.render.backgroundColor });
+
+  const basePng = params.backStyle === 'abstract' ? await renderBackAbstractPngBuffer(clean, salted) : await renderBackTextPngBuffer(clean, salted);
+
+  const out = await sharp(basePng)
+    .composite([{ input: stamp, left, top }])
+    .png({ compressionLevel: 9, adaptiveFiltering: true, palette: true })
+    .toBuffer();
+
+  return out.toString('base64');
+}
+
+async function getBackWordPreviewUrl(keyword: string, origin: string | null, seedSalt?: string, qrUrl?: string) {
   const cfg = getPrintifyBackTextConfig();
   const ttlMs = 24 * 60 * 60 * 1000;
   const kw = sanitizeBannerText(keyword) || 'CUSTOM';
   const saltKey = seedSalt ? `|q|${seedSalt}` : '';
-  const cacheKey = `collage_v4|${cfg.version}${saltKey}|${kw.toUpperCase()}`;
+  const mode = getBackMode();
+  const style = getBackStyle();
+  const qrKey = qrUrl ? `|u|${fnv1a32Hex(qrUrl).slice(0, 8)}` : '';
+  const originKey = origin ? (() => {
+    try {
+      return new URL(origin).host;
+    } catch {
+      return origin;
+    }
+  })() : 'no_origin';
+  const cacheKey = `${mode}|${style}|back_v1|${originKey}${qrKey}|${cfg.version}${saltKey}|${kw.toUpperCase()}`;
   const cached = cachedBackWordPreviewUrls.get(cacheKey);
   if (cached && Date.now() - cached.at < ttlMs) return cached.url;
 
-  const base64 = await renderBackBannerBase64(kw, seedSalt);
+  const base64 =
+    mode === 'qr_stamp' && origin
+      ? await renderBackQrStampBase64({ origin, text: kw, seedSalt, backStyle: style, qrUrl })
+      : style === 'abstract'
+        ? await renderBackAbstractBase64(kw, seedSalt)
+        : await renderBackBannerBase64(kw, seedSalt);
   const fileSafe = (kw || 'CUSTOM').replace(/\s+/g, '-').replace(/[^A-Za-z0-9-]/g, '').slice(0, 48) || 'CUSTOM';
   const saltTag = seedSalt ? `-q-${seedSalt.slice(0, 8)}` : '';
-  const previewUrl = await uploadImageToPrintify(`back-collage-v4-${cfg.version}${saltTag}-${fileSafe}.png`, base64);
+  const prefix = mode === 'qr_stamp' ? `back-qr-stamp-${style}-v1` : `back-${style}-v1`;
+  const previewUrl = await uploadImageToPrintify(`${prefix}-${cfg.version}${saltTag}-${fileSafe}.png`, base64);
   cachedBackWordPreviewUrls.set(cacheKey, { url: previewUrl, at: Date.now() });
   return previewUrl;
 }
@@ -773,7 +1046,14 @@ export async function POST(request: Request) {
 
       if (backKey) {
         const bannerText = bannerTextFromCartItem(item, metadata);
-        const backPreviewUrl = await getBackWordPreviewUrl(bannerText, quantumProof?.seed);
+        const seedSalt = buildBackSeedSalt({
+          sessionId: session.id,
+          itemId: String(item.id || ''),
+          imageUrl: absoluteImageUrl,
+          quantumSeed: quantumProof?.seed || null,
+        });
+        const customerQrUrl = normalizeCustomerQrUrl(session.metadata?.qrUrl);
+        const backPreviewUrl = await getBackWordPreviewUrl(bannerText, origin || null, seedSalt, customerQrUrl || undefined);
 
         printAreas[backKey] = [
           {

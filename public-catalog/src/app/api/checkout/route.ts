@@ -27,6 +27,21 @@ function getNumber(v: unknown): number {
   return Number.isFinite(n) ? n : NaN;
 }
 
+function normalizeCustomerQrUrl(input: unknown): string {
+  const raw = getString(input, 400);
+  if (!raw) return '';
+  const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(raw) ? raw : `https://${raw}`;
+  let u: URL;
+  try {
+    u = new URL(withScheme);
+  } catch {
+    return '';
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+  const href = u.toString();
+  return href.length > 350 ? href.slice(0, 350) : href;
+}
+
 function resolveUnitAmountCents(item: unknown): number | null {
   const rec = isRecord(item) ? item : {};
   const meta = isRecord(rec.metadata) ? (rec.metadata as Record<string, unknown>) : {};
@@ -48,6 +63,11 @@ export async function POST(request: Request) {
     const shippingOptionId = getString(b.shippingOptionId, 64);
     const shippingCountry = getString(b.shippingCountry, 4);
     const metadata = isRecord(b.metadata) ? (b.metadata as Record<string, unknown>) : {};
+    const qrUrlRaw = 'qrUrl' in b ? (b as Record<string, unknown>).qrUrl : '';
+    const qrUrl = normalizeCustomerQrUrl(qrUrlRaw);
+    if (getString(qrUrlRaw) && !qrUrl) {
+      return NextResponse.json({ error: 'Invalid QR link URL' }, { status: 400 });
+    }
 
     const cartItems = getCart(deviceId);
 
@@ -150,6 +170,7 @@ export async function POST(request: Request) {
         quantumFeeCents: quantumVerified ? String(quantumFeeCents) : '0',
         shippingOptionId: selectedShip?.id || '',
         shippingCents: selectedShip ? String(Math.round(Number(selectedShip.amountUsd) * 100)) : '0',
+        qrUrl: qrUrl || '',
         ...(metadata || {}),
       }
     });

@@ -21,6 +21,21 @@ function getNumber(v: unknown): number {
   return Number.isFinite(n) ? n : NaN;
 }
 
+function normalizeCustomerQrUrl(input: unknown): string {
+  const raw = getString(input, 400);
+  if (!raw) return "";
+  const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(raw) ? raw : `https://${raw}`;
+  let u: URL;
+  try {
+    u = new URL(withScheme);
+  } catch {
+    return "";
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return "";
+  const href = u.toString();
+  return href.length > 350 ? href.slice(0, 350) : href;
+}
+
 function isEvmAddress(v: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(v);
 }
@@ -131,6 +146,11 @@ export async function POST(request: Request) {
     const shippingOptionId = getString(b.shippingOptionId, 64);
     const shippingCountry = getString(b.shippingCountry, 4);
     const metadata = isRecord(b.metadata) ? (b.metadata as Record<string, unknown>) : {};
+    const qrUrlRaw = "qrUrl" in b ? (b as Record<string, unknown>).qrUrl : "";
+    const qrUrl = normalizeCustomerQrUrl(qrUrlRaw);
+    if (getString(qrUrlRaw) && !qrUrl) {
+      return NextResponse.json({ success: false, error: "invalid_qr_url" }, { status: 400 });
+    }
 
     const cartItems = getCart(deviceId);
     if (!Array.isArray(cartItems) || cartItems.length === 0) {
@@ -223,6 +243,7 @@ export async function POST(request: Request) {
       status: "pending",
       deviceId,
       userId: userId || undefined,
+      qrUrl: qrUrl || undefined,
       amountUsd,
       chainId: token.chainId,
       tokenId: token.id,

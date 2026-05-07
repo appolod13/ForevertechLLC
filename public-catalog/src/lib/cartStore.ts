@@ -58,6 +58,7 @@ export type CryptoCheckoutRecord = {
   status: 'pending' | 'confirmed';
   deviceId: string;
   userId?: string;
+  qrUrl?: string;
   amountUsd: number;
   chainId: number;
   tokenId: string;

@@ -25,8 +25,12 @@ export default function AdminPrintifyBackTextPage() {
 
   const [cfg, setCfg] = useState<PrintifyBackTextConfig | null>(null);
   const [previewText, setPreviewText] = useState("CUSTOM FUTURE TECH");
+  const [backStyle, setBackStyle] = useState<"words" | "abstract">("words");
   const [msg, setMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [sampleUrl, setSampleUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -89,11 +93,40 @@ export default function AdminPrintifyBackTextPage() {
     }
   }
 
+  async function uploadSample() {
+    if (!cfg) return;
+    setUploading(true);
+    setUploadMsg(null);
+    setSampleUrl(null);
+    try {
+      const res = await fetch("/api/admin/printify-back-text", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          uploadSample: true,
+          text: previewText,
+          backStyle,
+          origin: typeof window !== "undefined" ? window.location.origin : "http://localhost:3001",
+        }),
+      });
+      const json = (await res.json().catch(() => null)) as ApiOk<{ previewUrl: string }> | ApiFail | null;
+      if (!res.ok || !json || !json.success) {
+        setUploadMsg(errorFrom(json, res.status));
+        return;
+      }
+      setSampleUrl(json.data.previewUrl);
+      setUploadMsg("Uploaded sample to Printify");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   const previewSvg = useMemo(() => {
     if (!cfg) return "";
+    if (backStyle !== "words") return "";
     const txt = cfg.textMode === "custom" && cfg.customText.trim() ? cfg.customText : previewText;
     return buildBackTextSvg(sanitizeBannerText(txt, cfg.render.maxChars), cfg);
-  }, [cfg, previewText]);
+  }, [cfg, previewText, backStyle]);
 
   if (!cfg) return <div className="text-sm text-white/60">Loading...</div>;
 
@@ -256,9 +289,42 @@ export default function AdminPrintifyBackTextPage() {
         </div>
 
         <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-5 lg:col-span-2">
-          <div className="font-semibold">Preview</div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="font-semibold">Preview</div>
+              <select
+                className="rounded-md border border-white/10 bg-black/30 px-2 py-1 text-sm outline-none"
+                value={backStyle}
+                onChange={(e) => setBackStyle(e.target.value as "words" | "abstract")}
+              >
+                <option value="words">Words</option>
+                <option value="abstract">Abstract</option>
+              </select>
+            </div>
+            <button
+              onClick={uploadSample}
+              disabled={uploading}
+              className="rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm disabled:opacity-60"
+            >
+              {uploading ? "Uploading..." : "Upload QR Stamp Sample to Printify"}
+            </button>
+          </div>
+          {uploadMsg ? <div className="mt-2 text-sm text-white/70">{uploadMsg}</div> : null}
+          {sampleUrl ? (
+            <div className="mt-2 text-sm">
+              <a href={sampleUrl} target="_blank" rel="noreferrer" className="text-blue-300 underline">
+                Open Printify preview_url
+              </a>
+            </div>
+          ) : null}
           <div className="mt-3 rounded-md border border-white/10 bg-black/30 p-3 overflow-auto">
-            <img src={svgDataUrl(previewSvg)} alt="Back text preview" className="max-w-full rounded" />
+            {backStyle === "words" ? (
+              <img src={svgDataUrl(previewSvg)} alt="Back preview" className="max-w-full rounded" />
+            ) : sampleUrl ? (
+              <img src={sampleUrl} alt="Back preview" className="max-w-full rounded" />
+            ) : (
+              <div className="text-sm text-white/60">Upload a sample to see the abstract back preview.</div>
+            )}
           </div>
         </div>
       </div>
