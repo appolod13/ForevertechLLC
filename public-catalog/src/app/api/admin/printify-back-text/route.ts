@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/adminAuth";
-import { getPrintifyBackTextConfig, renderBackAbstractPngBuffer, renderBackTextPngBuffer, resetPrintifyBackTextConfig, updatePrintifyBackTextConfig, type PrintifyBackTextConfigPatch } from "@/lib/printifyBackText";
+import { buildBackTextSvg, getPrintifyBackTextConfig, renderBackAbstractPngBuffer, renderBackTextPngBuffer, resetPrintifyBackTextConfig, updatePrintifyBackTextConfig, type PrintifyBackTextConfig, type PrintifyBackTextConfigPatch } from "@/lib/printifyBackText";
 import { getAiGeneratorsConfig } from "@/lib/aiGeneratorsConfig";
 import sharp from "sharp";
 import QRCode from "qrcode";
@@ -452,7 +452,35 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({} as unknown));
-  const b = body as { reset?: unknown; uploadSample?: unknown; createProductSample?: unknown; text?: unknown; origin?: unknown; prompt?: unknown; backStyle?: unknown; seedSalt?: unknown; qrUrl?: unknown };
+  const b = body as {
+    reset?: unknown;
+    uploadSample?: unknown;
+    createProductSample?: unknown;
+    previewSvg?: unknown;
+    cfg?: unknown;
+    text?: unknown;
+    origin?: unknown;
+    prompt?: unknown;
+    backStyle?: unknown;
+    seedSalt?: unknown;
+    qrUrl?: unknown;
+  };
+
+  if (b && b.previewSvg === true) {
+    const auth = requireAdmin(req);
+    const devBypass = process.env.NODE_ENV !== "production" && isSameOrigin(req);
+    if (!auth.ok && !devBypass) return NextResponse.json({ success: false, error: "unauthorized" }, { status: 401 });
+    try {
+      const cfg = (isRecord(b.cfg) ? (b.cfg as PrintifyBackTextConfig) : getPrintifyBackTextConfig()) as PrintifyBackTextConfig;
+      const txt = cfg.textMode === "custom" && (cfg.customText || "").trim() ? String(cfg.customText) : (typeof b.text === "string" ? b.text : "CUSTOM FUTURE TECH");
+      const clean = sanitizeBannerText(txt, cfg.render?.maxChars || 96) || "CUSTOM";
+      const svg = buildBackTextSvg(clean, cfg);
+      return NextResponse.json({ success: true, data: { svg } }, { status: 200 });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e || "unknown_error");
+      return NextResponse.json({ success: false, error: msg }, { status: 500 });
+    }
+  }
 
   if (b && b.uploadSample === true) {
     const auth = requireAdmin(req);

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { buildBackTextSvg, sanitizeBannerText, type PrintifyBackTextConfig } from "@/lib/printifyBackText";
+import type { PrintifyBackTextConfig } from "@/lib/printifyBackText";
 
 type ApiOk<T> = { success: true; data: T };
 type ApiFail = { success: false; error: string; details?: unknown };
@@ -26,6 +26,8 @@ export default function AdminPrintifyBackTextPage() {
   const [cfg, setCfg] = useState<PrintifyBackTextConfig | null>(null);
   const [previewText, setPreviewText] = useState("CUSTOM FUTURE TECH");
   const [backStyle, setBackStyle] = useState<"words" | "abstract">("words");
+  const [previewSvg, setPreviewSvg] = useState("");
+  const [previewSvgMsg, setPreviewSvgMsg] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [sampleUrl, setSampleUrl] = useState<string | null>(null);
@@ -49,6 +51,48 @@ export default function AdminPrintifyBackTextPage() {
       setCfg(json.data.config);
     })();
   }, [router, redirectToLogin]);
+
+  useEffect(() => {
+    if (!cfg) return;
+    if (backStyle !== "words") {
+      setPreviewSvg("");
+      setPreviewSvgMsg(null);
+      return;
+    }
+
+    let cancelled = false;
+    setPreviewSvgMsg("Rendering preview...");
+
+    (async () => {
+      const res = await fetch("/api/admin/printify-back-text", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          previewSvg: true,
+          cfg,
+          text: previewText,
+        }),
+      });
+      const json = (await res.json().catch(() => null)) as ApiOk<{ svg: string }> | ApiFail | null;
+      if (cancelled) return;
+      if (!res.ok || !json || !json.success) {
+        setPreviewSvg("");
+        setPreviewSvgMsg(errorFrom(json, res.status));
+        return;
+      }
+      setPreviewSvg(json.data.svg || "");
+      setPreviewSvgMsg(null);
+    })().catch((e: unknown) => {
+      if (cancelled) return;
+      const msg = e instanceof Error ? e.message : String(e || "preview_error");
+      setPreviewSvg("");
+      setPreviewSvgMsg(msg);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cfg, previewText, backStyle]);
 
   async function save() {
     if (!cfg) return;
@@ -120,13 +164,6 @@ export default function AdminPrintifyBackTextPage() {
       setUploading(false);
     }
   }
-
-  const previewSvg = useMemo(() => {
-    if (!cfg) return "";
-    if (backStyle !== "words") return "";
-    const txt = cfg.textMode === "custom" && cfg.customText.trim() ? cfg.customText : previewText;
-    return buildBackTextSvg(sanitizeBannerText(txt, cfg.render.maxChars), cfg);
-  }, [cfg, previewText, backStyle]);
 
   if (!cfg) return <div className="text-sm text-white/60">Loading...</div>;
 
@@ -319,7 +356,11 @@ export default function AdminPrintifyBackTextPage() {
           ) : null}
           <div className="mt-3 rounded-md border border-white/10 bg-black/30 p-3 overflow-auto">
             {backStyle === "words" ? (
-              <img src={svgDataUrl(previewSvg)} alt="Back preview" className="max-w-full rounded" />
+              previewSvg ? (
+                <img src={svgDataUrl(previewSvg)} alt="Back preview" className="max-w-full rounded" />
+              ) : (
+                <div className="text-sm text-white/60">{previewSvgMsg || "No preview"}</div>
+              )
             ) : sampleUrl ? (
               <img src={sampleUrl} alt="Back preview" className="max-w-full rounded" />
             ) : (
