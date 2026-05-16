@@ -55,6 +55,7 @@
 - UI images: components use standard <img> tags (instead of next/image) to avoid remote image domain constraints and reduce production friction.
 - Social auth: Twitter/X OAuth1 uses /api/auth/twitter/login + /api/auth/twitter/callback; callback URL is derived from request origin (or TWITTER_CALLBACK_URL) and OAuth token/secret are stored in httpOnly cookies. Instagram OAuth2 uses /api/auth/instagram/login + /api/auth/instagram/callback; callback stores a token + ig user id in cookies and /api/post can publish to Instagram feed + stories (and reels when media is video). Other platforms still use a mock login route /api/auth/[platform]/login that sets placeholder cookies for UI testing only.
 - Compliance: Privacy Policy page at /privacy-policy with its own page title metadata; linked in Header navigation (desktop + mobile) as “Privacy”.
+- Customer education: FAQs page at /faqs explains Studio → Customize → Cart → Checkout → Printify plus crypto payments + NFT claiming and splits benefits for Quantum Verified Premium vs NFT claims; linked in Header navigation (desktop + mobile).
 
 ## User Defined Namespaces
 - [Leave blank - user populates]
