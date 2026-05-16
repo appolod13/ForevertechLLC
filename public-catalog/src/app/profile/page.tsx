@@ -3,7 +3,6 @@
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import Image from 'next/image';
 import { ShoppingBag, Image as ImageIcon, Loader2 } from 'lucide-react';
 import type { OrderRecord } from '@/lib/cartStore';
 
@@ -77,7 +76,13 @@ export default function ProfilePage() {
                 return (
                 <div key={order.id} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
                   <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black mb-4">
-                    <Image src={imageUrl} alt={title} fill className="object-cover" unoptimized />
+                    <img
+                      src={imageUrl}
+                      alt={title}
+                      className="absolute inset-0 h-full w-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                    />
                   </div>
                   <h3 className="font-semibold text-white">{title}</h3>
                   <div className="mt-2 flex justify-between text-sm text-zinc-400">

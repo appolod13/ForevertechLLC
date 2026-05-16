@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-import Image from 'next/image';
 import { format } from 'date-fns';
 import { ShoppingCart, ShieldCheck, AlertTriangle, ThumbsUp, ThumbsDown, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -34,20 +33,40 @@ export function CatalogItem({
   })()
 }: CatalogItemProps) {
   const { addToCart } = useCart();
+
+  const stableNumber = (input: string, min: number, max: number) => {
+    let h = 2166136261;
+    for (let i = 0; i < input.length; i++) {
+      h ^= input.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    const span = Math.max(1, max - min + 1);
+    return min + ((h >>> 0) % span);
+  };
   
   // Handle image URL
   const getImageUrl = (url?: string | null) => {
     if (!url) return '/placeholder-future-city.svg';
-    if (url.startsWith('http')) return url;
+    if (url.startsWith('http')) {
+      try {
+        const u = new URL(url);
+        if ((u.hostname === 'localhost' || u.hostname === '127.0.0.1') && u.port === '5328' && u.pathname.startsWith('/images/')) {
+          const filename = u.pathname.split('/').pop() || '';
+          return filename ? `/api/images/${encodeURIComponent(filename)}` : '/placeholder-future-city.svg';
+        }
+      } catch {
+      }
+      return url;
+    }
     if (url.startsWith('Qm') || url.startsWith('bafy')) return `https://ipfs.io/ipfs/${url}`;
-    return `http://localhost:3001${url.startsWith('/') ? '' : '/'}${url}`;
+    return `${url.startsWith('/') ? '' : '/'}${url}`;
   };
 
   const [imgSrc, setImgSrc] = React.useState(getImageUrl(mediaUrl));
   const [isLoading, setIsLoading] = React.useState(true);
   const [hasError, setHasError] = useState(false);
   const [isFallback, setIsFallback] = useState(false);
-  const [likes, setLikes] = useState(Math.floor(Math.random() * 50) + 10);
+  const [likes, setLikes] = useState(() => stableNumber(`likes|${id}`, 10, 59));
   const [isLiked, setIsLiked] = useState(false);
   const [dislikeTime, setDislikeTime] = useState<number | null>(null);
   const [isHidden, setIsHidden] = useState(false);
@@ -162,22 +181,18 @@ export function CatalogItem({
         )}
         
         {!hasError ? (
-          <Image
+          <img
             src={imgSrc}
             alt="Item thumbnail"
-            fill
-            unoptimized
             className={cn(
-              "object-cover transition-transform duration-500 group-hover:scale-110",
+              "absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-110",
               isLoading ? "opacity-0" : "opacity-100"
             )}
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             onLoad={() => setIsLoading(false)}
             onError={() => {
               setHasError(true);
               setIsLoading(false);
-              // Log error to backend
-              fetch('http://localhost:3001/api/log/error', {
+              fetch('/api/log/error', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -187,6 +202,7 @@ export function CatalogItem({
                 })
               }).catch(console.error);
             }}
+            loading="lazy"
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 p-4 text-center">
@@ -325,16 +341,15 @@ export function CatalogItem({
       {showPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setShowPreview(false)}>
           <div className="relative max-w-4xl w-full aspect-square md:aspect-video rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800" onClick={(e) => e.stopPropagation()}>
-            <Image
+            <img
               src={imgSrc}
               alt="Preview"
-              fill
-              unoptimized
-              className="object-contain"
+              className="absolute inset-0 h-full w-full object-contain"
               onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
                 const target = e.currentTarget;
                 target.src = 'https://via.placeholder.com/400x300?text=Preview+Not+Available';
               }}
+              loading="eager"
             />
             <button 
               onClick={() => setShowPreview(false)}

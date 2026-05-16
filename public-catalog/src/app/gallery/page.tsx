@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { Header } from '@/components/Header';
 import { Heart, RefreshCw, User, BookOpen } from 'lucide-react';
-import Image from 'next/image';
 import { useAuth } from '@/context/AuthContext';
 
 interface GalleryItem {
@@ -146,13 +145,11 @@ export default function GalleryPage() {
                   {item.imageUrl.startsWith('<svg') ? (
                     <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: item.imageUrl }} />
                   ) : (
-                    <Image 
-                      src={item.imageUrl} 
+                    <img
+                      src={item.imageUrl}
                       alt={item.prompt}
-                      fill
-                      className="object-cover transition-transform duration-500 group-hover:scale-105"
-                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
-                      unoptimized={item.imageUrl.startsWith('blob:')}
+                      className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      loading="lazy"
                     />
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">

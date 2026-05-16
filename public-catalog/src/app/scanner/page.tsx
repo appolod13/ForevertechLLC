@@ -4,7 +4,6 @@
 import { useState, useEffect } from 'react';
 import { Header } from '../../components/Header';
 import { Camera, RefreshCw, AlertCircle, Link as LinkIcon, Download } from 'lucide-react';
-import Image from 'next/image';
 import { LocalShopFinder } from '@/components/LocalShopFinder';
 
 interface Screenshot {
@@ -24,11 +23,14 @@ export default function ScannerPage() {
   const [urlInput, setUrlInput] = useState('');
   const [capturing, setCapturing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminChecked, setAdminChecked] = useState(false);
 
   // Fetch screenshots from the service
   const fetchScreenshots = async () => {
     try {
-      const base = process.env.NEXT_PUBLIC_SCREENSHOT_URL || 'http://localhost:4010';
+      const base = (process.env.NEXT_PUBLIC_SCREENSHOT_URL || '').trim().replace(/\/$/, '');
+      if (!base) throw new Error('missing_SCREENSHOT_SERVICE_URL');
       const res = await fetch(`${base}/api/screenshots`);
       if (!res.ok) throw new Error('Failed to fetch gallery');
       const data = await res.json();
@@ -36,14 +38,27 @@ export default function ScannerPage() {
       setScreenshots(data.sort((a: Screenshot, b: Screenshot) => new Date(b.created).getTime() - new Date(a.created).getTime()));
     } catch (e) {
       console.error(e);
-      setError('Could not load gallery. Is the service running on port 4000?');
+      setError('Scanner service is not configured or unavailable.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchScreenshots();
+    let cancelled = false;
+    const run = async () => {
+      const res = await fetch('/api/admin/me', { cache: 'no-store' }).catch(() => null);
+      const json: unknown = res ? await res.json().catch(() => null) : null;
+      const ok = Boolean(res && res.ok && typeof json === 'object' && json !== null && (json as { success?: unknown }).success === true);
+      if (!cancelled) {
+        setIsAdmin(ok);
+        setAdminChecked(true);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleCapture = async (e: React.FormEvent) => {
@@ -54,7 +69,9 @@ export default function ScannerPage() {
     setError(null);
 
     try {
-      const res = await fetch('http://localhost:4000/api/capture', {
+      const base = (process.env.NEXT_PUBLIC_SCREENSHOT_URL || '').trim().replace(/\/$/, '');
+      if (!base) throw new Error('missing_SCREENSHOT_SERVICE_URL');
+      const res = await fetch(`${base}/api/capture`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: urlInput })
@@ -70,15 +87,25 @@ export default function ScannerPage() {
       }
     } catch (e) {
       console.error(e);
-      setError('Network error. Check service connection.');
+      setError('Scanner service is not configured or unavailable.');
     } finally {
       setCapturing(false);
     }
   };
 
+  const locked = process.env.NODE_ENV === 'production' && adminChecked && !isAdmin;
+
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <Header />
+      {locked ? (
+        <main className="max-w-3xl mx-auto p-8">
+          <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700">
+            <h1 className="text-2xl font-bold mb-2">Scanner</h1>
+            <p className="text-gray-400">This page is only available to admins in production.</p>
+          </div>
+        </main>
+      ) : (
       <main className="max-w-7xl mx-auto p-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
@@ -143,16 +170,15 @@ export default function ScannerPage() {
             {screenshots.map((shot) => (
               <div key={shot.filename} className="group bg-gray-800 rounded-xl overflow-hidden border border-gray-700 hover:border-gray-500 transition-all hover:shadow-xl hover:shadow-black/50">
                 <div className="relative aspect-video bg-gray-900 overflow-hidden">
-                  <Image 
-                    src={`http://localhost:4000${shot.url}`} 
+                  <img
+                    src={`${(process.env.NEXT_PUBLIC_SCREENSHOT_URL || '').trim().replace(/\/$/, '')}${shot.url}`}
                     alt={shot.filename}
-                    fill
-                    className="object-cover transition-transform group-hover:scale-105"
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    className="absolute inset-0 h-full w-full object-cover transition-transform group-hover:scale-105"
+                    loading="lazy"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
                     <a 
-                      href={`http://localhost:4000${shot.url}`} 
+                      href={`${(process.env.NEXT_PUBLIC_SCREENSHOT_URL || '').trim().replace(/\/$/, '')}${shot.url}`} 
                       download
                       className="self-end bg-white/10 hover:bg-white/20 p-2 rounded-full backdrop-blur-md transition-colors"
                       title="Download"
@@ -191,6 +217,7 @@ export default function ScannerPage() {
           </div>
         )}
       </main>
+      )}
     </div>
   );
 }

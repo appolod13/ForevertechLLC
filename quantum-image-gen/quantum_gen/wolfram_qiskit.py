@@ -425,6 +425,53 @@ def generate_random_quantum_distribution(width, height, seed=None):
     img = img.filter(ImageFilter.GaussianBlur(radius=3))
     return img
 
+def _mandelbrot_escape_iterations(c_x: float, c_y: float, max_iter: int = 64) -> int:
+    zx = 0.0
+    zy = 0.0
+    cx = float(c_x)
+    cy = float(c_y)
+    for i in range(int(max_iter)):
+        zx2 = zx * zx
+        zy2 = zy * zy
+        if zx2 + zy2 > 4.0:
+            return i
+        zy = 2.0 * zx * zy + cy
+        zx = zx2 - zy2 + cx
+    return int(max_iter)
+
+def _pick_boundary_c(seed: int) -> tuple[float, float]:
+    rng = random.Random(int(seed) ^ 0x5EF13A91)
+    best = (-0.70176, -0.3842)
+    best_score = -1.0
+    target = 28.0
+    for _ in range(28):
+        x = rng.uniform(-1.25, 0.85)
+        y = rng.uniform(-1.15, 1.15)
+        it = _mandelbrot_escape_iterations(x, y, 64)
+        if it >= 64:
+            score = 0.12 + rng.random() * 0.05
+        else:
+            score = 1.0 / (abs(float(it) - target) + 1.0)
+            if 8 <= it <= 56:
+                score += 0.25
+        if score > best_score:
+            best_score = score
+            best = (x, y)
+    return best
+
+def _jitter_c(seed: int, amount: float) -> tuple[float, float]:
+    rng = random.Random(int(seed) ^ 0xA31C7F11)
+    r = float(amount) * (0.25 + rng.random() * 0.85)
+    theta = rng.random() * math.pi * 2.0
+    return (r * math.cos(theta), r * math.sin(theta))
+
+def _clamp_c(c_x: float, c_y: float) -> tuple[float, float]:
+    x = float(c_x)
+    y = float(c_y)
+    x = max(-1.6, min(1.6, x))
+    y = max(-1.6, min(1.6, y))
+    return (x, y)
+
 def _analyze_prompt_energy(prompt):
     """
     Parses the prompt for emotional and shape keywords to determine 
@@ -443,16 +490,52 @@ def _analyze_prompt_energy(prompt):
     elif any(w in p for w in ["cross", "plus", "star"]): shape_type = "cross"
 
     # Emotional/Energy Analysis
+    prompt_seed = _seed_from_text(p)
     if any(w in p for w in ["love", "passion", "heart", "warm", "fire", "soul"]):
-        return "magma", -0.4, 0.6, "diamond" if shape_type == "circle" else shape_type
+        base = (-0.4, 0.6)
+        boundary = _pick_boundary_c(prompt_seed)
+        mix = 0.22
+        jx, jy = _jitter_c(prompt_seed, 0.028)
+        c_x = base[0] * (1.0 - mix) + boundary[0] * mix + jx
+        c_y = base[1] * (1.0 - mix) + boundary[1] * mix + jy
+        c_x, c_y = _clamp_c(c_x, c_y)
+        return "magma", c_x, c_y, "diamond" if shape_type == "circle" else shape_type
     if any(w in p for w in ["calm", "peace", "water", "flow", "tranquil", "breeze", "ocean"]):
-        return "viridis", 0.285, 0.01, "wave" if shape_type == "circle" else shape_type
+        base = (0.285, 0.01)
+        boundary = _pick_boundary_c(prompt_seed)
+        mix = 0.18
+        jx, jy = _jitter_c(prompt_seed, 0.022)
+        c_x = base[0] * (1.0 - mix) + boundary[0] * mix + jx
+        c_y = base[1] * (1.0 - mix) + boundary[1] * mix + jy
+        c_x, c_y = _clamp_c(c_x, c_y)
+        return "viridis", c_x, c_y, "wave" if shape_type == "circle" else shape_type
     if any(w in p for w in ["energy", "chaos", "power", "electric", "lightning", "dynamic"]):
-        return "turbo", -0.8, 0.156, "cross" if shape_type == "circle" else shape_type
+        base = (-0.8, 0.156)
+        boundary = _pick_boundary_c(prompt_seed)
+        mix = 0.26
+        jx, jy = _jitter_c(prompt_seed, 0.030)
+        c_x = base[0] * (1.0 - mix) + boundary[0] * mix + jx
+        c_y = base[1] * (1.0 - mix) + boundary[1] * mix + jy
+        c_x, c_y = _clamp_c(c_x, c_y)
+        return "turbo", c_x, c_y, "cross" if shape_type == "circle" else shape_type
     if any(w in p for w in ["transcendent", "mystic", "cosmos", "god", "divine", "spirit"]):
-        return "plasma", -0.7269, 0.1889, "spiral" if shape_type == "circle" else shape_type
+        base = (-0.7269, 0.1889)
+        boundary = _pick_boundary_c(prompt_seed)
+        mix = 0.24
+        jx, jy = _jitter_c(prompt_seed, 0.030)
+        c_x = base[0] * (1.0 - mix) + boundary[0] * mix + jx
+        c_y = base[1] * (1.0 - mix) + boundary[1] * mix + jy
+        c_x, c_y = _clamp_c(c_x, c_y)
+        return "plasma", c_x, c_y, "spiral" if shape_type == "circle" else shape_type
     if any(w in p for w in ["dark", "void", "abyss", "shadow", "deep"]):
-        return "inferno", -0.835, -0.2321, "square" if shape_type == "circle" else shape_type
+        base = (-0.835, -0.2321)
+        boundary = _pick_boundary_c(prompt_seed)
+        mix = 0.24
+        jx, jy = _jitter_c(prompt_seed, 0.028)
+        c_x = base[0] * (1.0 - mix) + boundary[0] * mix + jx
+        c_y = base[1] * (1.0 - mix) + boundary[1] * mix + jy
+        c_x, c_y = _clamp_c(c_x, c_y)
+        return "inferno", c_x, c_y, "square" if shape_type == "circle" else shape_type
         
     # Try to use a learned pattern from the quantum images dataset
     learned_params = []
@@ -467,7 +550,7 @@ def _analyze_prompt_energy(prompt):
     # Default: "roulette of possibilities"
     cmaps = ["turbo", "viridis", "plasma", "magma", "inferno", "ocean", "rainbow"]
     # Seed random with prompt to keep it deterministic for the same prompt
-    rng = random.Random(_seed_from_text(p))
+    rng = random.Random(prompt_seed)
     
     # Known "stunning" Julia set parameters
     beautiful_c_values = [
@@ -508,8 +591,14 @@ def _analyze_prompt_energy(prompt):
             pass
     else:
         c_x, c_y = rng.choice(beautiful_c_values)
-        
-    return rng.choice(cmaps), c_x, c_y, shape_type
+
+    boundary_x, boundary_y = _pick_boundary_c(prompt_seed)
+    mix = 0.62
+    jx, jy = _jitter_c(prompt_seed, 0.045)
+    out_x = float(c_x) * (1.0 - mix) + float(boundary_x) * mix + jx
+    out_y = float(c_y) * (1.0 - mix) + float(boundary_y) * mix + jy
+    out_x, out_y = _clamp_c(out_x, out_y)
+    return rng.choice(cmaps), out_x, out_y, shape_type
 
 def generate_julia_set(width, height, c_x, c_y, zoom=1.0, max_iter=100, cmap_name="turbo"):
     """
@@ -597,17 +686,204 @@ def generate_julia_set(width, height, c_x, c_y, zoom=1.0, max_iter=100, cmap_nam
     return apply_simple_colormap(smooth_norm.astype(np.float32), cmap_name)
 
 
-def _pseudo_quantum_probs(prompt: str, num_states: int) -> "np.ndarray":
+def generate_mandelbrot_set(
+    width,
+    height,
+    center_x=-0.5,
+    center_y=0.0,
+    zoom=1.0,
+    max_iter=100,
+    cmap_name="turbo",
+):
+    if not np:
+        return None
+
+    def apply_simple_colormap(vals_01: "np.ndarray", name: str) -> "np.ndarray":
+        name = (name or "turbo").lower()
+        stops = {
+            "turbo": [(48, 18, 59), (59, 82, 139), (33, 145, 140), (96, 202, 96), (231, 228, 25), (180, 39, 46)],
+            "viridis": [(68, 1, 84), (59, 82, 139), (33, 145, 140), (94, 201, 97), (253, 231, 37)],
+            "plasma": [(12, 7, 134), (86, 1, 164), (156, 23, 158), (212, 73, 128), (246, 141, 76), (252, 216, 86)],
+            "magma": [(0, 0, 4), (28, 16, 68), (79, 18, 123), (129, 37, 129), (181, 54, 122), (229, 80, 100), (251, 135, 97), (252, 203, 134)],
+            "inferno": [(0, 0, 4), (31, 12, 72), (85, 15, 109), (136, 34, 106), (186, 54, 85), (227, 89, 51), (249, 140, 10), (252, 255, 164)],
+            "ocean": [(0, 12, 38), (0, 66, 98), (0, 133, 139), (0, 190, 170), (180, 255, 245)],
+            "rainbow": [(150, 0, 255), (0, 80, 255), (0, 220, 255), (0, 255, 120), (240, 255, 0), (255, 120, 0), (255, 0, 0)],
+        }.get(name)
+
+        if not stops:
+            stops = [(48, 18, 59), (59, 82, 139), (33, 145, 140), (96, 202, 96), (231, 228, 25), (180, 39, 46)]
+
+        stops_np = np.array(stops, dtype=np.float32) / 255.0
+        x = np.clip(vals_01, 0.0, 1.0) * (stops_np.shape[0] - 1)
+        i0 = np.floor(x).astype(np.int32)
+        i1 = np.clip(i0 + 1, 0, stops_np.shape[0] - 1)
+        t = (x - i0).astype(np.float32)[..., None]
+        rgb = (1.0 - t) * stops_np[i0] + t * stops_np[i1]
+        return (np.clip(rgb, 0.0, 1.0) * 255.0).astype(np.uint8)
+
+    w = int(width)
+    h = int(height)
+
+    x = np.linspace(center_x - (1.5 / zoom), center_x + (1.5 / zoom), w)
+    y = np.linspace(center_y - (1.5 / zoom), center_y + (1.5 / zoom), h)
+    X, Y = np.meshgrid(x, y)
+    C = X + 1j * Y
+    Z = np.zeros_like(C)
+
+    div_time = np.zeros(C.shape, dtype=int)
+    m = np.full(C.shape, True, dtype=bool)
+
+    for i in range(int(max_iter)):
+        Z[m] = Z[m] ** 2 + C[m]
+        diverged = np.abs(Z) > 2
+        just_diverged = diverged & m
+        div_time[just_diverged] = i
+        m[just_diverged] = False
+        if not m.any():
+            break
+
+    smooth = np.zeros(C.shape, dtype=float)
+    mask = div_time > 0
+    smooth[~mask] = 0.0
+
+    Z_abs = np.abs(Z[mask])
+    Z_abs[Z_abs == 0] = 1e-10
+    smooth[mask] = div_time[mask] + 1 - np.log2(np.log(Z_abs))
+
+    smooth_norm = smooth / np.max(smooth) if np.max(smooth) > 0 else smooth
+
+    if cm is not None:
+        try:
+            colormap = cm.get_cmap(cmap_name)
+        except Exception:
+            colormap = cm.get_cmap("turbo")
+        img_rgba = colormap(smooth_norm)
+        return (img_rgba[:, :, :3] * 255).astype(np.uint8)
+
+    return apply_simple_colormap(smooth_norm.astype(np.float32), cmap_name)
+
+
+def _compute_julia_smooth_norm(width, height, c_x, c_y, zoom=1.0, max_iter=100):
+    if not np:
+        return None
+
+    x = np.linspace(-1.5 / zoom, 1.5 / zoom, int(width))
+    y = np.linspace(-1.5 / zoom, 1.5 / zoom, int(height))
+    X, Y = np.meshgrid(x, y)
+    Z = X + 1j * Y
+    C = float(c_x) + 1j * float(c_y)
+
+    div_time = np.zeros(Z.shape, dtype=int)
+    m = np.full(Z.shape, True, dtype=bool)
+
+    for i in range(int(max_iter)):
+        Z[m] = Z[m] ** 2 + C
+        diverged = np.abs(Z) > 2
+        just_diverged = diverged & m
+        div_time[just_diverged] = i
+        m[just_diverged] = False
+
+    smooth = np.zeros(Z.shape, dtype=float)
+    mask = div_time > 0
+    smooth[~mask] = 0.0
+
+    Z_abs = np.abs(Z[mask])
+    Z_abs[Z_abs == 0] = 1e-10
+    smooth[mask] = div_time[mask] + 1 - np.log2(np.log(Z_abs))
+
+    maxv = float(np.max(smooth))
+    smooth_norm = (smooth / maxv) if maxv > 0 else smooth
+    return smooth_norm.astype(np.float32)
+
+
+def _compute_mandelbrot_smooth_norm(width, height, center_x=-0.5, center_y=0.0, zoom=1.0, max_iter=100):
+    if not np:
+        return None
+
+    w = int(width)
+    h = int(height)
+    x = np.linspace(float(center_x) - (1.5 / zoom), float(center_x) + (1.5 / zoom), w)
+    y = np.linspace(float(center_y) - (1.5 / zoom), float(center_y) + (1.5 / zoom), h)
+    X, Y = np.meshgrid(x, y)
+    C = X + 1j * Y
+    Z = np.zeros_like(C)
+
+    div_time = np.zeros(C.shape, dtype=int)
+    m = np.full(C.shape, True, dtype=bool)
+
+    for i in range(int(max_iter)):
+        Z[m] = Z[m] ** 2 + C[m]
+        diverged = np.abs(Z) > 2
+        just_diverged = diverged & m
+        div_time[just_diverged] = i
+        m[just_diverged] = False
+        if not m.any():
+            break
+
+    smooth = np.zeros(C.shape, dtype=float)
+    mask = div_time > 0
+    smooth[~mask] = 0.0
+
+    Z_abs = np.abs(Z[mask])
+    Z_abs[Z_abs == 0] = 1e-10
+    smooth[mask] = div_time[mask] + 1 - np.log2(np.log(Z_abs))
+
+    maxv = float(np.max(smooth))
+    smooth_norm = (smooth / maxv) if maxv > 0 else smooth
+    return smooth_norm.astype(np.float32)
+
+
+def _apply_colormap_01(vals_01: "np.ndarray", cmap_name: str) -> "np.ndarray":
+    if not np:
+        return None
+
+    vals_01 = np.clip(vals_01.astype(np.float32), 0.0, 1.0)
+
+    def apply_simple_colormap(name: str) -> "np.ndarray":
+        name = (name or "turbo").lower()
+        stops = {
+            "turbo": [(48, 18, 59), (59, 82, 139), (33, 145, 140), (96, 202, 96), (231, 228, 25), (180, 39, 46)],
+            "viridis": [(68, 1, 84), (59, 82, 139), (33, 145, 140), (94, 201, 97), (253, 231, 37)],
+            "plasma": [(12, 7, 134), (86, 1, 164), (156, 23, 158), (212, 73, 128), (246, 141, 76), (252, 216, 86)],
+            "magma": [(0, 0, 4), (28, 16, 68), (79, 18, 123), (129, 37, 129), (181, 54, 122), (229, 80, 100), (251, 135, 97), (252, 203, 134)],
+            "inferno": [(0, 0, 4), (31, 12, 72), (85, 15, 109), (136, 34, 106), (186, 54, 85), (227, 89, 51), (249, 140, 10), (252, 255, 164)],
+            "ocean": [(0, 12, 38), (0, 66, 98), (0, 133, 139), (0, 190, 170), (180, 255, 245)],
+            "rainbow": [(150, 0, 255), (0, 80, 255), (0, 220, 255), (0, 255, 120), (240, 255, 0), (255, 120, 0), (255, 0, 0)],
+        }.get(name)
+
+        if not stops:
+            stops = [(48, 18, 59), (59, 82, 139), (33, 145, 140), (96, 202, 96), (231, 228, 25), (180, 39, 46)]
+
+        stops_np = np.array(stops, dtype=np.float32) / 255.0
+        x = vals_01 * (stops_np.shape[0] - 1)
+        i0 = np.floor(x).astype(np.int32)
+        i1 = np.clip(i0 + 1, 0, stops_np.shape[0] - 1)
+        t = (x - i0).astype(np.float32)[..., None]
+        rgb = (1.0 - t) * stops_np[i0] + t * stops_np[i1]
+        return (np.clip(rgb, 0.0, 1.0) * 255.0).astype(np.uint8)
+
+    if cm is not None:
+        try:
+            colormap = cm.get_cmap(cmap_name)
+        except Exception:
+            colormap = cm.get_cmap("turbo")
+        img_rgba = colormap(vals_01)
+        return (img_rgba[:, :, :3] * 255).astype(np.uint8)
+
+    return apply_simple_colormap(cmap_name)
+
+
+def _pseudo_quantum_probs(seed_context: str, num_states: int) -> "np.ndarray":
     if not np:
         return None
     n = int(num_states)
     n = max(8, min(256, n))
-    seed = _seed_from_text(prompt or "quantum-julia")
+    seed = _seed_from_text(seed_context or "quantum-julia")
     rng = np.random.default_rng(seed)
     raw = rng.random(n, dtype=np.float32) + 1e-6
     return raw / np.sum(raw)
 
-def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum=False):
+def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum=False, seed_salt: str | None = None):
     if _contains_future_city(prompt) and not force_quantum:
         return _future_city_concept(prompt, int(width), int(height), int(rule))
 
@@ -618,12 +894,16 @@ def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum
     """
     Main function to generate a quantum-inspired image.
     """
+    salt = (seed_salt or "").strip()
+    seed_context = f"{(prompt or '').strip()}|salt:{salt}" if salt else (prompt or "")
+
     # 1. Generate Wolfram Pattern
     print(f"Generating Wolfram pattern (Rule {rule})...")
-    pattern = generate_wolfram_pattern(width, height, rule=rule, prompt=prompt) if np else None
+    pattern = generate_wolfram_pattern(width, height, rule=rule, prompt=seed_context) if np else None
 
     probs_np = None
     sorted_keys = None
+    quantum_engine = "pseudo"
 
     if np and QuantumCircuit:
         print("Mapping to Quantum Circuit...")
@@ -637,6 +917,7 @@ def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum
         if total_shots <= 0:
             print("Simulation failed, falling back to pseudo-quantum distribution")
         else:
+            quantum_engine = "qiskit-aer"
             sorted_keys = sorted(counts.keys())
             probs_np = np.array([counts[k] / total_shots for k in sorted_keys], dtype=np.float32)
 
@@ -644,20 +925,30 @@ def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum
         if not np:
             return _future_city_concept(prompt + " (mock quantum)", int(width), int(height), int(rule))
         sorted_keys = [str(i) for i in range(64)]
-        probs_np = _pseudo_quantum_probs(prompt, len(sorted_keys))
+        probs_np = _pseudo_quantum_probs(seed_context, len(sorted_keys))
 
     # 4. Extract Emotional Energy and Shape
     cmap_name, julia_cx, julia_cy, shape_type = _analyze_prompt_energy(prompt)
     
     # Modulate Julia coordinates with top quantum probabilities (true Quantum-Julia mix)
     # Kept extremely subtle so it doesn't break the fractal structure
-    julia_cx += (float(probs_np[0]) - 0.5) * 0.01
+    julia_cx += (float(probs_np[0]) - 0.5) * 0.025
     if len(probs_np) > 1:
-        julia_cy += (float(probs_np[1]) - 0.5) * 0.01
+        julia_cy += (float(probs_np[1]) - 0.5) * 0.025
+    if len(probs_np) > 4:
+        julia_cx += (float(probs_np[2]) - float(probs_np[3])) * 0.012
+        julia_cy += (float(probs_np[4]) - 0.5) * 0.012
+
+    render_seed = _seed_from_text(f"{seed_context}|{rule}|julia-render")
+    render_rng = random.Random(render_seed)
+    julia_zoom = 1.05 + render_rng.random() * 0.95
+    julia_iters = 140 + int(render_rng.random() * 80)
+    if int(width) * int(height) > 1024 * 1024:
+        julia_iters = min(julia_iters, 175)
         
     print(f"Rendering Quantum Julia (cmap={cmap_name}, shape={shape_type})...")
-    julia_rgb = generate_julia_set(width, height, julia_cx, julia_cy, zoom=1.35, max_iter=150, cmap_name=cmap_name)
-    if julia_rgb is None:
+    julia_field = _compute_julia_smooth_norm(width, height, julia_cx, julia_cy, zoom=julia_zoom, max_iter=julia_iters)
+    if julia_field is None:
         return _future_city_concept(prompt + " (mock quantum)", int(width), int(height), int(rule))
 
     # Non-linear rendering using quantum probabilities and spatial coordinates
@@ -734,7 +1025,36 @@ def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum
     # We want the Julia Set to be the undisputed dominant visual element.
     # We'll apply the interference pattern as a subtle translucent overlay.
     img_interf = Image.fromarray(interference_img).convert("RGBA")
-    img_julia = Image.fromarray(julia_rgb).convert("RGBA")
+    base_rgb = _apply_colormap_01(julia_field, cmap_name)
+    img_julia = Image.fromarray(base_rgb).convert("RGBA")
+
+    p = (prompt or "").lower()
+    disable_mandelbrot = ("no mandelbrot" in p) or ("no-mandelbrot" in p)
+    if not disable_mandelbrot:
+        seed = _seed_from_text(f"{seed_context}|{width}x{height}|{rule}|mandelbrot")
+        rng = random.Random(seed)
+        mandel_center_x = -0.5 + (rng.random() - 0.5) * 0.8
+        mandel_center_y = (rng.random() - 0.5) * 0.8
+        mandel_zoom = 0.9 + rng.random() * 1.6
+        mandel_iter = 180 + int(rng.random() * 120)
+        mandel_field = _compute_mandelbrot_smooth_norm(width, height, center_x=mandel_center_x, center_y=mandel_center_y, zoom=mandel_zoom, max_iter=mandel_iter)
+        if mandel_field is not None:
+            hybrid_seed = _seed_from_text(f"{seed_context}|{width}x{height}|{rule}|hybrid")
+            hrng = np.random.default_rng(hybrid_seed)
+            freq1 = float(hrng.uniform(6.0, 16.0))
+            freq2 = float(hrng.uniform(6.0, 16.0))
+            phase = float(hrng.uniform(0.0, 2.0 * np.pi))
+            mix = float(hrng.uniform(0.35, 0.65))
+
+            combined = (mix * julia_field) + ((1.0 - mix) * mandel_field)
+            signal = np.sin((2.0 * np.pi) * (freq1 * julia_field + freq2 * mandel_field) + phase)
+            ridges = (1.0 - np.abs(signal)).astype(np.float32)
+            ridges = np.clip(ridges ** float(hrng.uniform(1.2, 2.0)), 0.0, 1.0)
+
+            fused = np.clip(0.35 * combined + 0.65 * ridges, 0.0, 1.0).astype(np.float32)
+            fused_rgb = _apply_colormap_01(fused, cmap_name)
+            img_julia = Image.fromarray(fused_rgb).convert("RGBA")
+
     if force_quantum:
         img_interf = img_interf.filter(ImageFilter.GaussianBlur(radius=2))
     img_interf.putalpha(90 if force_quantum else 40)
@@ -746,7 +1066,16 @@ def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum
     from PIL import ImageEnhance
     enhancer = ImageEnhance.Contrast(blended)
     final_img = enhancer.enhance(1.55 if force_quantum else 1.4)
-            
+
+    img_hash = hashlib.sha256(final_img.tobytes()).hexdigest()[:12]
+    base_prompt = (prompt or "").strip()
+    derived_prompt = f"{base_prompt} ::qf:{img_hash}" if base_prompt else f"qf::{img_hash}"
+    final_img.info["qf_image_hash"] = img_hash
+    final_img.info["qf_derived_prompt"] = derived_prompt
+    final_img.info["qf_quantum_engine"] = quantum_engine
+    if salt:
+        final_img.info["qf_quantum_seed_hash"] = hashlib.sha256(salt.encode("utf-8")).hexdigest()[:12]
+
     return final_img
 
 if __name__ == "__main__":

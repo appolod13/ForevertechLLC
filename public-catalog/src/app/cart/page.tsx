@@ -4,7 +4,6 @@ import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import { Trash2, ShoppingBag, ArrowRight, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
-import Image from 'next/image';
 
 export default function CartPage() {
   const { items, removeFromCart, clearCart, total, isLoading } = useCart();
@@ -59,14 +58,14 @@ export default function CartPage() {
                     </p>
                   </div>
                 ) : item.imageUrl ? (
-                  <Image 
-                    src={item.imageUrl} 
-                    alt={item.title} 
-                    fill 
-                    className="object-cover"
-                    unoptimized={item.imageUrl.startsWith('blob:') || item.imageUrl.includes('localhost')}
+                  <img
+                    src={item.imageUrl}
+                    alt={item.title}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
                     onError={(e) => {
-                       e.currentTarget.style.display = 'none';
+                      e.currentTarget.style.display = 'none';
                     }}
                   />
                 ) : (

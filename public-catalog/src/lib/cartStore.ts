@@ -108,6 +108,19 @@ export const addOrder = (key: string, order: OrderRecord) => {
   global.orderStore[key] = [order, ...current].slice(0, 200);
 };
 
+export const getAllOrders = (): Array<{ key: string; order: OrderRecord }> => {
+  const stores = global.orderStore || {};
+  const out: Array<{ key: string; order: OrderRecord }> = [];
+  for (const key of Object.keys(stores)) {
+    const orders = stores[key] || [];
+    for (const order of orders) {
+      if (order && typeof order.id === 'string') out.push({ key, order });
+    }
+  }
+  out.sort((a, b) => String(b.order.createdAt || '').localeCompare(String(a.order.createdAt || '')));
+  return out;
+};
+
 export const findOrderByStripeSessionId = (stripeSessionId: string): { key: string; order: OrderRecord } | null => {
   const sid = String(stripeSessionId || '').trim();
   if (!sid) return null;

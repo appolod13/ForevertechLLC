@@ -11,6 +11,20 @@ interface SearchResult {
 }
 
 export default function SearchTestPage() {
+  if (process.env.NODE_ENV === 'production') {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white">
+        <Header />
+        <main className="max-w-3xl mx-auto p-8">
+          <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700">
+            <h1 className="text-2xl font-bold mb-2">Search Test</h1>
+            <p className="text-gray-400">This page is disabled in production.</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   const [query, setQuery] = useState('FutureTech innovations 2026');
   const [exact, setExact] = useState(true);
   const [edu, setEdu] = useState(true);
@@ -124,4 +138,3 @@ export default function SearchTestPage() {
     </div>
   );
 }
-

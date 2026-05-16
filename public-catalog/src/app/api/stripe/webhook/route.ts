@@ -3,10 +3,12 @@ import Stripe from 'stripe';
 import { addOrder, clearCart, getCart, type OrderLineItem, type OrderRecord } from '@/lib/cartStore';
 import { getPrintifyBackTextConfig, renderBackAbstractPngBuffer, renderBackTextPngBuffer } from '@/lib/printifyBackText';
 import { requestIbmQuantumProof, type QuantumProof } from '@/lib/quantumVerified';
+import { getAiGeneratorsConfig } from '@/lib/aiGeneratorsConfig';
 import sharp from 'sharp';
 import QRCode from 'qrcode';
 import path from 'path';
 import { readFile } from 'fs/promises';
+import { createHash } from 'crypto';
 
 function getStripeClient() {
   const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -157,6 +159,65 @@ function buildBackSeedSalt(params: { sessionId: string; itemId: string; imageUrl
   return fnv1a32Hex(s);
 }
 
+function quantumSeedSalt(seed: string): string {
+  const s = String(seed || '').trim();
+  if (!s) return '';
+  return `ibm-${createHash('sha256').update(s).digest('hex').slice(0, 24)}`;
+}
+
+async function generateQuantumFrontImageUrl(params: { prompt: string; quantumSeed: string }): Promise<{
+  url: string;
+  meta: { seed_salt?: string; qf_quantum_seed_hash?: string; image_hash?: string; derived_prompt?: string };
+} | null> {
+  const prompt = (params.prompt || '').trim();
+  const quantumSeed = (params.quantumSeed || '').trim();
+  if (!prompt || !quantumSeed) return null;
+
+  const cfg = getAiGeneratorsConfig();
+  if (!cfg.quantum.enabled) return null;
+  const base = cfg.quantum.internalBaseUrl.trim().replace(/\/$/, '');
+  if (!base) return null;
+
+  const url = `${base}/v1/images/generations`;
+  const timeoutMs = Math.max(1, cfg.timeouts.quantumMs);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const seed_salt = quantumSeedSalt(quantumSeed);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt, width: 1024, height: 1024, steps: 30, quantum_mode: true, ipfs_upload: false, seed_salt }),
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    const json: unknown = await res.json().catch(() => null);
+    const r = isRecord(json) ? json : {};
+    if (!res.ok || r.success !== true) return null;
+    const imageUrlRaw = typeof r.imageUrl === 'string' ? r.imageUrl.trim() : '';
+    if (!imageUrlRaw) return null;
+    const metaRaw = isRecord(r.meta) ? (r.meta as Record<string, unknown>) : {};
+    const outMeta = {
+      seed_salt: typeof metaRaw.seed_salt === 'string' ? metaRaw.seed_salt : seed_salt,
+      qf_quantum_seed_hash: typeof metaRaw.qf_quantum_seed_hash === 'string' ? metaRaw.qf_quantum_seed_hash : undefined,
+      image_hash: typeof metaRaw.image_hash === 'string' ? metaRaw.image_hash : undefined,
+      derived_prompt: typeof metaRaw.derived_prompt === 'string' ? metaRaw.derived_prompt : undefined,
+    };
+
+    let finalUrl = imageUrlRaw;
+    if (!(finalUrl.startsWith('http://') || finalUrl.startsWith('https://'))) {
+      if (finalUrl.startsWith('/')) finalUrl = `${base}${finalUrl}`;
+      else finalUrl = `${base}/${finalUrl}`;
+    }
+
+    return { url: finalUrl, meta: outMeta };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function titleCaseWord(word: string): string {
   const w = (word || '').trim();
   if (!w) return '';
@@ -271,7 +332,7 @@ function getBackMode(): 'collage' | 'qr_stamp' {
 function getBackStyle(): 'words' | 'abstract' {
   const raw = (process.env.PRINTIFY_BACK_STYLE || '').trim().toLowerCase();
   if (raw === 'abstract') return 'abstract';
-  return 'words';
+  return 'abstract';
 }
 
 function buildBackQrTargetUrl(origin: string, bannerText: string, qrUrl?: string) {
@@ -436,6 +497,16 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
     .png()
     .toBuffer();
 
+  const labelText = 'Quantum Verified';
+  const labelFontSize = Math.max(18, Math.round(stampSide * 0.075));
+  const labelCenterX = 8 + stampSide / 2;
+  const labelY = 8 + stampSide - Math.max(14, Math.round(border * 0.60));
+  const approxHalfW = (labelFontSize * 0.62 * labelText.length) / 2;
+  const badgeR = Math.max(10, Math.round(labelFontSize * 0.42));
+  const badgeCx = Math.min(8 + stampSide - border - badgeR, labelCenterX + approxHalfW + badgeR + Math.round(labelFontSize * 0.18));
+  const badgeCy = labelY - Math.round(labelFontSize * 0.55);
+  const labelSvg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${stampSide + 24}" height="${stampSide + 24}">\n  <text x="${labelCenterX}" y="${labelY}" text-anchor="middle" font-family="Impact, Arial Black, Arial, sans-serif" font-weight="900" font-size="${labelFontSize}" fill="rgba(255,255,255,0.92)" stroke="rgba(0,0,0,0.45)" stroke-width="${Math.max(2, Math.round(labelFontSize * 0.06))}">Quantum Verified</text>\n  <circle cx="${badgeCx}" cy="${badgeCy}" r="${badgeR}" fill="rgba(255,255,255,0.92)" stroke="rgba(0,0,0,0.75)" stroke-width="${Math.max(2, Math.round(badgeR * 0.18))}" />\n  <text x="${badgeCx}" y="${badgeCy + Math.round(badgeR * 0.12)}" text-anchor="middle" font-family="Impact, Arial Black, Arial, sans-serif" font-weight="900" font-size="${Math.max(10, Math.round(badgeR * 0.92))}" fill="rgba(0,0,0,0.92)">QF</text>\n</svg>`;
+
   const out = await sharp({
     create: { width: stampSide + 24, height: stampSide + 24, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
   })
@@ -444,6 +515,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
       { input: frame, left: 8, top: 8 },
       ...(logoFull ? [{ input: logoFull, left: 8 + qrLeft, top: 8 + qrTop }] : []),
       { input: qrModulesOnly, left: 8 + qrLeft, top: 8 + qrTop },
+      { input: Buffer.from(labelSvg), left: 0, top: 0 },
     ])
     .png()
     .toBuffer();
@@ -878,6 +950,9 @@ export async function POST(request: Request) {
     getString(session.metadata?.origin) ||
     (process.env.NEXT_PUBLIC_SITE_URL || '') ||
     (process.env.NODE_ENV !== 'production' ? 'http://localhost:3001' : '');
+  if (!origin) {
+    return NextResponse.json({ error: 'Missing site origin. Set NEXT_PUBLIC_SITE_URL.' }, { status: 500 });
+  }
   const shopId = process.env.PRINTIFY_SHOP_ID;
 
   if (!shopId) {
@@ -960,7 +1035,28 @@ export async function POST(request: Request) {
           ? itemMeta.ipfs_url.replace('ipfs://', 'https://ipfs.io/ipfs/')
           : '';
 
+    const prompt = promptFromCartItem(item, metadata);
+    const quantumFront =
+      quantumVerified && quantumProof?.seed && prompt
+        ? await generateQuantumFrontImageUrl({ prompt, quantumSeed: quantumProof.seed })
+        : null;
+
+    if (quantumFront) {
+      if (!item.metadata || !isRecord(item.metadata)) item.metadata = {};
+      const m = item.metadata as Record<string, unknown>;
+      m.quantum_front = {
+        seed_salt: quantumFront.meta.seed_salt,
+        qf_quantum_seed_hash: quantumFront.meta.qf_quantum_seed_hash,
+        image_hash: quantumFront.meta.image_hash,
+        derived_prompt: quantumFront.meta.derived_prompt,
+        ibm_job_id: quantumProof?.jobId || '',
+        ibm_backend: quantumProof?.backend || '',
+      };
+      item.imageUrl = quantumFront.url;
+    }
+
     const rawImageUrl =
+      (quantumFront ? quantumFront.url : '') ||
       ipfsGateway ||
       (typeof item.imageUrl === 'string' ? item.imageUrl : typeof item.image === 'string' ? item.image : '');
 

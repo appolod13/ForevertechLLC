@@ -2,57 +2,90 @@ import { Header } from '@/components/Header';
 import { CatalogGrid } from '@/components/CatalogGrid';
 import { TwitterFeed } from '@/components/TwitterFeed';
 import { LatestAIImage } from '@/components/LatestAIImage';
-import Image from 'next/image';
 import Link from 'next/link';
+import fs from 'fs';
+import path from 'path';
 
-const API_BASE = process.env.CATALOG_API_BASE || process.env.NEXT_PUBLIC_CART_API_BASE || 'http://localhost:3001';
-
-type Post = {
+type CatalogPost = {
   id: string;
   content: string;
-  mediaUrl?: string | null;
-  createdAt: string;
-  metadata?: {
-    platformMediaUrls?: Record<string, string>;
-  };
-  platform: string;
-  userId: string;
+  ipfsHash?: string;
+  timestamp: string;
+  metadata?: { title?: string; mediaUrl?: string; prompt?: string; [key: string]: unknown };
 };
 
-function resolvePostMediaUrl(post: Post | undefined): string | null {
+function resolvePostMediaUrl(post: CatalogPost | undefined): string | null {
   if (!post) return null;
   const raw =
-    post.mediaUrl ||
-    (post.metadata?.platformMediaUrls ? Object.values(post.metadata.platformMediaUrls)[0] : null) ||
-    null;
+    (post.metadata && typeof post.metadata.mediaUrl === 'string' ? post.metadata.mediaUrl : null) || null;
   if (!raw) return null;
   if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
   if (raw.startsWith('Qm') || raw.startsWith('bafy')) return `https://ipfs.io/ipfs/${raw}`;
-  return `${API_BASE}${raw.startsWith('/') ? '' : '/'}${raw}`;
+  return `${raw.startsWith('/') ? '' : '/'}${raw}`;
 }
 
-async function getPosts(): Promise<Post[]> {
+async function getInitialPosts(): Promise<CatalogPost[]> {
   try {
-    const res = await fetch(`${API_BASE}/api/catalog/posts`, { 
-      cache: 'no-store' 
+    const imagesDir = path.join(process.cwd(), '..', 'quantum-image-gen', 'images');
+    const files = fs.existsSync(imagesDir) ? fs.readdirSync(imagesDir) : [];
+    const imageFiles = files.filter((f) => f.endsWith('.png')).sort((a, b) => b.localeCompare(a));
+
+    const posts = imageFiles.map((file, index) => {
+      const parts = file.split('_');
+      const timestampStr = parts[0];
+
+      let date = new Date();
+      if (timestampStr && timestampStr.length >= 15) {
+        const y = timestampStr.substring(0, 4);
+        const m = timestampStr.substring(4, 6);
+        const d = timestampStr.substring(6, 8);
+        const h = timestampStr.substring(9, 11);
+        const min = timestampStr.substring(11, 13);
+        const s = timestampStr.substring(13, 15);
+        date = new Date(`${y}-${m}-${d}T${h}:${min}:${s}Z`);
+      }
+
+      const ipfsHash = index < 3 ? `QmSeeded${String(index + 1).padStart(2, '0')}` : undefined;
+
+      return {
+        id: file,
+        content: `Quantum Generated Asset - ${parts.length > 2 ? parts[2].replace('.png', '') : 'Image'}`,
+        timestamp: date.toISOString(),
+        ipfsHash,
+        metadata: {
+          title: `Quantum Asset ${file.substring(0, 8)}`,
+          mediaUrl: `/api/images/${encodeURIComponent(file)}`,
+          priceUsd: 49.99,
+          prompt: 'seeded',
+        },
+      } satisfies CatalogPost;
     });
-    if (!res.ok) {
-      throw new Error('Failed to fetch posts');
+
+    if (posts.length === 0 && process.env.NODE_ENV !== 'production') {
+      return [
+        {
+          id: 'seed-post-1',
+          content: 'Seeded Quantum Generated Asset',
+          timestamp: new Date().toISOString(),
+          ipfsHash: 'QmSeeded01',
+          metadata: {
+            title: 'Quantum Asset Seed',
+            mediaUrl: '/placeholder-future-city.svg',
+            priceUsd: 49.99,
+            prompt: 'seeded',
+          },
+        },
+      ];
     }
-    const contentType = res.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      throw new Error('Invalid response format');
-    }
-    const data = await res.json() as { posts?: Post[] };
-    return data.posts || [];
-  } catch (error: unknown) {
-    console.error('Error fetching initial posts:', error);
+
+    return posts;
+  } catch {
     return [];
   }
 }
 
 export default async function Home() {
-  const initialPosts = await getPosts();
+  const initialPosts = await getInitialPosts();
   const heroPost = initialPosts[0];
   const heroImageUrl = resolvePostMediaUrl(heroPost);
   const heroText = (heroPost?.content || '').trim();
@@ -67,13 +100,11 @@ export default async function Home() {
             {/* Main Hero - Latest Drop */}
             <div className="relative col-span-1 md:col-span-2 aspect-video w-full overflow-hidden rounded-2xl border border-zinc-800 shadow-2xl shadow-primary/10 group">
               {heroImageUrl ? (
-                <Image
+                <img
                   src={heroImageUrl}
                   alt="Latest community drop"
-                  fill
-                  priority
-                  className="object-cover transition-transform duration-700 group-hover:scale-105"
-                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 66vw, 800px"
+                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  loading="eager"
                 />
               ) : (
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.20),transparent_55%),radial-gradient(ellipse_at_bottom,rgba(16,185,129,0.12),transparent_55%)]" />

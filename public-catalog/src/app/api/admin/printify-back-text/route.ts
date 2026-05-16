@@ -18,6 +18,22 @@ function isSameOrigin(req: NextRequest): boolean {
   return origin === `https://${host}` || origin === `http://${host}`;
 }
 
+function getRequestOrigin(req: NextRequest): string {
+  const env = (process.env.NEXT_PUBLIC_SITE_URL || "").trim();
+  if (env) return env.replace(/\/$/, "");
+
+  const hostHeader = (req.headers.get("x-forwarded-host") || req.headers.get("host") || "").trim();
+  const host = hostHeader.split(",")[0]?.trim() || "";
+  const protoHeader = (req.headers.get("x-forwarded-proto") || "").trim();
+  const proto = protoHeader.split(",")[0]?.trim() || "";
+  if (host) return `${proto || "https"}://${host}`;
+
+  const origin = (req.headers.get("origin") || "").trim();
+  if (origin) return origin.replace(/\/$/, "");
+
+  return process.env.NODE_ENV !== "production" ? "http://localhost:3001" : "";
+}
+
 function sanitizeBannerText(text: string, maxChars = 96): string {
   const t = (text || "")
     .trim()
@@ -47,7 +63,7 @@ function getBackStyle(input: unknown): "words" | "abstract" {
   if (raw === "abstract") return "abstract";
   const env = (process.env.PRINTIFY_BACK_STYLE || "").trim().toLowerCase();
   if (env === "abstract") return "abstract";
-  return "words";
+  return "abstract";
 }
 
 function clampByte(n: number) {
@@ -213,6 +229,16 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
     .png()
     .toBuffer();
 
+  const labelText = "Quantum Verified";
+  const labelFontSize = Math.max(18, Math.round(stampSide * 0.075));
+  const labelCenterX = 8 + stampSide / 2;
+  const labelY = 8 + stampSide - Math.max(14, Math.round(border * 0.60));
+  const approxHalfW = (labelFontSize * 0.62 * labelText.length) / 2;
+  const badgeR = Math.max(10, Math.round(labelFontSize * 0.42));
+  const badgeCx = Math.min(8 + stampSide - border - badgeR, labelCenterX + approxHalfW + badgeR + Math.round(labelFontSize * 0.18));
+  const badgeCy = labelY - Math.round(labelFontSize * 0.55);
+  const labelSvg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${stampSide + 24}" height="${stampSide + 24}">\n  <text x="${labelCenterX}" y="${labelY}" text-anchor="middle" font-family="Impact, Arial Black, Arial, sans-serif" font-weight="900" font-size="${labelFontSize}" fill="rgba(255,255,255,0.92)" stroke="rgba(0,0,0,0.45)" stroke-width="${Math.max(2, Math.round(labelFontSize * 0.06))}">Quantum Verified</text>\n  <circle cx="${badgeCx}" cy="${badgeCy}" r="${badgeR}" fill="rgba(255,255,255,0.92)" stroke="rgba(0,0,0,0.75)" stroke-width="${Math.max(2, Math.round(badgeR * 0.18))}" />\n  <text x="${badgeCx}" y="${badgeCy + Math.round(badgeR * 0.12)}" text-anchor="middle" font-family="Impact, Arial Black, Arial, sans-serif" font-weight="900" font-size="${Math.max(10, Math.round(badgeR * 0.92))}" fill="rgba(0,0,0,0.92)">QF</text>\n</svg>`;
+
   const out = await sharp({
     create: { width: stampSide + 24, height: stampSide + 24, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
   })
@@ -221,6 +247,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
       { input: frame, left: 8, top: 8 },
       ...(logoFull ? [{ input: logoFull, left: 8 + qrLeft, top: 8 + qrTop }] : []),
       { input: qrModulesOnly, left: 8 + qrLeft, top: 8 + qrTop },
+      { input: Buffer.from(labelSvg), left: 0, top: 0 },
     ])
     .png()
     .toBuffer();
@@ -425,14 +452,22 @@ async function fetchAsBase64(url: string) {
   return Buffer.from(ab).toString("base64");
 }
 
-async function generateQuantumImageUrl(params: { prompt: string; width: number; height: number }) {
+async function generateQuantumImageUrl(params: { prompt: string; width: number; height: number; seed_salt?: string }) {
   const cfg = getAiGeneratorsConfig();
   const base = (cfg.quantum.internalBaseUrl || "http://127.0.0.1:5328").replace(/\/$/, "");
   const url = `${base}/v1/images/generations`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ prompt: params.prompt, width: params.width, height: params.height, steps: 30, quantum_mode: true, ipfs_upload: false }),
+    body: JSON.stringify({
+      prompt: params.prompt,
+      width: params.width,
+      height: params.height,
+      steps: 30,
+      quantum_mode: true,
+      ipfs_upload: false,
+      seed_salt: params.seed_salt,
+    }),
   });
   const json: unknown = await res.json().catch(() => null);
   if (!res.ok || !isRecord(json) || json.success !== true) {
@@ -441,7 +476,8 @@ async function generateQuantumImageUrl(params: { prompt: string; width: number; 
   }
   const imageUrl = typeof json.imageUrl === "string" ? json.imageUrl : "";
   if (!imageUrl) throw new Error("quantum_generate_missing_imageUrl");
-  return imageUrl.startsWith("/") ? `${base}${imageUrl}` : imageUrl;
+  const meta = isRecord(json.meta) ? (json.meta as Record<string, unknown>) : {};
+  return { url: imageUrl.startsWith("/") ? `${base}${imageUrl}` : imageUrl, meta };
 }
 
 export async function GET(req: NextRequest) {
@@ -489,15 +525,16 @@ export async function POST(req: NextRequest) {
     try {
       const cfg = getPrintifyBackTextConfig();
       const originRaw = typeof b.origin === "string" && b.origin.trim() ? b.origin.trim() : "";
-      const origin = originRaw || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3001";
+      const origin = (originRaw || getRequestOrigin(req)).trim().replace(/\/$/, "");
+      if (!origin) throw new Error("Missing site origin. Set NEXT_PUBLIC_SITE_URL.");
       const textRaw = typeof b.text === "string" ? b.text : "CUSTOM FUTURE TECH";
       const clean = sanitizeBannerText(textRaw, cfg.render.maxChars) || "CUSTOM";
       const backStyle = getBackStyle(b.backStyle);
       const qrUrl = normalizeCustomerQrUrl(b.qrUrl);
       const saltRaw = typeof b.seedSalt === "string" ? b.seedSalt.trim() : "";
       const seedSalt =
-        saltRaw.replace(/[^a-z0-9]/gi, "").slice(0, 48) ||
-        (backStyle === "abstract" ? `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`.replace(/[^a-z0-9]/gi, "").slice(0, 48) : "");
+        saltRaw.replace(/[^a-z0-9-]/gi, "").slice(0, 48) ||
+        (backStyle === "abstract" ? `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`.replace(/[^a-z0-9-]/gi, "").slice(0, 48) : "");
       const base64 = await renderBackQrStampBase64({ origin, text: clean, backStyle, seedSalt: seedSalt || undefined, qrUrl: qrUrl || undefined });
       const fileSafe = clean.replace(/\s+/g, "-").replace(/[^A-Za-z0-9-]/g, "").slice(0, 48) || "CUSTOM";
       const tag = Date.now().toString(36);
@@ -520,7 +557,8 @@ export async function POST(req: NextRequest) {
       if (!shopId) throw new Error("Missing PRINTIFY_SHOP_ID");
 
       const originRaw = typeof b.origin === "string" && b.origin.trim() ? b.origin.trim() : "";
-      const origin = originRaw || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3001";
+      const origin = (originRaw || getRequestOrigin(req)).trim().replace(/\/$/, "");
+      if (!origin) throw new Error("Missing site origin. Set NEXT_PUBLIC_SITE_URL.");
 
       const cfg = getPrintifyBackTextConfig();
       const textRaw = typeof b.text === "string" ? b.text : "CUSTOM FUTURE TECH";
@@ -528,11 +566,12 @@ export async function POST(req: NextRequest) {
       const backStyle = getBackStyle(b.backStyle);
       const qrUrl = normalizeCustomerQrUrl(b.qrUrl);
 
+      const seedSalt = (typeof b.seedSalt === "string" ? b.seedSalt.trim().replace(/[^a-z0-9-]/gi, "").slice(0, 128) : "") || Date.now().toString(36);
       const promptRaw = typeof b.prompt === "string" && b.prompt.trim() ? b.prompt.trim() : "Cinematic FUTURE CITY megacity skyline at golden hour, zeta pattern, ultra-detailed, photoreal lighting";
-      const quantumImageUrl = await generateQuantumImageUrl({ prompt: promptRaw, width: 1024, height: 1024 });
+      const quantumFront = await generateQuantumImageUrl({ prompt: promptRaw, width: 1024, height: 1024, seed_salt: seedSalt });
+      const quantumImageUrl = quantumFront.url;
       const frontBase64 = await fetchAsBase64(quantumImageUrl);
 
-      const seedSalt = (typeof b.seedSalt === "string" ? b.seedSalt.trim().replace(/[^a-z0-9]/gi, "").slice(0, 48) : "") || Date.now().toString(36);
       const backBase64 = await renderBackQrStampBase64({ origin, text: backText, backStyle, seedSalt, qrUrl: qrUrl || undefined });
 
       const nowTag = Date.now().toString(36);
@@ -593,9 +632,11 @@ export async function POST(req: NextRequest) {
             frontUploadUrl: frontUploaded.previewUrl,
             backUploadUrl: backUploaded.previewUrl,
             quantumImageUrl,
+            quantumMeta: quantumFront.meta,
             backText,
             prompt: promptRaw,
             backStyle,
+            seedSalt,
             positions: { front: frontPos, back: backPos },
           },
         },

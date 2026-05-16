@@ -7,6 +7,16 @@ export async function GET(
 ) {
   const resolvedParams = await params;
   const platform = resolvedParams.platform;
+
+  if (platform === 'twitter') {
+    const url = new URL('/api/auth/twitter/login', request.url);
+    return NextResponse.redirect(url);
+  }
+
+  if (platform === 'instagram') {
+    const url = new URL('/api/auth/instagram/login', request.url);
+    return NextResponse.redirect(url);
+  }
   
   // NOTE: This is a placeholder Mock OAuth flow for testing the UI.
   // To implement real OAuth for Instagram/TikTok/YouTube/Telegram, 

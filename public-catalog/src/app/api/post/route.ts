@@ -1,6 +1,117 @@
 import { NextResponse } from 'next/server';
 import { TwitterApi } from 'twitter-api-v2';
 import { cookies } from 'next/headers';
+import crypto from 'crypto';
+import fs from 'fs/promises';
+import path from 'path';
+
+type PostMetadata = {
+  mediaUrl?: string;
+  platformMediaUrls?: Record<string, string | undefined>;
+  [key: string]: unknown;
+};
+
+function isLocalHostname(hostname: string) {
+  return hostname === 'localhost' || hostname === '127.0.0.1';
+}
+
+function resolvePublicUrl(input: string, request: Request) {
+  if (!input) return '';
+  if (input.startsWith('data:')) return '';
+  if (input.startsWith('/')) {
+    const hostHeader = (request.headers.get('x-forwarded-host') || request.headers.get('host') || '').trim();
+    const host = hostHeader.split(',')[0]?.trim() || '';
+    const hostname = host.split(':')[0]?.trim().toLowerCase() || '';
+    if (!host || isLocalHostname(hostname)) return '';
+
+    const protoHeader = (request.headers.get('x-forwarded-proto') || 'https').trim();
+    const proto = protoHeader.split(',')[0]?.trim().toLowerCase() || 'https';
+    if (proto !== 'https') return '';
+
+    return `https://${host}${input}`;
+  }
+  try {
+    const u = new URL(input);
+    if (u.protocol !== 'https:') return '';
+    if (isLocalHostname(u.hostname.toLowerCase())) return '';
+    return u.toString();
+  } catch {
+    return '';
+  }
+}
+
+async function persistDataUrlToQuantumImagesDir(dataUrl: string) {
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) throw new Error('Invalid base64 image format');
+  const mime = (match[1] || '').trim().toLowerCase();
+  const base64 = match[2] || '';
+  const ext =
+    mime === 'image/png' ? 'png' :
+    (mime === 'image/jpeg' || mime === 'image/jpg') ? 'jpg' :
+    mime === 'image/webp' ? 'webp' :
+    '';
+  if (!ext) throw new Error('Unsupported image type for Instagram');
+  const buf = Buffer.from(base64, 'base64');
+
+  const dir = path.join(process.cwd(), '..', 'quantum-image-gen', 'images');
+  const filename = `ig_${Date.now()}_${crypto.randomBytes(6).toString('hex')}.${ext}`;
+  await fs.writeFile(path.join(dir, filename), buf);
+  return filename;
+}
+
+async function igCreateMediaContainer(params: {
+  igUserId: string;
+  accessToken: string;
+  body: Record<string, string>;
+}) {
+  const url = new URL(`https://graph.facebook.com/v19.0/${encodeURIComponent(params.igUserId)}/media`);
+  url.searchParams.set('access_token', params.accessToken);
+  const res = await fetch(url.toString(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params.body),
+    cache: 'no-store',
+  });
+  const json = (await res.json().catch(() => null)) as { id?: string; error?: { message?: string } } | null;
+  if (!res.ok || !json?.id) {
+    throw new Error(json?.error?.message || 'Instagram media container creation failed');
+  }
+  return json.id;
+}
+
+async function igPublishContainer(params: { igUserId: string; accessToken: string; creationId: string }) {
+  const url = new URL(`https://graph.facebook.com/v19.0/${encodeURIComponent(params.igUserId)}/media_publish`);
+  url.searchParams.set('access_token', params.accessToken);
+  const res = await fetch(url.toString(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ creation_id: params.creationId }),
+    cache: 'no-store',
+  });
+  const json = (await res.json().catch(() => null)) as { id?: string; error?: { message?: string } } | null;
+  if (!res.ok || !json?.id) {
+    throw new Error(json?.error?.message || 'Instagram media publish failed');
+  }
+  return json.id;
+}
+
+async function igWaitForContainerReady(params: { creationId: string; accessToken: string }) {
+  for (let i = 0; i < 15; i++) {
+    const res = await fetch(
+      `https://graph.facebook.com/v19.0/${encodeURIComponent(params.creationId)}?fields=status_code&access_token=${encodeURIComponent(params.accessToken)}`,
+      { cache: 'no-store' }
+    );
+    const json = (await res.json().catch(() => null)) as { status_code?: string; error?: { message?: string } } | null;
+    if (!res.ok) {
+      throw new Error(json?.error?.message || 'Instagram container status check failed');
+    }
+    const status = (json?.status_code || '').toUpperCase();
+    if (status === 'FINISHED') return;
+    if (status === 'ERROR') throw new Error('Instagram container failed processing');
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  throw new Error('Instagram container processing timed out');
+}
 
 export async function POST(request: Request) {
   try {
@@ -11,7 +122,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Missing content or platforms' }, { status: 400 });
     }
 
-    const { content, platforms, metadata } = payload as { content: string, platforms: string[], metadata?: { mediaUrl?: string, [key: string]: unknown } };
+    const { content, platforms, metadata } = payload as { content: string, platforms: string[], metadata?: PostMetadata };
     const mediaUrl = metadata?.mediaUrl;
 
     const results: Record<string, unknown> = {};
@@ -120,9 +231,88 @@ export async function POST(request: Request) {
       }
     }
 
-    // Mock other platforms (Instagram, Telegram, TikTok, YouTube)
+    if (platforms.includes('instagram')) {
+      const cookieStore = await cookies();
+      const accessToken = cookieStore.get('instagram_user_token')?.value;
+      const igUserId = cookieStore.get('instagram_user_id')?.value;
+
+      if (!accessToken || !igUserId) {
+        hasErrors = true;
+        errorMessage = 'Instagram is not connected. Please sign in to Instagram first.';
+        results.instagram = { success: false, error: errorMessage };
+      } else {
+        try {
+          let desiredUrl = metadata?.platformMediaUrls?.instagram || mediaUrl || '';
+          if (desiredUrl.startsWith('data:')) {
+            const hostHeader = (request.headers.get('x-forwarded-host') || request.headers.get('host') || '').trim();
+            const host = hostHeader.split(',')[0]?.trim() || '';
+            const hostname = host.split(':')[0]?.trim().toLowerCase() || '';
+            const protoHeader = (request.headers.get('x-forwarded-proto') || 'https').trim();
+            const proto = protoHeader.split(',')[0]?.trim().toLowerCase() || 'https';
+            if (!host || isLocalHostname(hostname) || proto !== 'https') {
+              throw new Error('Instagram requires posting from a public https domain (not localhost).');
+            }
+            const filename = await persistDataUrlToQuantumImagesDir(desiredUrl);
+            desiredUrl = `/api/images/${filename}`;
+          }
+          const publicUrl = resolvePublicUrl(desiredUrl, request);
+          if (!publicUrl) {
+            throw new Error('Instagram requires a public https image/video URL (not data: or localhost).');
+          }
+
+          const caption = content.replace(/\(Attached: Generated Image\):.*/g, '').trim();
+          const isVideo = /\.(mp4|mov|m4v)$/i.test(publicUrl);
+
+          const instagramResult: Record<string, unknown> = {};
+
+          const feedCreationId = await igCreateMediaContainer({
+            igUserId,
+            accessToken,
+            body: isVideo
+              ? { media_type: 'VIDEO', video_url: publicUrl, caption }
+              : { image_url: publicUrl, caption },
+          });
+          if (isVideo) await igWaitForContainerReady({ creationId: feedCreationId, accessToken });
+          const feedId = await igPublishContainer({ igUserId, accessToken, creationId: feedCreationId });
+          instagramResult.feed = { success: true, id: feedId };
+
+          const storyCreationId = await igCreateMediaContainer({
+            igUserId,
+            accessToken,
+            body: isVideo
+              ? { media_type: 'STORIES', video_url: publicUrl }
+              : { media_type: 'STORIES', image_url: publicUrl },
+          });
+          if (isVideo) await igWaitForContainerReady({ creationId: storyCreationId, accessToken });
+          const storyId = await igPublishContainer({ igUserId, accessToken, creationId: storyCreationId });
+          instagramResult.stories = { success: true, id: storyId };
+
+          if (isVideo) {
+            const reelsCreationId = await igCreateMediaContainer({
+              igUserId,
+              accessToken,
+              body: { media_type: 'REELS', video_url: publicUrl, caption },
+            });
+            await igWaitForContainerReady({ creationId: reelsCreationId, accessToken });
+            const reelsId = await igPublishContainer({ igUserId, accessToken, creationId: reelsCreationId });
+            instagramResult.reels = { success: true, id: reelsId };
+          } else {
+            instagramResult.reels = { success: false, error: 'Reels requires a video URL (.mp4/.mov). Provide a video to publish reels.' };
+          }
+
+          results.instagram = { success: true, ...instagramResult };
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : 'Instagram publish failed';
+          hasErrors = true;
+          errorMessage = msg;
+          results.instagram = { success: false, error: msg };
+        }
+      }
+    }
+
+    // Mock other platforms (Telegram, TikTok, YouTube)
     for (const p of platforms) {
-      if (p !== 'twitter') {
+      if (p !== 'twitter' && p !== 'instagram') {
         results[p] = { success: true, mock: true };
       }
     }

@@ -13,7 +13,7 @@ type Platform = "linkedin" | "instagram" | "twitter";
 type Provider = "mock" | "dalle" | "stablediffusion" | "midjourney";
 
 type ImageRequest = { prompt: string; platform: Platform; provider: Provider };
-type ImageRequestV2 = { prompt: string; negative_prompt?: string; width?: number; height?: number; provider?: Provider; quantum_mode?: boolean; ipfs_upload?: boolean };
+type ImageRequestV2 = { prompt: string; negative_prompt?: string; width?: number; height?: number; provider?: Provider; quantum_mode?: boolean; ipfs_upload?: boolean; seed_salt?: string };
 
 type AIResult =
   | { success: true; image_url: string; meta: Record<string, unknown> }
@@ -30,7 +30,7 @@ const cache = new Map<string, Cached>();
 const CACHE_TTL_MS = 10 * 60_000;
 const CACHE_MAX = 200;
 
-function cacheKeyFor(v: { prompt: string; negative_prompt?: string; width: number; height: number; provider?: Provider; quantum_mode: boolean }): string {
+function cacheKeyFor(v: { prompt: string; negative_prompt?: string; width: number; height: number; provider?: Provider; quantum_mode: boolean; seed_salt?: string }): string {
   const payload = JSON.stringify(v);
   return createHash("sha256").update(payload).digest("hex");
 }
@@ -111,8 +111,10 @@ function validateV2(body: unknown): { valid: boolean; errors: string[]; parsed?:
   const provider = typeof b.provider === "string" && providers.includes(b.provider as Provider) ? (b.provider as Provider) : undefined;
   const quantum_mode = Boolean(b.quantum_mode);
   const ipfs_upload = Boolean(b.ipfs_upload);
+  const seed_salt_raw = typeof b.seed_salt === "string" ? b.seed_salt.trim() : "";
+  const seed_salt = seed_salt_raw ? seed_salt_raw.replace(/\s+/g, " ").slice(0, 128) : undefined;
   if (errors.length) return { valid: false, errors };
-  return { valid: true, errors: [], parsed: { prompt, negative_prompt, width: w, height: h, provider, quantum_mode, ipfs_upload } };
+  return { valid: true, errors: [], parsed: { prompt, negative_prompt, width: w, height: h, provider, quantum_mode, ipfs_upload, seed_salt } };
 }
 
 async function tryAIGenerate(
@@ -121,6 +123,7 @@ async function tryAIGenerate(
   height: number,
   quantum_mode: boolean,
   ipfs_upload: boolean,
+  seed_salt: string | undefined,
   timeoutMs: number,
 ): Promise<AIResult> {
   const cfg = getAiGeneratorsConfig();
@@ -132,7 +135,7 @@ async function tryAIGenerate(
     const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ prompt, width, height, steps: 30, quantum_mode, ipfs_upload }),
+      body: JSON.stringify({ prompt, width, height, steps: 30, quantum_mode, ipfs_upload, seed_salt }),
       cache: "no-store",
       signal: controller.signal,
     });
@@ -263,7 +266,7 @@ export async function POST(req: NextRequest) {
     const quantumAllowed = requestedQuantum && cfg.quantum.enabled;
     const timeoutMs = requestedQuantum ? quantumTimeoutMs : stdTimeoutMs;
 
-    const cacheKey = cacheKeyFor({ prompt: parsed.prompt, negative_prompt: parsed.negative_prompt, width, height, provider: parsed.provider, quantum_mode: Boolean(parsed.quantum_mode) });
+    const cacheKey = cacheKeyFor({ prompt: parsed.prompt, negative_prompt: parsed.negative_prompt, width, height, provider: parsed.provider, quantum_mode: Boolean(parsed.quantum_mode), seed_salt: parsed.seed_salt });
     // const cached = getCache(cacheKey);
     // if (cached) {
     //   if (parsed.ipfs_upload && typeof cached.meta.ipfs_url !== "string") {
@@ -282,6 +285,7 @@ export async function POST(req: NextRequest) {
         height,
         true,
         parsed.ipfs_upload || false,
+        parsed.seed_salt,
         timeoutMs,
       );
       
@@ -303,6 +307,7 @@ export async function POST(req: NextRequest) {
         height,
         false,
         false,
+        parsed.seed_salt,
         timeoutMs,
       );
       if (degraded.success) {
@@ -340,7 +345,7 @@ export async function POST(req: NextRequest) {
     }
 
     const aiService = cfg.quantum.enabled
-      ? await tryAIGenerate(parsed.prompt, width, height, false, parsed.ipfs_upload || false, timeoutMs)
+      ? await tryAIGenerate(parsed.prompt, width, height, false, parsed.ipfs_upload || false, parsed.seed_salt, timeoutMs)
       : ({ success: false, error: "disabled" } as AIResult);
     
     if (aiService.success) {

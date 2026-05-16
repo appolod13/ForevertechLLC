@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logInfo, logError } from "@/lib/api/logger";
+import { requireAdmin } from "@/lib/adminAuth";
 
 export async function POST(req: NextRequest) {
+  const auth = requireAdmin(req);
+  if (!auth.ok) return NextResponse.json({ success: false, error: "unauthorized" }, { status: 401 });
+
   try {
     logInfo("build.pipeline.triggered", { timestamp: Date.now() });
 

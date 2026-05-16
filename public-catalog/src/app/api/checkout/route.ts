@@ -42,6 +42,22 @@ function normalizeCustomerQrUrl(input: unknown): string {
   return href.length > 350 ? href.slice(0, 350) : href;
 }
 
+function getRequestOrigin(request: Request): string {
+  const env = (process.env.NEXT_PUBLIC_SITE_URL || '').trim();
+  if (env) return env.replace(/\/$/, '');
+
+  const hostHeader = (request.headers.get('x-forwarded-host') || request.headers.get('host') || '').trim();
+  const host = hostHeader.split(',')[0]?.trim() || '';
+  const protoHeader = (request.headers.get('x-forwarded-proto') || '').trim();
+  const proto = protoHeader.split(',')[0]?.trim() || '';
+  if (host) return `${proto || 'https'}://${host}`;
+
+  const origin = (request.headers.get('origin') || '').trim();
+  if (origin) return origin.replace(/\/$/, '');
+
+  return process.env.NODE_ENV !== 'production' ? 'http://localhost:3001' : '';
+}
+
 function resolveUnitAmountCents(item: unknown): number | null {
   const rec = isRecord(item) ? item : {};
   const meta = isRecord(rec.metadata) ? (rec.metadata as Record<string, unknown>) : {};
@@ -152,7 +168,10 @@ export async function POST(request: Request) {
       });
     }
 
-    const origin = request.headers.get('origin') || 'http://localhost:3001';
+    const origin = getRequestOrigin(request);
+    if (!origin) {
+      return NextResponse.json({ error: 'Missing site origin. Set NEXT_PUBLIC_SITE_URL.' }, { status: 500 });
+    }
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],

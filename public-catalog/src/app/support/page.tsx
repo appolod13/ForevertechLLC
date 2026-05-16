@@ -23,7 +23,7 @@ export default function SupportPage() {
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const res = await fetch('http://localhost:3001/api/support/status');
+        const res = await fetch('/api/support/status');
         const contentType = res.headers.get('content-type');
         if (!res.ok) {
           throw new Error(`Server returned ${res.status} ${res.statusText}`);
@@ -45,7 +45,7 @@ export default function SupportPage() {
   const submitTicket = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('http://localhost:3001/api/support/ticket', {
+      const res = await fetch('/api/support/ticket', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(ticket)
@@ -69,7 +69,7 @@ export default function SupportPage() {
     e.preventDefault();
     setCallStatus('Connecting...');
     try {
-      const res = await fetch('http://localhost:3001/api/support/call', {
+      const res = await fetch('/api/support/call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(call)

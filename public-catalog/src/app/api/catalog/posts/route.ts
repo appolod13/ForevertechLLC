@@ -31,8 +31,7 @@ export async function GET() {
         date = new Date(`${y}-${m}-${d}T${h}:${min}:${s}Z`);
       }
       
-      // Some mock IPFS hash for the latest few to simulate "live the ipfs image generated"
-      const ipfsHash = index < 3 ? `Qm${Math.random().toString(36).substring(2, 15)}...` : undefined;
+      const ipfsHash = index < 3 ? `QmSeeded${String(index + 1).padStart(2, '0')}` : undefined;
 
       return {
         id: file,
@@ -47,6 +46,28 @@ export async function GET() {
         }
       };
     });
+
+    if (posts.length === 0 && process.env.NODE_ENV !== 'production') {
+      const now = new Date().toISOString();
+      return NextResponse.json({
+        success: true,
+        posts: [
+          {
+            id: 'seed-post-1',
+            content: 'Seeded Quantum Generated Asset',
+            author: 'Quantum Engine',
+            timestamp: now,
+            ipfsHash: 'QmSeeded01',
+            metadata: {
+              title: 'Quantum Asset Seed',
+              mediaUrl: '/placeholder-future-city.svg',
+              priceUsd: 49.99,
+              prompt: 'seeded',
+            },
+          },
+        ],
+      });
+    }
 
     return NextResponse.json({
       success: true,

@@ -290,11 +290,13 @@ type CanvasRenderingContext2DLike = {
   lineTo: (x: number, y: number) => void;
   arc: (x: number, y: number, r: number, s: number, e: number) => void;
   translate: (x: number, y: number) => void;
+  scale: (x: number, y: number) => void;
   rotate: (a: number) => void;
   stroke: () => void;
   fill: () => void;
   strokeText: (t: string, x: number, y: number) => void;
   fillText: (t: string, x: number, y: number) => void;
+  measureText?: (t: string) => { width: number };
   createPattern?: (img: unknown, repetition: string) => unknown;
   globalAlpha: number;
   fillStyle: unknown;
@@ -573,30 +575,64 @@ function drawFuturisticLines(params: {
   for (let i = 0; i < triCount; i++) {
     const a = nodes[Math.floor(rng() * nodes.length)];
     if (!a) continue;
-    const nn: Array<{ p: { x: number; y: number }; d: number }> = [];
-    for (let j = 0; j < nodes.length; j++) {
-      const b = nodes[j]!;
-      const dx = a.x - b.x;
-      const dy = a.y - b.y;
-      const d = dx * dx + dy * dy;
-      if (d === 0) continue;
-      if (nn.length < 2) {
-        nn.push({ p: b, d });
-        nn.sort((p, q) => p.d - q.d);
-      } else if (d < nn[nn.length - 1]!.d) {
-        nn[nn.length - 1] = { p: b, d };
-        nn.sort((p, q) => p.d - q.d);
+    if (variant === "abstract") {
+      const want = 6;
+      const nn: Array<{ p: { x: number; y: number }; d: number; ang: number }> = [];
+      for (let j = 0; j < nodes.length; j++) {
+        const b = nodes[j]!;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const d = dx * dx + dy * dy;
+        if (d === 0) continue;
+        const ang = Math.atan2(dy, dx);
+        if (nn.length < want) {
+          nn.push({ p: b, d, ang });
+          nn.sort((p, q) => p.d - q.d);
+        } else if (d < nn[nn.length - 1]!.d) {
+          nn[nn.length - 1] = { p: b, d, ang };
+          nn.sort((p, q) => p.d - q.d);
+        }
       }
+      if (nn.length < 4) continue;
+      nn.sort((p, q) => p.ang - q.ang);
+
+      const t = 0.52 + rng() * 0.12;
+      ctx.beginPath();
+      for (let k2 = 0; k2 < nn.length; k2++) {
+        const p = nn[k2]!.p;
+        const x = a.x + (p.x - a.x) * t;
+        const y = a.y + (p.y - a.y) * t;
+        if (k2 === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    } else {
+      const nn: Array<{ p: { x: number; y: number }; d: number }> = [];
+      for (let j = 0; j < nodes.length; j++) {
+        const b = nodes[j]!;
+        const dx = a.x - b.x;
+        const dy = a.y - b.y;
+        const d = dx * dx + dy * dy;
+        if (d === 0) continue;
+        if (nn.length < 2) {
+          nn.push({ p: b, d });
+          nn.sort((p, q) => p.d - q.d);
+        } else if (d < nn[nn.length - 1]!.d) {
+          nn[nn.length - 1] = { p: b, d };
+          nn.sort((p, q) => p.d - q.d);
+        }
+      }
+      if (nn.length < 2) continue;
+      const b = nn[0]!.p;
+      const c = nn[1]!.p;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.lineTo(c.x, c.y);
+      ctx.closePath();
+      ctx.stroke();
     }
-    if (nn.length < 2) continue;
-    const b = nn[0]!.p;
-    const c = nn[1]!.p;
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.lineTo(c.x, c.y);
-    ctx.closePath();
-    ctx.stroke();
   }
   ctx.restore();
 
@@ -623,6 +659,136 @@ function drawFuturisticLines(params: {
   }
   ctx.restore();
 
+  if (variant === "abstract") {
+    const orng = makeRng(seed ^ 0x2b13a41f);
+    const pad = Math.max(24, Math.round(thick * 10));
+    const x0 = bgX + pad;
+    const y0 = bgY + pad;
+    const w = bgW - pad * 2;
+    const h = bgH - pad * 2;
+    const centerX = x0 + w * (0.46 + (orng() - 0.5) * 0.04);
+    const centerY = y0 + h * (0.54 + (orng() - 0.5) * 0.05);
+    const size = Math.min(w, h) * (0.42 + orng() * 0.05);
+    const depth = size * (0.18 + orng() * 0.03);
+    const rot = (orng() - 0.5) * 0.14;
+
+    const mkDiamond = (cx: number, cy: number, s: number, r: number) => {
+      const pts = [
+        { x: 0, y: -s },
+        { x: s, y: 0 },
+        { x: 0, y: s },
+        { x: -s, y: 0 },
+      ];
+      const cr = Math.cos(r);
+      const sr = Math.sin(r);
+      return pts.map((p) => ({
+        x: cx + p.x * cr - p.y * sr,
+        y: cy + p.x * sr + p.y * cr,
+      }));
+    };
+
+    const front = mkDiamond(centerX, centerY, size, rot);
+    const back = mkDiamond(centerX + depth * 0.44, centerY - depth * 0.36, size * 0.92, rot);
+    const innerFront = mkDiamond(centerX, centerY, size * 0.62, rot);
+    const innerBack = mkDiamond(centerX + depth * 0.44, centerY - depth * 0.36, size * 0.57, rot);
+
+    ctx.save();
+    ctx.globalAlpha = 0.98;
+    ctx.strokeStyle = strokeMain;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    const strokePoly = (poly: Array<{ x: number; y: number }>) => {
+      ctx.beginPath();
+      ctx.moveTo(poly[0]!.x, poly[0]!.y);
+      for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i]!.x, poly[i]!.y);
+      ctx.closePath();
+      ctx.stroke();
+    };
+
+    ctx.lineWidth = 12;
+    strokePoly(front);
+    strokePoly(back);
+
+    ctx.lineWidth = 10;
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.moveTo(front[i]!.x, front[i]!.y);
+      ctx.lineTo(back[i]!.x, back[i]!.y);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = strokeSecondary;
+    ctx.globalAlpha = 0.92;
+    ctx.lineWidth = 10;
+    strokePoly(innerFront);
+    strokePoly(innerBack);
+    ctx.lineWidth = 8;
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.moveTo(innerFront[i]!.x, innerFront[i]!.y);
+      ctx.lineTo(innerBack[i]!.x, innerBack[i]!.y);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = strokeAccent;
+    ctx.globalAlpha = 0.82;
+    ctx.lineWidth = 7;
+    for (let i = 0; i < 4; i++) {
+      const a = front[i]!;
+      const b = front[(i + 1) % 4]!;
+      const c = back[(i + 1) % 4]!;
+      const d = back[i]!;
+      ctx.beginPath();
+      ctx.moveTo((a.x + b.x) * 0.5, (a.y + b.y) * 0.5);
+      ctx.lineTo((c.x + d.x) * 0.5, (c.y + d.y) * 0.5);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+function drawExpressYourselfHeader(params: {
+  ctx: CanvasRenderingContext2DLike;
+  bgX: number;
+  bgY: number;
+  bgW: number;
+  bgH: number;
+  fontFamily: string;
+  fontWeight: number;
+}) {
+  const { ctx, bgX, bgY, bgW, bgH, fontFamily, fontWeight } = params;
+  const text = "EMOTIONAL QUANTUM";
+  const len = Math.max(1, text.length);
+  const fontSize = Math.max(72, Math.min(320, Math.floor((bgW * 1.08) / (len * 0.50))));
+  const x = bgX + bgW / 2;
+
+  ctx.save();
+  ctx.globalAlpha = 0.96;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const weight = Math.max(700, Math.min(1000, Math.round(fontWeight || 900)));
+  const family = fontFamily || "Impact, Arial Black, Arial, sans-serif";
+  ctx.font = `${weight} ${fontSize}px ${family}`;
+
+  const measured = typeof ctx.measureText === "function" ? ctx.measureText(text).width : fontSize * (len * 0.62);
+  const targetW = bgW * 0.995;
+  const scaleX = measured > 0 ? Math.min(1.25, Math.max(0.7, targetW / measured)) : 1;
+  const scaleY = 1.08;
+
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "rgba(0,0,0,0.55)";
+  const strokeW = Math.max(4, Math.round(fontSize * 0.10));
+  ctx.lineWidth = strokeW;
+  ctx.miterLimit = 2;
+  const y = bgY + Math.round(fontSize * (0.52 + (scaleY - 1) * 0.12)) + strokeW + 8;
+  ctx.translate(x, y);
+  ctx.scale(scaleX, scaleY);
+  ctx.strokeText(text, 0, 0);
+  ctx.fillText(text, 0, 0);
   ctx.restore();
 }
 
@@ -636,29 +802,10 @@ export async function renderBackTextPngBuffer(text: string, cfg: PrintifyBackTex
   const bgH = Math.min(r.bgH, height);
   const bgX = Math.floor((width - bgW) / 2);
   const bgY = Math.floor((height - bgH) / 2);
-  const outerPad = Math.max(0, r.outerPad);
 
   const clean = sanitizeBannerText(text, r.maxChars).toUpperCase();
-  const words = clean
-    .split(" ")
-    .map((w) => w.trim())
-    .filter(Boolean)
-    .map((w) => w.slice(0, r.maxWordLength))
-    .slice(0, r.maxWords);
-
-  if (!words.length) words.push("CUSTOM");
 
   const seed = fnv1a32(`${cfg.version}|${clean}`);
-  const rng = makeRng(seed);
-
-  const cols = Math.min(r.colsMax, Math.max(r.colsMin, words.length >= r.colsDenseThreshold ? r.colsDenseCount : r.colsMin));
-  const rows = Math.max(1, Math.ceil(words.length / cols));
-  const cellW = Math.max(1, Math.floor((bgW - outerPad * 2) / cols));
-  const cellH = Math.max(1, Math.floor((bgH - outerPad * 2) / rows));
-
-  const clipPadX = Math.max(6, Math.floor(cellW * 0.06));
-  const clipPadY = Math.max(10, Math.floor(cellH * 0.12));
-  const angleSpan = r.angleMax - r.angleMin;
 
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext("2d");
@@ -673,50 +820,7 @@ export async function renderBackTextPngBuffer(text: string, cfg: PrintifyBackTex
 
   if (bgRgb) drawRedPattern({ ctx, seed, bgX, bgY, bgW, bgH, base: bgRgb, createCanvas });
   if (bgRgb) drawFuturisticLines({ ctx, seed, bgX, bgY, bgW, bgH, base: bgRgb, variant: "words" });
-  for (let i = 0; i < words.length; i++) {
-    const word = words[i];
-    const c = i % cols;
-    const rr = Math.floor(i / cols);
-    const cellX = bgX + outerPad + c * cellW;
-    const cellY = bgY + outerPad + rr * cellH;
-
-    const clipX = cellX + clipPadX;
-    const clipY = cellY + clipPadY;
-    const usableW = Math.max(1, cellW - clipPadX * 2);
-    const usableH = Math.max(1, cellH - clipPadY * 2);
-
-    const len = Math.max(1, word.length);
-    const fontH = Math.floor(Math.min(r.maxFontSize, usableH * 0.48, usableW / (len * 0.62)));
-    const fontV = Math.floor(Math.min(r.maxFontSize, usableW * 0.48, usableH / (len * 0.62)));
-    const rotate90 = fontV > fontH + 3;
-    const baseAngle = rotate90 ? Math.PI / 2 : 0;
-    const wobbleDeg = angleSpan === 0 ? 0 : Math.floor(r.angleMin + rng() * angleSpan);
-    const angle = baseAngle + (wobbleDeg * Math.PI) / 180;
-
-    const fontSize = Math.max(18, rotate90 ? fontV : fontH);
-    const strokeWidth = Math.max(1, Math.min(12, Math.floor(fontSize * r.strokeWidthRatio)));
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(clipX, clipY, usableW, usableH);
-    ctx.clip();
-
-    ctx.translate(cellX + cellW / 2, cellY + cellH / 2);
-    ctx.rotate(angle);
-
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = `${r.fontWeight} ${fontSize}px ${r.fontFamily}`;
-    ctx.fillStyle = r.textColor;
-    ctx.strokeStyle = r.strokeColor;
-    ctx.lineWidth = strokeWidth;
-    ctx.miterLimit = 2;
-
-    if (strokeWidth > 0) ctx.strokeText(word, 0, 0);
-    ctx.fillText(word, 0, 0);
-
-    ctx.restore();
-  }
+  drawExpressYourselfHeader({ ctx, bgX, bgY, bgW, bgH, fontFamily: r.fontFamily, fontWeight: r.fontWeight });
 
   return canvas.toBuffer("image/png");
 }
@@ -745,6 +849,7 @@ export async function renderBackAbstractPngBuffer(seedText: string, cfg: Printif
 
   drawRedPattern({ ctx, seed, bgX, bgY, bgW, bgH, base: baseRgb, createCanvas });
   drawFuturisticLines({ ctx, seed, bgX, bgY, bgW, bgH, base: baseRgb, variant: "abstract" });
+  drawExpressYourselfHeader({ ctx, bgX, bgY, bgW, bgH, fontFamily: r.fontFamily, fontWeight: r.fontWeight });
 
   return canvas.toBuffer("image/png");
 }

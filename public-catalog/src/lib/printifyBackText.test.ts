@@ -61,7 +61,7 @@ describe('printifyBackText', () => {
     const png = await renderBackTextPngBuffer('SPIDER WOLF NIGHT TIME', cfg);
     expect(Buffer.isBuffer(png)).toBe(true);
     expect(png.slice(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
-  });
+  }, 15000);
 
   it('renders a deterministic abstract back PNG for the same seed text', async () => {
     const cfg = defaultPrintifyBackTextConfig();

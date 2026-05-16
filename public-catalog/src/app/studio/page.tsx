@@ -1448,9 +1448,18 @@ function StudioPageInner() {
             
             <div className="mt-8 p-4 bg-gray-900 rounded-lg text-sm text-gray-400">
               <p>Pro Tip: Use the Screenshot Manager service for capturing web assets.</p>
-              <a href={`${process.env.NEXT_PUBLIC_SCREENSHOT_URL || 'http://localhost:4010'}/api/screenshots`} target="_blank" className="text-blue-400 hover:underline mt-2 inline-block">
-                Open Screenshot Manager
-              </a>
+              {(() => {
+                const base =
+                  process.env.NEXT_PUBLIC_SCREENSHOT_URL || (process.env.NODE_ENV !== 'production' ? 'http://localhost:4010' : '');
+                if (!base) {
+                  return <div className="mt-2 text-xs text-gray-500">Set NEXT_PUBLIC_SCREENSHOT_URL to enable Screenshot Manager.</div>;
+                }
+                return (
+                  <a href={`${base}/api/screenshots`} target="_blank" className="text-blue-400 hover:underline mt-2 inline-block">
+                    Open Screenshot Manager
+                  </a>
+                );
+              })()}
             </div>
           </div>
         </div>

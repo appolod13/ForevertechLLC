@@ -25,7 +25,7 @@ export default function AdminPrintifyBackTextPage() {
 
   const [cfg, setCfg] = useState<PrintifyBackTextConfig | null>(null);
   const [previewText, setPreviewText] = useState("CUSTOM FUTURE TECH");
-  const [backStyle, setBackStyle] = useState<"words" | "abstract">("words");
+  const [backStyle, setBackStyle] = useState<"words" | "abstract">("abstract");
   const [previewSvg, setPreviewSvg] = useState("");
   const [previewSvgMsg, setPreviewSvgMsg] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -33,6 +33,18 @@ export default function AdminPrintifyBackTextPage() {
   const [sampleUrl, setSampleUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const [productPrompt, setProductPrompt] = useState("Cinematic FUTURE CITY megacity skyline at golden hour, zeta pattern, ultra-detailed, photoreal lighting");
+  const [productQrUrl, setProductQrUrl] = useState("");
+  const [creatingProduct, setCreatingProduct] = useState(false);
+  const [productMsg, setProductMsg] = useState<string | null>(null);
+  const [productData, setProductData] = useState<{
+    productId: string;
+    shopId: string;
+    title: string;
+    frontUploadUrl?: string;
+    backUploadUrl?: string;
+    quantumImageUrl?: string;
+  } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -150,7 +162,7 @@ export default function AdminPrintifyBackTextPage() {
           uploadSample: true,
           text: previewText,
           backStyle,
-          origin: typeof window !== "undefined" ? window.location.origin : "http://localhost:3001",
+          origin: typeof window !== "undefined" ? window.location.origin : "",
         }),
       });
       const json = (await res.json().catch(() => null)) as ApiOk<{ previewUrl: string }> | ApiFail | null;
@@ -164,6 +176,51 @@ export default function AdminPrintifyBackTextPage() {
       setUploading(false);
     }
   }
+
+  async function createProductSample() {
+    if (!cfg) return;
+    setCreatingProduct(true);
+    setProductMsg(null);
+    setProductData(null);
+    try {
+      const res = await fetch("/api/admin/printify-back-text", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          createProductSample: true,
+          text: previewText,
+          backStyle,
+          origin: typeof window !== "undefined" ? window.location.origin : "",
+          prompt: productPrompt,
+          qrUrl: productQrUrl || undefined,
+        }),
+      });
+      const json = (await res.json().catch(() => null)) as
+        | ApiOk<{
+            productId: string;
+            shopId: string;
+            title: string;
+            frontUploadUrl?: string;
+            backUploadUrl?: string;
+            quantumImageUrl?: string;
+          }>
+        | ApiFail
+        | null;
+      if (!res.ok || !json || !json.success) {
+        setProductMsg(errorFrom(json, res.status));
+        return;
+      }
+      setProductData(json.data);
+      setProductMsg("Created Printify product sample");
+    } finally {
+      setCreatingProduct(false);
+    }
+  }
+
+  const printifyProductUrl = useMemo(() => {
+    if (!productData?.shopId || !productData.productId) return "";
+    return `https://printify.com/app/store/${encodeURIComponent(productData.shopId)}/products/${encodeURIComponent(productData.productId)}`;
+  }, [productData?.productId, productData?.shopId]);
 
   if (!cfg) return <div className="text-sm text-white/60">Loading...</div>;
 
@@ -338,13 +395,22 @@ export default function AdminPrintifyBackTextPage() {
                 <option value="abstract">Abstract</option>
               </select>
             </div>
-            <button
-              onClick={uploadSample}
-              disabled={uploading}
-              className="rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm disabled:opacity-60"
-            >
-              {uploading ? "Uploading..." : "Upload QR Stamp Sample to Printify"}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={uploadSample}
+                disabled={uploading}
+                className="rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm disabled:opacity-60"
+              >
+                {uploading ? "Uploading..." : "Upload Back Sample to Printify"}
+              </button>
+              <button
+                onClick={createProductSample}
+                disabled={creatingProduct}
+                className="rounded-md bg-white text-black px-3 py-2 text-sm font-medium disabled:opacity-60"
+              >
+                {creatingProduct ? "Creating..." : "Create Shirt Product Sample"}
+              </button>
+            </div>
           </div>
           {uploadMsg ? <div className="mt-2 text-sm text-white/70">{uploadMsg}</div> : null}
           {sampleUrl ? (
@@ -354,6 +420,55 @@ export default function AdminPrintifyBackTextPage() {
               </a>
             </div>
           ) : null}
+          <div className="mt-3 grid gap-3 rounded-md border border-white/10 bg-black/30 p-3">
+            <div className="grid gap-1">
+              <div className="text-sm text-white/70">Front Prompt (used to generate the front image)</div>
+              <textarea
+                className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 outline-none min-h-[88px]"
+                value={productPrompt}
+                onChange={(e) => setProductPrompt(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1">
+              <div className="text-sm text-white/70">QR URL override (optional)</div>
+              <input
+                className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 outline-none"
+                placeholder="https://your-site.com/verify/..."
+                value={productQrUrl}
+                onChange={(e) => setProductQrUrl(e.target.value)}
+              />
+            </div>
+            {productMsg ? <div className="text-sm text-white/70">{productMsg}</div> : null}
+            {productData ? (
+              <div className="grid gap-2 text-sm">
+                <div className="text-white/70">Title: <span className="text-white">{productData.title}</span></div>
+                <div className="text-white/70">Shop ID: <span className="text-white">{productData.shopId}</span></div>
+                <div className="text-white/70">Product ID: <span className="text-white">{productData.productId}</span></div>
+                {printifyProductUrl ? (
+                  <a href={printifyProductUrl} target="_blank" rel="noreferrer" className="text-blue-300 underline">
+                    Open product in Printify
+                  </a>
+                ) : null}
+                <div className="grid gap-1">
+                  {productData.quantumImageUrl ? (
+                    <a href={productData.quantumImageUrl} target="_blank" rel="noreferrer" className="text-blue-300 underline">
+                      Open generated front image
+                    </a>
+                  ) : null}
+                  {productData.frontUploadUrl ? (
+                    <a href={productData.frontUploadUrl} target="_blank" rel="noreferrer" className="text-blue-300 underline">
+                      Open Printify front upload preview
+                    </a>
+                  ) : null}
+                  {productData.backUploadUrl ? (
+                    <a href={productData.backUploadUrl} target="_blank" rel="noreferrer" className="text-blue-300 underline">
+                      Open Printify back upload preview
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
           <div className="mt-3 rounded-md border border-white/10 bg-black/30 p-3 overflow-auto">
             {backStyle === "words" ? (
               previewSvg ? (

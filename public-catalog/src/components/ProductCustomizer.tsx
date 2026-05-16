@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
-import Image from 'next/image';
 import { ShoppingCart, Shirt, Coffee } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCart } from '@/context/CartContext';
@@ -304,24 +303,24 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
                     ? "w-1/2 h-1/2 mix-blend-overlay opacity-90 shadow-2xl" 
                     : "w-[35%] h-[35%] -mt-[15%] shadow-xl rounded-lg overflow-hidden bg-zinc-950/50 backdrop-blur-sm border border-white/10 p-1 mix-blend-multiply opacity-95" 
              )}>
-                 <Image 
-                    src={initialImageUrl} 
-                    alt="Design" 
-                    fill 
-                    className="object-contain" 
-                    unoptimized={initialImageUrl.startsWith('blob:') || initialImageUrl.includes('127.0.0.1') || initialImageUrl.includes('localhost')}
+                 <img
+                   src={initialImageUrl}
+                   alt="Design"
+                   className="absolute inset-0 h-full w-full object-contain"
+                   loading="eager"
+                   decoding="async"
                  />
              </div>
          )}
 
          {view === 'back' && (
             <div className="relative z-10 h-[70%] w-[70%] rounded-md bg-black/0">
-              <Image
+              <img
                 src={backWordSvgDataUrl}
                 alt={`Back banner: ${bannerText}`}
-                fill
-                className="object-contain"
-                unoptimized
+                className="absolute inset-0 h-full w-full object-contain"
+                loading="eager"
+                decoding="async"
               />
             </div>
          )}

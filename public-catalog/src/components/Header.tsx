@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { ShoppingBag, Menu, X, User } from 'lucide-react';
 import { LiveBadge } from './LiveBadge';
 import { useCart } from '@/context/CartContext';
@@ -17,6 +16,7 @@ export function Header() {
   const { itemCount } = useCart();
   const { user, logout } = useAuth();
   const [showAdmin, setShowAdmin] = useState(false);
+  const showDevTools = process.env.NODE_ENV !== 'production' || showAdmin;
 
   useEffect(() => {
     let cancelled = false;
@@ -38,13 +38,12 @@ export function Header() {
         <div className="flex items-center gap-2">
           <Link href="/" className="flex items-center gap-2">
             <div className="relative h-12 w-12 overflow-hidden rounded-full border-2 border-white shadow-lg shadow-primary/20">
-              <Image 
-                src="/images/Forevertech_logo.jpg" 
-                alt="ForeverTech Logo" 
-                fill
-                className="object-cover"
-                sizes="48px"
-                priority
+              <img
+                src="/images/Forevertech_logo.jpg"
+                alt="ForeverTech Logo"
+                className="absolute inset-0 h-full w-full object-cover"
+                loading="eager"
+                decoding="async"
               />
             </div>
             <span className="hidden text-xl font-bold text-white sm:inline-block">
@@ -74,14 +73,19 @@ export function Header() {
           <Link href="/studio" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
             Studio
           </Link>
-          <Link href="/scanner" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-            Scanner
-          </Link>
+          {showDevTools ? (
+            <Link href="/scanner" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
+              Scanner
+            </Link>
+          ) : null}
           <Link href="/gallery" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
             Gallery
           </Link>
           <Link href="/support" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
             Support
+          </Link>
+          <Link href="/privacy-policy" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
+            Privacy
           </Link>
         </nav>
 
@@ -180,13 +184,15 @@ export function Header() {
             >
               Studio
             </Link>
-            <Link 
-              href="/scanner" 
-              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Scanner
-            </Link>
+            {showDevTools ? (
+              <Link 
+                href="/scanner" 
+                className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Scanner
+              </Link>
+            ) : null}
             <Link 
               href="/gallery" 
               className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
@@ -200,6 +206,13 @@ export function Header() {
               onClick={() => setIsMobileMenuOpen(false)}
             >
               Support
+            </Link>
+            <Link 
+              href="/privacy-policy" 
+              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Privacy Policy
             </Link>
           </div>
         </div>
