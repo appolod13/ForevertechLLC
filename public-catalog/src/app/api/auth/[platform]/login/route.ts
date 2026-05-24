@@ -17,6 +17,16 @@ export async function GET(
     const url = new URL('/api/auth/instagram/login', request.url);
     return NextResponse.redirect(url);
   }
+
+  if (platform === 'tiktok') {
+    const url = new URL('/api/auth/tiktok/login', request.url);
+    return NextResponse.redirect(url);
+  }
+
+  if (platform === 'youtube') {
+    const url = new URL('/api/auth/youtube/login', request.url);
+    return NextResponse.redirect(url);
+  }
   
   // NOTE: This is a placeholder Mock OAuth flow for testing the UI.
   // To implement real OAuth for Instagram/TikTok/YouTube/Telegram, 

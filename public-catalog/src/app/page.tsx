@@ -175,7 +175,7 @@ export default async function Home() {
                   <span className="text-2xl font-bold text-primary">1</span>
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-2">Generate Art</h3>
-                <p className="text-zinc-400 text-sm">Head to the Studio and type an emotional prompt. Our Quantum AI will generate a unique fractal design.</p>
+                <p className="text-zinc-400 text-sm">Head to the Studio and type a prompt. Our generator creates unique Julia + Mandelbrot fractal fusion designs—Julia uses a fixed equation repeated on every pixel; Mandelbrot uses the pixel itself as the equation’s starting point; we blend them mathematically into one sharp, printable pattern for your shirt.</p>
               </div>
               <div className="flex flex-col items-center">
                 <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center mb-4 border border-primary/50">

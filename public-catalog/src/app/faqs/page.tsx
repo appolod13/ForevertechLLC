@@ -125,22 +125,22 @@ export default function FaqsPage() {
           </Card>
 
           <Card title="Julia sets and Mandelbrot (the fractal basics)">
+            <p className="font-semibold text-white">Commercial version (for quick reading)</p>
+            <p>
+              Julia + Mandelbrot fractal fusion: Julia uses a fixed equation repeated on every pixel; Mandelbrot uses the pixel itself as the equation’s
+              starting point; we blend them mathematically into one sharp, printable pattern for your shirt.
+            </p>
+            <p className="font-semibold text-white mt-4">Full explanation (if you want the details)</p>
             <p>
               Julia sets are a family of fractal patterns related to the Mandelbrot set. At a high level, they come from repeatedly applying an equation
               and observing whether values “escape” to infinity or stay bounded.
             </p>
-            <p className="font-semibold text-white">Julia set idea</p>
             <ul className="list-disc pl-6 space-y-2">
               <li>Pick a starting value x (often a complex number).</li>
               <li>Apply a function repeatedly, like x → x² + c (c is fixed for the whole image).</li>
               <li>If the sequence escapes (grows beyond a threshold), the starting point is outside the set; otherwise it is inside.</li>
               <li>Coloring is usually based on how fast it escapes, producing the familiar gradients and boundaries.</li>
             </ul>
-            <p className="font-semibold text-white">Why complex numbers matter</p>
-            <p>
-              With real numbers you only have a number line, which is visually limited. With complex numbers (a + bi), you can map values onto a 2D complex
-              plane (real axis + imaginary axis) and produce rich 2D structure.
-            </p>
             <p className="font-semibold text-white">How Mandelbrot differs</p>
             <p>
               The Mandelbrot set uses the same iteration rule x → x² + c, but c changes per pixel: for each point you test, that point is the c value. In a

@@ -11,6 +11,7 @@ export async function POST(
   
   cookieStore.delete(`${platform}_user_token`);
   cookieStore.delete(`${platform}_user_secret`);
+  cookieStore.delete(`${platform}_user_refresh_token`);
   cookieStore.delete(`${platform}_screen_name`);
   cookieStore.delete(`${platform}_user_id`);
   cookieStore.delete(`${platform}_oauth_token_secret`);

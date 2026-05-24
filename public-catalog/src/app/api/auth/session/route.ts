@@ -11,7 +11,10 @@ export async function GET() {
     const token = cookieStore.get(`${p}_user_token`)?.value;
     const screenName = cookieStore.get(`${p}_screen_name`)?.value;
     
-    if (token) {
+    const envTelegramReady =
+      p === 'telegram' && Boolean((process.env.TELEGRAM_BOT_TOKEN || '').trim()) && Boolean((process.env.TELEGRAM_CHAT_ID || '').trim());
+
+    if (token || envTelegramReady) {
       session[p] = { authenticated: true, screenName: screenName || p };
     } else {
       session[p] = { authenticated: false };

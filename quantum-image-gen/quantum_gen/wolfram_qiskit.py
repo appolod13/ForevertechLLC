@@ -6,18 +6,10 @@ import json
 import os
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
-try:
-    import numpy as np
-    import matplotlib.pyplot as plt
-    from matplotlib import cm
-    from qiskit import QuantumCircuit, transpile
-    from qiskit_aer import AerSimulator
-    from qiskit.circuit.library import efficient_su2
-except ImportError:
-    np = None
-    plt = None
-    cm = None
-    QuantumCircuit = None
+import numpy as np
+from qiskit import QuantumCircuit, transpile
+from qiskit_aer import AerSimulator
+from qiskit.circuit.library import efficient_su2
 
 import os
 import wolframalpha
@@ -29,146 +21,6 @@ except ImportError:
 def _seed_from_text(text: str) -> int:
     h = hashlib.sha256(text.encode("utf-8")).hexdigest()
     return int(h[:8], 16)
-
-def _contains_future_city(prompt: str) -> bool:
-    p = (prompt or "").lower()
-    keys = [
-        "future city",
-        "futuristic city",
-        "megacity",
-        "mega city",
-        "sci-fi city",
-        "sci fi city",
-        "golden hour",
-    ]
-    return any(k in p for k in keys)
-
-def _future_city_concept(prompt: str, width: int, height: int, rule: int) -> Image.Image:
-    rng = random.Random(_seed_from_text(f"{prompt}|{width}x{height}|{rule}"))
-    w = int(width)
-    h = int(height)
-
-    if np is not None:
-        top = np.array([130, 170, 230], dtype=np.float32)
-        bottom = np.array([255, 175, 135], dtype=np.float32)
-        t = (np.linspace(0.0, 1.0, h, dtype=np.float32) ** 0.95).reshape(h, 1, 1)
-        grad = top * (1.0 - t) + bottom * t
-        bg = np.repeat(grad, w, axis=1)
-        base = Image.fromarray(np.clip(bg, 0, 255).astype(np.uint8), "RGB")
-    else:
-        base = Image.new("RGB", (w, h), (160, 180, 220))
-
-    cloud = Image.new("L", (w, h), 0)
-    cdraw = ImageDraw.Draw(cloud)
-    cx = int(w * 0.33)
-    cy = int(h * 0.18)
-    cw = int(w * 0.75)
-    ch = int(h * 0.55)
-    cdraw.ellipse([cx - cw // 2, cy - ch // 2, cx + cw // 2, cy + ch // 2], fill=255)
-    cdraw.ellipse([cx - int(cw * 0.35), cy - int(ch * 0.35), cx + int(cw * 0.15), cy + int(ch * 0.25)], fill=255)
-    cloud = cloud.filter(ImageFilter.GaussianBlur(radius=max(18, w // 50)))
-    cloud_rgb = Image.merge("RGB", (cloud, cloud, cloud))
-    base = Image.blend(base, cloud_rgb, 0.12)
-
-    horizon = int(h * 0.52)
-    mountain = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    mdraw = ImageDraw.Draw(mountain)
-    points = []
-    x = 0
-    step = max(8, w // 120)
-    while x <= w:
-        bump = math.sin(x / max(1, w) * math.pi * 1.2) * (h * 0.03)
-        jag = (rng.random() - 0.5) * (h * 0.05)
-        y = horizon + int(h * 0.05 + bump + jag)
-        points.append((x, y))
-        x += step
-    peak_x = int(w * 0.42)
-    peak_y = horizon - int(h * 0.06)
-    points.insert(len(points) // 2, (peak_x, peak_y))
-    points.append((w, h))
-    points.append((0, h))
-    mdraw.polygon(points, fill=(35, 30, 40, 220))
-    mountain = mountain.filter(ImageFilter.GaussianBlur(radius=max(2, w // 300)))
-    base = Image.alpha_composite(base.convert("RGBA"), mountain).convert("RGB")
-
-    city = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    cty = ImageDraw.Draw(city)
-    ground_y = int(h * 0.66)
-    cty.rectangle([0, ground_y, w, h], fill=(15, 12, 20, 255))
-
-    x = 0
-    while x < w:
-        bw = rng.randint(max(6, w // 140), max(14, w // 60))
-        bh = rng.randint(int(h * 0.04), int(h * 0.25))
-        top_y = ground_y - bh
-        shade = rng.randint(10, 28)
-        cty.rectangle([x, top_y, x + bw, h], fill=(shade, shade, shade + 8, 255))
-        x += bw + rng.randint(1, 3)
-
-    lights = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    ldraw = ImageDraw.Draw(lights)
-    count = int((w * h) / 420)
-    for _ in range(count):
-        px = rng.randrange(0, w)
-        py = rng.randrange(ground_y, h)
-        intensity = rng.randint(140, 255)
-        col = (255, rng.randint(120, 185), rng.randint(35, 90), intensity)
-        ldraw.point((px, py), fill=col)
-        if rng.random() < 0.12:
-            ldraw.point((min(w - 1, px + 1), py), fill=col)
-    lights = lights.filter(ImageFilter.GaussianBlur(radius=max(1, w // 420)))
-    city = Image.alpha_composite(city, lights)
-
-    towers = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    tdraw = ImageDraw.Draw(towers)
-    right = int(w * 0.97)
-    cluster_left = int(w * 0.70)
-    num = rng.randint(4, 6)
-    for i in range(num):
-        tw = rng.randint(int(w * 0.035), int(w * 0.06))
-        th = rng.randint(int(h * 0.38), int(h * 0.62))
-        tx = rng.randint(cluster_left, right - tw)
-        ty = ground_y - th
-        base_col = (22, 26, 36, 255)
-        tdraw.rounded_rectangle([tx, ty, tx + tw, ground_y + rng.randint(0, int(h * 0.03))], radius=max(6, tw // 4), fill=base_col)
-        seam_count = rng.randint(2, 4)
-        for s in range(seam_count):
-            sx = tx + int((s + 1) * tw / (seam_count + 1))
-            tdraw.line([sx, ty + int(th * 0.05), sx, ground_y], fill=(70, 210, 255, 180), width=max(2, tw // 18))
-        tdraw.line([tx + int(tw * 0.12), ty + int(th * 0.1), tx + int(tw * 0.12), ground_y], fill=(255, 200, 160, 70), width=max(1, tw // 30))
-        if rng.random() < 0.8:
-            sp_h = rng.randint(int(th * 0.05), int(th * 0.12))
-            tdraw.polygon(
-                [(tx + tw // 2, ty - sp_h), (tx + int(tw * 0.22), ty + int(th * 0.02)), (tx + int(tw * 0.78), ty + int(th * 0.02))],
-                fill=(30, 40, 55, 220),
-            )
-
-    towers = towers.filter(ImageFilter.GaussianBlur(radius=max(1, w // 350)))
-    city = Image.alpha_composite(city, towers)
-
-    haze = Image.new("RGBA", (w, h), (240, 210, 190, 0))
-    hdraw = ImageDraw.Draw(haze)
-    for i in range(6):
-        a = int(18 + i * 10)
-        y0 = int(horizon - (h * 0.05) + i * (h * 0.035))
-        hdraw.rectangle([0, y0, w, y0 + int(h * 0.08)], fill=(245, 210, 185, a))
-    haze = haze.filter(ImageFilter.GaussianBlur(radius=max(8, w // 80)))
-    base = Image.alpha_composite(base.convert("RGBA"), city)
-    base = Image.alpha_composite(base, haze).convert("RGB")
-
-    if np is not None:
-        try:
-            pattern = generate_wolfram_pattern(w, h, rule=max(30, int(rule)), prompt=prompt) or None
-        except Exception:
-            pattern = None
-        if pattern is not None:
-            pat = (np.clip(pattern, 0.0, 1.0) * 255.0).astype(np.uint8)
-            pimg = Image.fromarray(pat, "L").filter(ImageFilter.GaussianBlur(radius=max(1, w // 260)))
-            tint = Image.merge("RGB", (Image.new("L", (w, h), 40), pimg, pimg))
-            base = ImageChops.screen(base, tint)
-            base = Image.blend(base, tint, 0.08)
-
-    return base
 
 def get_wolfram_alpha_pattern(width, height, prompt):
     if not np: return None
@@ -834,48 +686,32 @@ def _compute_mandelbrot_smooth_norm(width, height, center_x=-0.5, center_y=0.0, 
 
 
 def _apply_colormap_01(vals_01: "np.ndarray", cmap_name: str) -> "np.ndarray":
-    if not np:
-        return None
-
     vals_01 = np.clip(vals_01.astype(np.float32), 0.0, 1.0)
 
-    def apply_simple_colormap(name: str) -> "np.ndarray":
-        name = (name or "turbo").lower()
-        stops = {
-            "turbo": [(48, 18, 59), (59, 82, 139), (33, 145, 140), (96, 202, 96), (231, 228, 25), (180, 39, 46)],
-            "viridis": [(68, 1, 84), (59, 82, 139), (33, 145, 140), (94, 201, 97), (253, 231, 37)],
-            "plasma": [(12, 7, 134), (86, 1, 164), (156, 23, 158), (212, 73, 128), (246, 141, 76), (252, 216, 86)],
-            "magma": [(0, 0, 4), (28, 16, 68), (79, 18, 123), (129, 37, 129), (181, 54, 122), (229, 80, 100), (251, 135, 97), (252, 203, 134)],
-            "inferno": [(0, 0, 4), (31, 12, 72), (85, 15, 109), (136, 34, 106), (186, 54, 85), (227, 89, 51), (249, 140, 10), (252, 255, 164)],
-            "ocean": [(0, 12, 38), (0, 66, 98), (0, 133, 139), (0, 190, 170), (180, 255, 245)],
-            "rainbow": [(150, 0, 255), (0, 80, 255), (0, 220, 255), (0, 255, 120), (240, 255, 0), (255, 120, 0), (255, 0, 0)],
-        }.get(name)
+    name = (cmap_name or "turbo").lower()
+    stops = {
+        "turbo": [(48, 18, 59), (59, 82, 139), (33, 145, 140), (96, 202, 96), (231, 228, 25), (180, 39, 46)],
+        "viridis": [(68, 1, 84), (59, 82, 139), (33, 145, 140), (94, 201, 97), (253, 231, 37)],
+        "plasma": [(12, 7, 134), (86, 1, 164), (156, 23, 158), (212, 73, 128), (246, 141, 76), (252, 216, 86)],
+        "magma": [(0, 0, 4), (28, 16, 68), (79, 18, 123), (129, 37, 129), (181, 54, 122), (229, 80, 100), (251, 135, 97), (252, 203, 134)],
+        "inferno": [(0, 0, 4), (31, 12, 72), (85, 15, 109), (136, 34, 106), (186, 54, 85), (227, 89, 51), (249, 140, 10), (252, 255, 164)],
+        "ocean": [(0, 12, 38), (0, 66, 98), (0, 133, 139), (0, 190, 170), (180, 255, 245)],
+        "rainbow": [(150, 0, 255), (0, 80, 255), (0, 220, 255), (0, 255, 120), (240, 255, 0), (255, 120, 0), (255, 0, 0)],
+    }.get(name)
 
-        if not stops:
-            stops = [(48, 18, 59), (59, 82, 139), (33, 145, 140), (96, 202, 96), (231, 228, 25), (180, 39, 46)]
+    if not stops:
+        stops = [(48, 18, 59), (59, 82, 139), (33, 145, 140), (96, 202, 96), (231, 228, 25), (180, 39, 46)]
 
-        stops_np = np.array(stops, dtype=np.float32) / 255.0
-        x = vals_01 * (stops_np.shape[0] - 1)
-        i0 = np.floor(x).astype(np.int32)
-        i1 = np.clip(i0 + 1, 0, stops_np.shape[0] - 1)
-        t = (x - i0).astype(np.float32)[..., None]
-        rgb = (1.0 - t) * stops_np[i0] + t * stops_np[i1]
-        return (np.clip(rgb, 0.0, 1.0) * 255.0).astype(np.uint8)
-
-    if cm is not None:
-        try:
-            colormap = cm.get_cmap(cmap_name)
-        except Exception:
-            colormap = cm.get_cmap("turbo")
-        img_rgba = colormap(vals_01)
-        return (img_rgba[:, :, :3] * 255).astype(np.uint8)
-
-    return apply_simple_colormap(cmap_name)
+    stops_np = np.array(stops, dtype=np.float32) / 255.0
+    x = vals_01 * (stops_np.shape[0] - 1)
+    i0 = np.floor(x).astype(np.int32)
+    i1 = np.clip(i0 + 1, 0, stops_np.shape[0] - 1)
+    t = (x - i0).astype(np.float32)[..., None]
+    rgb = (1.0 - t) * stops_np[i0] + t * stops_np[i1]
+    return (np.clip(rgb, 0.0, 1.0) * 255.0).astype(np.uint8)
 
 
 def _pseudo_quantum_probs(seed_context: str, num_states: int) -> "np.ndarray":
-    if not np:
-        return None
     n = int(num_states)
     n = max(8, min(256, n))
     seed = _seed_from_text(seed_context or "quantum-julia")
@@ -884,60 +720,48 @@ def _pseudo_quantum_probs(seed_context: str, num_states: int) -> "np.ndarray":
     return raw / np.sum(raw)
 
 def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum=False, seed_salt: str | None = None):
-    if _contains_future_city(prompt) and not force_quantum:
-        return _future_city_concept(prompt, int(width), int(height), int(rule))
-
-    if not force_quantum:
-        if not np or not QuantumCircuit:
-            return _future_city_concept(prompt + " (mock quantum)", int(width), int(height), int(rule))
-
+    # Always use Wolfram + Qiskit + Julia + Mandelbrot fusion, no future city fallbacks
     """
     Main function to generate a quantum-inspired image.
     """
     salt = (seed_salt or "").strip()
     seed_context = f"{(prompt or '').strip()}|salt:{salt}" if salt else (prompt or "")
 
+    # Initialize variables FIRST (never None)
+    quantum_engine = "pseudo"
+    sorted_keys = [str(i) for i in range(64)]
+    probs_np = _pseudo_quantum_probs(seed_context, len(sorted_keys))
+
     # 1. Generate Wolfram Pattern
     print(f"Generating Wolfram pattern (Rule {rule})...")
-    pattern = generate_wolfram_pattern(width, height, rule=rule, prompt=seed_context) if np else None
+    pattern = generate_wolfram_pattern(width, height, rule=rule, prompt=seed_context)
 
-    probs_np = None
-    sorted_keys = None
-    quantum_engine = "pseudo"
+    # 2. Quantum circuit + simulation
+    print("Mapping to Quantum Circuit...")
+    qc = map_pattern_to_quantum_circuit(pattern, num_qubits=6)
+    print("Simulating on Aer backend...")
+    counts = simulate_quantum_circuit(qc)
+    print("Rendering image...")
+    total_shots = sum(counts.values()) if counts else 0
 
-    if np and QuantumCircuit:
-        print("Mapping to Quantum Circuit...")
-        qc = map_pattern_to_quantum_circuit(pattern, num_qubits=6)  # 6 qubits for complexity
-
-        print("Simulating on Aer backend...")
-        counts = simulate_quantum_circuit(qc)
-
-        print("Rendering image...")
-        total_shots = sum(counts.values()) if counts else 0
-        if total_shots <= 0:
-            print("Simulation failed, falling back to pseudo-quantum distribution")
-        else:
-            quantum_engine = "qiskit-aer"
-            sorted_keys = sorted(counts.keys())
-            probs_np = np.array([counts[k] / total_shots for k in sorted_keys], dtype=np.float32)
-
-    if probs_np is None:
-        if not np:
-            return _future_city_concept(prompt + " (mock quantum)", int(width), int(height), int(rule))
-        sorted_keys = [str(i) for i in range(64)]
-        probs_np = _pseudo_quantum_probs(seed_context, len(sorted_keys))
+    # Try to use real quantum results if available
+    if total_shots > 0:
+        quantum_engine = "qiskit-aer"
+        sorted_keys = sorted(counts.keys())
+        probs_np = np.array([counts[k] / total_shots for k in sorted_keys], dtype=np.float32)
 
     # 4. Extract Emotional Energy and Shape
     cmap_name, julia_cx, julia_cy, shape_type = _analyze_prompt_energy(prompt)
     
     # Modulate Julia coordinates with top quantum probabilities (true Quantum-Julia mix)
     # Kept extremely subtle so it doesn't break the fractal structure
-    julia_cx += (float(probs_np[0]) - 0.5) * 0.025
-    if len(probs_np) > 1:
-        julia_cy += (float(probs_np[1]) - 0.5) * 0.025
-    if len(probs_np) > 4:
-        julia_cx += (float(probs_np[2]) - float(probs_np[3])) * 0.012
-        julia_cy += (float(probs_np[4]) - 0.5) * 0.012
+    if probs_np is not None:
+        julia_cx += (float(probs_np[0]) - 0.5) * 0.025
+        if len(probs_np) > 1:
+            julia_cy += (float(probs_np[1]) - 0.5) * 0.025
+        if len(probs_np) > 4:
+            julia_cx += (float(probs_np[2]) - float(probs_np[3])) * 0.012
+            julia_cy += (float(probs_np[4]) - 0.5) * 0.012
 
     render_seed = _seed_from_text(f"{seed_context}|{rule}|julia-render")
     render_rng = random.Random(render_seed)
@@ -948,8 +772,6 @@ def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum
         
     print(f"Rendering Quantum Julia (cmap={cmap_name}, shape={shape_type})...")
     julia_field = _compute_julia_smooth_norm(width, height, julia_cx, julia_cy, zoom=julia_zoom, max_iter=julia_iters)
-    if julia_field is None:
-        return _future_city_concept(prompt + " (mock quantum)", int(width), int(height), int(rule))
 
     # Non-linear rendering using quantum probabilities and spatial coordinates
     # This creates actual interference-like quantum patterns

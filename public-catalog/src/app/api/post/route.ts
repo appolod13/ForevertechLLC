@@ -11,6 +11,158 @@ type PostMetadata = {
   [key: string]: unknown;
 };
 
+async function blobFromDataUrl(dataUrl: string): Promise<Blob> {
+  const match = dataUrl.match(/^data:([^;,]+)(;base64)?,(.*)$/);
+  if (!match) throw new Error('invalid_data_url');
+  const mime = match[1] || 'application/octet-stream';
+  const isBase64 = Boolean(match[2]);
+  const dataPart = match[3] || '';
+  const bytes = isBase64
+    ? Uint8Array.from(Buffer.from(dataPart, 'base64'))
+    : Uint8Array.from(Buffer.from(decodeURIComponent(dataPart), 'utf-8'));
+  return new Blob([bytes], { type: mime });
+}
+
+async function telegramSendMessage(params: { token: string; chatId: string; text: string }) {
+  const url = `https://api.telegram.org/bot${params.token}/sendMessage`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: params.chatId,
+      text: params.text,
+      disable_web_page_preview: true,
+    }),
+    cache: 'no-store',
+  });
+  const json = (await res.json().catch(() => null)) as { ok?: boolean; description?: string } | null;
+  if (!res.ok || json?.ok !== true) throw new Error(json?.description || `telegram_http_${res.status}`);
+  return json;
+}
+
+async function telegramSendPhoto(params: { token: string; chatId: string; caption: string; photoUrl: string }) {
+  const url = `https://api.telegram.org/bot${params.token}/sendPhoto`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: params.chatId,
+      photo: params.photoUrl,
+      caption: params.caption,
+    }),
+    cache: 'no-store',
+  });
+  const json = (await res.json().catch(() => null)) as { ok?: boolean; description?: string } | null;
+  if (!res.ok || json?.ok !== true) throw new Error(json?.description || `telegram_http_${res.status}`);
+  return json;
+}
+
+async function telegramSendPhotoUpload(params: { token: string; chatId: string; caption: string; blob: Blob }) {
+  const url = `https://api.telegram.org/bot${params.token}/sendPhoto`;
+  const form = new FormData();
+  form.append('chat_id', params.chatId);
+  if (params.caption) form.append('caption', params.caption);
+  form.append('photo', params.blob, `post_${Date.now()}.png`);
+  const res = await fetch(url, { method: 'POST', body: form, cache: 'no-store' });
+  const json = (await res.json().catch(() => null)) as { ok?: boolean; description?: string } | null;
+  if (!res.ok || json?.ok !== true) throw new Error(json?.description || `telegram_http_${res.status}`);
+  return json;
+}
+
+async function tiktokRefreshAccessToken(refreshToken: string) {
+  const clientKey = (process.env.TIKTOK_CLIENT_KEY || '').trim();
+  const clientSecret = (process.env.TIKTOK_CLIENT_SECRET || '').trim();
+  if (!clientKey || !clientSecret) throw new Error('TikTok credentials missing');
+  if (!refreshToken) throw new Error('TikTok refresh token missing');
+
+  const body = new URLSearchParams();
+  body.set('client_key', clientKey);
+  body.set('client_secret', clientSecret);
+  body.set('grant_type', 'refresh_token');
+  body.set('refresh_token', refreshToken);
+
+  const res = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+    cache: 'no-store',
+  });
+  const json = (await res.json().catch(() => null)) as
+    | {
+        access_token?: string;
+        refresh_token?: string;
+        expires_in?: number;
+        refresh_expires_in?: number;
+        open_id?: string;
+        scope?: string;
+        error?: string;
+        error_description?: string;
+      }
+    | null;
+  if (!res.ok || !json?.access_token) {
+    const msg = json?.error_description || json?.error || 'Failed to refresh TikTok token';
+    throw new Error(msg);
+  }
+  return {
+    accessToken: json.access_token,
+    refreshToken: json.refresh_token || refreshToken,
+    expiresIn: typeof json.expires_in === 'number' ? json.expires_in : 60 * 60 * 24,
+    refreshExpiresIn: typeof json.refresh_expires_in === 'number' ? json.refresh_expires_in : 60 * 60 * 24 * 365,
+    openId: json.open_id || '',
+    scope: json.scope || '',
+  };
+}
+
+async function tiktokInitPhotoPost(params: {
+  accessToken: string;
+  postMode: 'MEDIA_UPLOAD' | 'DIRECT_POST';
+  title: string;
+  description: string;
+  photoUrl: string;
+}) {
+  const res = await fetch('https://open.tiktokapis.com/v2/post/publish/content/init/', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${params.accessToken}`, 'content-type': 'application/json; charset=UTF-8' },
+    body: JSON.stringify({
+      post_info:
+        params.postMode === 'DIRECT_POST'
+          ? {
+              title: params.title,
+              description: params.description,
+              privacy_level: 'SELF_ONLY',
+              disable_comment: false,
+              auto_add_music: true,
+              brand_content_toggle: false,
+              brand_organic_toggle: false,
+            }
+          : {
+              title: params.title,
+              description: params.description,
+            },
+      source_info: {
+        source: 'PULL_FROM_URL',
+        photo_cover_index: 0,
+        photo_images: [params.photoUrl],
+      },
+      post_mode: params.postMode,
+      media_type: 'PHOTO',
+    }),
+    cache: 'no-store',
+  });
+
+  const json = (await res.json().catch(() => null)) as
+    | { data?: { publish_id?: string }; error?: { code?: string; message?: string; log_id?: string } }
+    | null;
+  const code = (json?.error?.code || '').trim();
+  if (!res.ok || code !== 'ok') {
+    const message = (json?.error?.message || '').trim();
+    const logId = (json?.error?.log_id || '').trim();
+    const suffix = logId ? ` (${logId})` : '';
+    throw new Error(code ? `${code}${message ? `: ${message}` : ''}${suffix}` : `tiktok_http_${res.status}${suffix}`);
+  }
+  return { publishId: (json?.data?.publish_id || '').trim() };
+}
+
 function isLocalHostname(hostname: string) {
   return hostname === 'localhost' || hostname === '127.0.0.1';
 }
@@ -310,9 +462,137 @@ export async function POST(request: Request) {
       }
     }
 
-    // Mock other platforms (Telegram, TikTok, YouTube)
+    if (platforms.includes('telegram')) {
+      const token = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
+      const chatId = (process.env.TELEGRAM_CHAT_ID || '').trim();
+      if (!token || !chatId) {
+        hasErrors = true;
+        errorMessage = 'Telegram is not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.';
+        results.telegram = { success: false, error: errorMessage };
+      } else {
+        try {
+          const caption = content.replace(/\(Attached: Generated Image\):.*/g, '').trim();
+          const desiredUrl = metadata?.platformMediaUrls?.telegram || mediaUrl || '';
+          if (!desiredUrl) {
+            await telegramSendMessage({ token, chatId, text: caption || 'New post' });
+            results.telegram = { success: true, mode: 'message' };
+          } else if (desiredUrl.startsWith('data:')) {
+            const blob = await blobFromDataUrl(desiredUrl);
+            await telegramSendPhotoUpload({ token, chatId, caption, blob });
+            results.telegram = { success: true, mode: 'upload' };
+          } else {
+            const publicUrl = resolvePublicUrl(desiredUrl, request);
+            if (publicUrl) {
+              await telegramSendPhoto({ token, chatId, caption, photoUrl: publicUrl });
+              results.telegram = { success: true, mode: 'photo_url' };
+            } else {
+              const res = await fetch(desiredUrl, { cache: 'no-store' });
+              if (!res.ok) throw new Error(`telegram_image_fetch_http_${res.status}`);
+              const blob = await res.blob();
+              await telegramSendPhotoUpload({ token, chatId, caption, blob });
+              results.telegram = { success: true, mode: 'download_upload' };
+            }
+          }
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : 'Telegram publish failed';
+          hasErrors = true;
+          errorMessage = msg;
+          results.telegram = { success: false, error: msg };
+        }
+      }
+    }
+
+    if (platforms.includes('tiktok')) {
+      const cookieStore = await cookies();
+      let accessToken = cookieStore.get('tiktok_user_token')?.value || '';
+      let refreshToken = cookieStore.get('tiktok_user_refresh_token')?.value || '';
+
+      if (!accessToken) {
+        hasErrors = true;
+        errorMessage = 'TikTok is not connected. Please sign in to TikTok first.';
+        results.tiktok = { success: false, error: errorMessage };
+      } else {
+        try {
+          const caption = content.replace(/\(Attached: Generated Image\):.*/g, '').trim();
+          let desiredUrl = metadata?.platformMediaUrls?.tiktok || mediaUrl || '';
+          if (!desiredUrl) throw new Error('TikTok requires an image URL to post.');
+
+          if (desiredUrl.startsWith('data:')) {
+            const hostHeader = (request.headers.get('x-forwarded-host') || request.headers.get('host') || '').trim();
+            const host = hostHeader.split(',')[0]?.trim() || '';
+            const hostname = host.split(':')[0]?.trim().toLowerCase() || '';
+            const protoHeader = (request.headers.get('x-forwarded-proto') || 'https').trim();
+            const proto = protoHeader.split(',')[0]?.trim().toLowerCase() || 'https';
+            if (!host || isLocalHostname(hostname) || proto !== 'https') {
+              throw new Error('TikTok requires posting from a public https domain (not localhost).');
+            }
+            const filename = await persistDataUrlToQuantumImagesDir(desiredUrl);
+            desiredUrl = `/api/images/${filename}`;
+          }
+
+          const publicUrl = resolvePublicUrl(desiredUrl, request);
+          if (!publicUrl) {
+            throw new Error('TikTok requires a public https image URL (not data: or localhost).');
+          }
+
+          const title = (caption.split('\n')[0] || '').trim().slice(0, 90);
+          const description = caption.slice(0, 4000);
+          const modeRaw = (process.env.TIKTOK_POST_MODE || '').trim().toUpperCase();
+          const postMode = modeRaw === 'DIRECT_POST' ? 'DIRECT_POST' : 'MEDIA_UPLOAD';
+
+          try {
+            const r = await tiktokInitPhotoPost({ accessToken, postMode, title, description, photoUrl: publicUrl });
+            results.tiktok = { success: true, publish_id: r.publishId, post_mode: postMode };
+          } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'TikTok publish failed';
+            if (msg.includes('access_token_invalid') && refreshToken) {
+              const refreshed = await tiktokRefreshAccessToken(refreshToken);
+              accessToken = refreshed.accessToken;
+              refreshToken = refreshed.refreshToken;
+              cookieStore.set('tiktok_user_token', accessToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                maxAge: refreshed.expiresIn,
+                path: '/',
+                sameSite: 'lax',
+              });
+              cookieStore.set('tiktok_user_refresh_token', refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                maxAge: refreshed.refreshExpiresIn,
+                path: '/',
+                sameSite: 'lax',
+              });
+              const r2 = await tiktokInitPhotoPost({ accessToken, postMode, title, description, photoUrl: publicUrl });
+              results.tiktok = { success: true, publish_id: r2.publishId, post_mode: postMode, refreshed: true };
+            } else {
+              throw new Error(msg);
+            }
+          }
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : 'TikTok publish failed';
+          hasErrors = true;
+          errorMessage = msg;
+          results.tiktok = { success: false, error: msg };
+        }
+      }
+    }
+
+    if (platforms.includes('youtube')) {
+      const cookieStore = await cookies();
+      const accessToken = (cookieStore.get('youtube_user_token')?.value || '').trim();
+      if (!accessToken) {
+        hasErrors = true;
+        errorMessage = 'YouTube is not connected. Please sign in to YouTube first.';
+        results.youtube = { success: false, error: errorMessage };
+      } else {
+        results.youtube = { success: true, connected: true, mock: true };
+      }
+    }
+
+    // Mock other platforms
     for (const p of platforms) {
-      if (p !== 'twitter' && p !== 'instagram') {
+      if (p !== 'twitter' && p !== 'instagram' && p !== 'telegram' && p !== 'tiktok' && p !== 'youtube') {
         results[p] = { success: true, mock: true };
       }
     }

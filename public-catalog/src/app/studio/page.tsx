@@ -1236,10 +1236,16 @@ function StudioPageInner() {
                   return (
                     <button
                       key={platform}
-                      onClick={() => window.location.href = `/api/auth/${platform}/login`}
+                      onClick={() => {
+                        if (platform === 'telegram') {
+                          alert('Telegram posting uses a Bot token + Chat ID. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID on the server, then refresh.');
+                          return;
+                        }
+                        window.location.href = `/api/auth/${platform}/login`;
+                      }}
                       className={`px-3 py-2 rounded-lg text-sm font-semibold border ${colors[platform]} text-white flex items-center justify-center gap-2 transition hover:opacity-80`}
                     >
-                      Sign in to {labels[platform]}
+                      {platform === 'telegram' ? 'Configure Telegram' : `Sign in to ${labels[platform]}`}
                     </button>
                   );
                 })}

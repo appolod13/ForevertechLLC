@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from quantum_gen.wolfram_qiskit import _contains_future_city, generate_quantum_image
+from quantum_gen.wolfram_qiskit import generate_quantum_image
 
 
 class GenerationRequest(BaseModel):
