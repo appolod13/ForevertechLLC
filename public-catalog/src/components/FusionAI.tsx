@@ -18,6 +18,7 @@ export function FusionAI({ prompt, baseImageUrl, onImageGenerated }: FusionAIPro
   const [status, setStatus] = useState<string>('');
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [useUploadedOnly, setUseUploadedOnly] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -55,12 +56,68 @@ export function FusionAI({ prompt, baseImageUrl, onImageGenerated }: FusionAIPro
   };
 
   const startFusion = async () => {
-    if (files.length === 0 || !prompt) return;
+    if (files.length === 0) return;
 
     setIsFusing(true);
     setStatus('Initializing...');
     setProgress(0);
     setError(null);
+
+    if (useUploadedOnly) {
+      try {
+        setStatus('Processing uploaded image...');
+        setProgress(0.15);
+        const firstFile = files[0];
+        const userBitmap = await createImageBitmap(firstFile);
+        const size = 1024;
+        
+        const out = document.createElement('canvas');
+        out.width = size;
+        out.height = size;
+        const octx = out.getContext('2d');
+        if (!octx) throw new Error('canvas_unavailable');
+        octx.imageSmoothingEnabled = true;
+        octx.imageSmoothingQuality = 'high';
+
+        const printW = Math.round(size * 0.64);
+        const printH = Math.round(size * 0.64);
+        const px = Math.round((size - printW) / 2);
+        const py = Math.round(size * 0.16);
+
+        octx.save();
+        clipRoundRect(octx, px, py, printW, printH, Math.round(size * 0.03));
+        drawCover(octx, userBitmap, px, py, printW, printH, userBitmap.width, userBitmap.height);
+        octx.restore();
+
+        octx.save();
+        octx.globalCompositeOperation = 'source-over';
+        octx.globalAlpha = 0.22;
+        octx.strokeStyle = 'rgba(0,0,0,0.35)';
+        octx.lineWidth = Math.max(2, Math.round(size * 0.004));
+        octx.beginPath();
+        octx.rect(px + 1, py + 1, printW - 2, printH - 2);
+        octx.stroke();
+        octx.restore();
+
+        const dataUrl = await canvasToDataUrl(out);
+        setProgress(1);
+        setStatus('done');
+        onImageGenerated(dataUrl);
+        setIsFusing(false);
+        setIsOpen(false);
+        return;
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to process uploaded image');
+        setIsFusing(false);
+        return;
+      }
+    }
+
+    if (!prompt) {
+      setError('Please enter a prompt');
+      setIsFusing(false);
+      return;
+    }
 
     if (!baseImageUrl) {
       setError('Generate an asset first, then add your image to fuse with it.');
@@ -237,6 +294,20 @@ export function FusionAI({ prompt, baseImageUrl, onImageGenerated }: FusionAIPro
                 <p className="text-xs text-gray-500 mt-1">JPG, PNG, WebP (max 20MB per file)</p>
               </div>
 
+              {/* Use Uploaded Only Toggle */}
+              <label className="flex items-center gap-3 p-3 rounded-xl bg-gray-950/40 border border-gray-800 cursor-pointer hover:border-blue-500/30 transition-all">
+                <input
+                  type="checkbox"
+                  className="w-5 h-5 accent-blue-500"
+                  checked={useUploadedOnly}
+                  onChange={(e) => setUseUploadedOnly(e.target.checked)}
+                />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-white">Use Uploaded Image Only</p>
+                  <p className="text-xs text-gray-500">No AI fusion - use your uploaded image directly</p>
+                </div>
+              </label>
+
               {/* Previews */}
               {previews.length > 0 && (
                 <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
@@ -283,19 +354,21 @@ export function FusionAI({ prompt, baseImageUrl, onImageGenerated }: FusionAIPro
               )}
 
               <button
-                disabled={isFusing || files.length === 0 || !prompt || !baseImageUrl}
+                disabled={isFusing || files.length === 0 || (!useUploadedOnly && (!prompt || !baseImageUrl))}
                 onClick={startFusion}
                 className="w-full py-4 rounded-xl font-bold bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-600 disabled:cursor-not-allowed text-white transition-all shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2"
               >
                 {isFusing ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    Processing Fusion...
+                    {useUploadedOnly ? 'Processing Image...' : 'Processing Fusion...'}
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-5 h-5" />
-                    Fuse {files.length > 0 ? `${files.length} Image${files.length > 1 ? 's' : ''}` : ''} with Prompt
+                    {useUploadedOnly 
+                      ? 'Use Uploaded Image' 
+                      : `Fuse ${files.length > 0 ? `${files.length} Image${files.length > 1 ? 's' : ''}` : ''} with Prompt`}
                   </>
                 )}
               </button>
