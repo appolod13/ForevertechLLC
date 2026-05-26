@@ -11,6 +11,11 @@ from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
 from qiskit.circuit.library import efficient_su2
 
+try:
+    from matplotlib import cm
+except ImportError:
+    cm = None
+
 import os
 import wolframalpha
 try:

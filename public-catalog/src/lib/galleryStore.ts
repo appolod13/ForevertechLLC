@@ -8,6 +8,9 @@ export interface GalleryItem {
   deviceId?: string;
   isFavorite: boolean;
   createdAt: string;
+  isQuantumVerified?: boolean;
+  isNft?: boolean;
+  nftId?: string;
 }
 
 declare global {
@@ -24,6 +27,7 @@ if (!global.galleryStore) {
       catalogName: 'Neo\'s Cyberpunk Collection',
       userId: 'neo-123',
       isFavorite: true,
+      isQuantumVerified: true,
       createdAt: new Date().toISOString()
     }
   ];
@@ -31,11 +35,14 @@ if (!global.galleryStore) {
 
 export const getGalleryItems = () => global.galleryStore;
 
-export const addGalleryItem = (item: Omit<GalleryItem, 'id' | 'createdAt' | 'isFavorite'>) => {
+export const addGalleryItem = (item: Omit<GalleryItem, 'id' | 'createdAt' | 'isFavorite' | 'isQuantumVerified' | 'isNft' | 'nftId'> & Partial<Pick<GalleryItem, 'isQuantumVerified' | 'isNft' | 'nftId'>>) => {
   const newItem: GalleryItem = {
     ...item,
     id: `gal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     isFavorite: false,
+    isQuantumVerified: item.isQuantumVerified || false,
+    isNft: item.isNft || false,
+    nftId: item.nftId,
     createdAt: new Date().toISOString()
   };
   global.galleryStore = [newItem, ...global.galleryStore];

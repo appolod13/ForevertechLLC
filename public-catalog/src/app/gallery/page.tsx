@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
-import { Heart, RefreshCw, User, BookOpen } from 'lucide-react';
+import { Heart, RefreshCw, User, BookOpen, Eye, ShoppingCart, Zap, Nfc, Sparkles } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 interface GalleryItem {
@@ -15,12 +16,16 @@ interface GalleryItem {
   deviceId?: string;
   isFavorite: boolean;
   createdAt: string;
+  isQuantumVerified?: boolean;
+  isNft?: boolean;
+  nftId?: string;
 }
 
 export default function GalleryPage() {
+  const router = useRouter();
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'favorites' | 'all'>('all');
+  const [filter, setFilter] = useState<'favorites' | 'all' | 'nfts' | 'quantum'>('all');
   const { user } = useAuth();
   const [deviceId, setDeviceId] = useState<string>('');
 
@@ -92,6 +97,8 @@ export default function GalleryPage() {
     if (!isMine) return false;
     
     if (filter === 'favorites') return i.isFavorite;
+    if (filter === 'nfts') return !!i.isNft;
+    if (filter === 'quantum') return !!i.isQuantumVerified;
     return true;
   });
 
@@ -102,11 +109,11 @@ export default function GalleryPage() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
             <h1 className="text-4xl font-bold mb-2">My Gallery</h1>
-            <p className="text-zinc-400">View the images you have generated and your personal favorites.</p>
+            <p className="text-zinc-400">View the images you have generated, your favorites, NFTs, and Quantum Verified items.</p>
           </div>
           
           <div className="flex items-center gap-4">
-            <div className="flex bg-zinc-900 rounded-lg p-1 border border-zinc-800">
+            <div className="flex bg-zinc-900 rounded-lg p-1 border border-zinc-800 flex-wrap">
               <button 
                 onClick={() => setFilter('all')}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${filter === 'all' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-300'}`}
@@ -118,6 +125,18 @@ export default function GalleryPage() {
                 className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors ${filter === 'favorites' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-300'}`}
               >
                 <Heart className="w-4 h-4" /> My Favorites
+              </button>
+              <button 
+                onClick={() => setFilter('nfts')}
+                className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors ${filter === 'nfts' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-300'}`}
+              >
+                <Nfc className="w-4 h-4" /> My NFTs
+              </button>
+              <button 
+                onClick={() => setFilter('quantum')}
+                className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors ${filter === 'quantum' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-300'}`}
+              >
+                <Zap className="w-4 h-4" /> Quantum Verified
               </button>
             </div>
             <button 
@@ -134,14 +153,29 @@ export default function GalleryPage() {
           <div className="text-center py-20 text-zinc-500">Loading gallery...</div>
         ) : displayedItems.length === 0 ? (
           <div className="text-center py-20 bg-zinc-900/30 rounded-xl border border-dashed border-zinc-800">
-            <h3 className="text-xl font-medium text-zinc-400 mb-2">No images found</h3>
-            <p className="text-zinc-500">Generate some images in the Studio to see them here.</p>
+            <h3 className="text-xl font-medium text-zinc-400 mb-2">No items found</h3>
+            <p className="text-zinc-500">
+              {filter === 'all' ? 'Generate some images in the Studio to see them here.' :
+               filter === 'favorites' ? 'Mark some images as favorites to see them here.' :
+               filter === 'nfts' ? 'Create some NFTs to see them here.' :
+               'Generate some Quantum Verified images to see them here.'}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {displayedItems.map((item) => (
               <div key={item.id} className="group bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 hover:border-zinc-700 transition-all hover:shadow-xl hover:shadow-black/50">
                 <div className="relative aspect-square bg-zinc-950 overflow-hidden">
+                  {item.isQuantumVerified && (
+                    <div className="absolute top-4 left-4 z-10 bg-purple-500/80 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
+                      <Zap className="w-3 h-3" /> Quantum Verified
+                    </div>
+                  )}
+                  {item.isNft && (
+                    <div className="absolute top-4 left-4 z-10 bg-green-500/80 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ml-32">
+                      <Nfc className="w-3 h-3" /> NFT
+                    </div>
+                  )}
                   {item.imageUrl.startsWith('<svg') ? (
                     <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: item.imageUrl }} />
                   ) : (
@@ -169,13 +203,31 @@ export default function GalleryPage() {
                     <User className="w-4 h-4 text-zinc-500" />
                     <span className="font-medium text-sm truncate">{item.userName}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-zinc-400">
+                  <div className="flex items-center gap-2 text-zinc-400 mb-3">
                     <BookOpen className="w-4 h-4 text-zinc-500" />
                     <span className="text-xs truncate">{item.catalogName}</span>
                   </div>
-                  <div className="mt-3 flex justify-between items-center text-xs text-zinc-500">
+                  <div className="flex gap-2 mb-3">
+                    <button 
+                      onClick={() => router.push('/customize')}
+                      className="flex-1 flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-2 rounded-lg text-sm transition-colors"
+                    >
+                      <Eye className="w-4 h-4" /> Preview
+                    </button>
+                    <button 
+                      onClick={() => router.push('/cart')}
+                      className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-lg text-sm transition-colors"
+                    >
+                      <ShoppingCart className="w-4 h-4" /> Purchase
+                    </button>
+                  </div>
+                  <div className="flex justify-between items-center text-xs text-zinc-500">
                     <span>{new Date(item.createdAt).toLocaleDateString()}</span>
-                    {item.isFavorite && <span className="text-red-400 font-medium">Favorite</span>}
+                    <div className="flex items-center gap-2">
+                      {item.isFavorite && <span className="text-red-400 font-medium">Favorite</span>}
+                      {item.isQuantumVerified && <span className="text-purple-400 font-medium">Quantum</span>}
+                      {item.isNft && <span className="text-green-400 font-medium">NFT</span>}
+                    </div>
                   </div>
                 </div>
               </div>
