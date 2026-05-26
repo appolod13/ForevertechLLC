@@ -3,8 +3,9 @@ import { Providers } from "@/components/Providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ForeverTech Public Catalog",
-  description: "Decentralized content catalog and marketplace.",
+  title: "ForeverTech | Julia + Mandelbrot Fractal Merch • Quantum Verified • Mintable NFT • IPFS",
+  description:
+    "Create wearable fractal art from prompts (Julia-set + Mandelbrot fusion). Optional Quantum Verified ties your final print to a real IBM quantum seed proof. Claim a mintable NFT after purchase, with IPFS-backed, shareable metadata links.",
   icons: {
     icon: "/favicon.ico",
     shortcut: "/favicon.ico",

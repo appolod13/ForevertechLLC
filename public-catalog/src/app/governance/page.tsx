@@ -21,7 +21,7 @@ export default function GovernancePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('http://localhost:3001/api/governance/proposals')
+    fetch('/api/governance/proposals')
       .then(res => {
         if (!res.ok) throw new Error('Network response was not ok');
         const contentType = res.headers.get('content-type');
@@ -42,7 +42,7 @@ export default function GovernancePage() {
 
   const vote = async (id: number, option: 'yes' | 'no') => {
     try {
-      const res = await fetch('http://localhost:3001/api/governance/vote', {
+      const res = await fetch('/api/governance/vote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ proposalId: id, vote: option, userId: 'user-123' }) // Mock User ID

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { Heart, Repeat, MessageCircle, ExternalLink, Twitter } from 'lucide-react';
-import Image from 'next/image';
 import { formatDistanceToNow } from 'date-fns';
 
 interface TweetMedia {
@@ -53,17 +52,16 @@ function TweetMediaImage({ src, alt, width, height }: { src: string; alt: string
       style={{ aspectRatio: `${aspectRatio}` }}
     >
       {isLoading && <div className="absolute inset-0 animate-pulse bg-gray-800" />}
-      <Image
+      <img
         src={src}
         alt={alt}
-        fill
-        className={`object-cover transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
+        className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
         onLoad={() => setIsLoading(false)}
         onError={() => {
           setHasError(true);
           setIsLoading(false);
         }}
-        sizes="(max-width: 768px) 100vw, 600px"
+        loading="lazy"
       />
     </div>
   );
@@ -82,13 +80,12 @@ function TweetAvatar({ src, alt }: { src: string; alt: string }) {
 
   return (
     <div className="relative w-10 h-10 rounded-full overflow-hidden bg-gray-800">
-      <Image
+      <img
         src={src}
         alt={alt}
-        fill
-        className="object-cover"
+        className="absolute inset-0 h-full w-full object-cover"
         onError={() => setHasError(true)}
-        sizes="40px"
+        loading="lazy"
       />
     </div>
   );
@@ -102,10 +99,13 @@ export function TwitterFeed() {
   useEffect(() => {
     const fetchTweets = async () => {
       try {
-        const response = await fetch('http://localhost:3001/api/twitter/feed');
-        if (!response.ok) {
-          throw new Error('Failed to fetch tweets');
+        const response = await fetch('/api/twitter/feed');
+        if (response.status === 404) {
+          setTweets([]);
+          setError(null);
+          return;
         }
+        if (!response.ok) throw new Error('Failed to fetch tweets');
         
         const contentType = response.headers.get('content-type');
         if (!contentType || !contentType.includes('application/json')) {
@@ -119,7 +119,6 @@ export function TwitterFeed() {
           setError(data.error || 'Failed to load tweets');
         }
       } catch (err) {
-        console.error('Error fetching tweets:', err);
         setError('Could not load Twitter feed');
       } finally {
         setLoading(false);
