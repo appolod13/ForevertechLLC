@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Supabase not configured' }, { status: 500 });
     }
 
-    const { galleryItemId, hiddenMessage, quantumVerificationCode, quantumJobId, quantumSeedHash } = body;
+    const { galleryItemId, hiddenMessage, quantumVerificationCode, quantumJobId, quantumSeedHash, creatorUserId, creatorStripeAccountId } = body;
 
     if (!galleryItemId || !hiddenMessage || !quantumVerificationCode) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
@@ -22,7 +22,9 @@ export async function POST(request: NextRequest) {
         hidden_message: hiddenMessage,
         quantum_verification_code: quantumVerificationCode,
         quantum_job_id: quantumJobId || null,
-        quantum_seed_hash: quantumSeedHash || null
+        quantum_seed_hash: quantumSeedHash || null,
+        creator_user_id: creatorUserId || null,
+        creator_stripe_account_id: creatorStripeAccountId || null,
       })
       .select()
       .single();
@@ -62,12 +64,26 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid PixelQrypt verification code' }, { status: 404 });
     }
 
+    const { data: gallery, error: galleryError } = await supabase
+      .from('gallery_items')
+      .select('*')
+      .eq('id', data.gallery_item_id)
+      .single();
+
+    if (galleryError || !gallery) {
+      return NextResponse.json({ success: false, error: 'PixelQrypt item not found' }, { status: 404 });
+    }
+
     return NextResponse.json({ 
       success: true, 
       hiddenMessage: data.hidden_message, 
       galleryItemId: data.gallery_item_id,
       quantumJobId: data.quantum_job_id,
-      quantumSeedHash: data.quantum_seed_hash
+      quantumSeedHash: data.quantum_seed_hash,
+      imageUrl: gallery.image_url,
+      prompt: gallery.prompt,
+      creatorUserId: data.creator_user_id || gallery.user_id || null,
+      creatorStripeAccountId: data.creator_stripe_account_id || null,
     });
   } catch (error) {
     console.error('Failed to retrieve PixelQrypt message:', error);

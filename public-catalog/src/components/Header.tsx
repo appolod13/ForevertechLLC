@@ -44,6 +44,9 @@ export function Header() {
           <Link href="/governance" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
             Governance
           </Link>
+          <Link href="/pixelqrypt" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
+            PixelQrypt™
+          </Link>
           <Link href="/studio" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
             Studio
           </Link>
@@ -127,6 +130,13 @@ export function Header() {
               onClick={() => setIsMobileMenuOpen(false)}
             >
               Studio
+            </Link>
+            <Link
+              href="/pixelqrypt"
+              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              PixelQrypt™
             </Link>
             <Link 
               href="/gallery" 
