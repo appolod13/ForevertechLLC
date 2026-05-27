@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
-import { Heart, RefreshCw, User, BookOpen, Eye, ShoppingCart, Zap, Nfc, Sparkles } from 'lucide-react';
+import { Heart, RefreshCw, User, BookOpen, Eye, ShoppingCart, Zap, Nfc, Sparkles, Key } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import PixelQryptModal from '@/components/PixelQryptModal';
 
 interface GalleryItem {
   id: string;
@@ -28,6 +29,7 @@ export default function GalleryPage() {
   const [filter, setFilter] = useState<'favorites' | 'all' | 'nfts' | 'quantum'>('all');
   const { user } = useAuth();
   const [deviceId, setDeviceId] = useState<string>('');
+  const [pixelQryptModalOpen, setPixelQryptModalOpen] = useState(false);
 
   const fetchGallery = async () => {
     setLoading(true);
@@ -134,9 +136,9 @@ export default function GalleryPage() {
               </button>
               <button 
                 onClick={() => setFilter('quantum')}
-                className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors ${filter === 'quantum' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-300'}`}
+                className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors ${filter === 'quantum' ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white' : 'text-zinc-400 hover:text-zinc-300'}`}
               >
-                <Zap className="w-4 h-4" /> Quantum Verified
+                <Zap className="w-4 h-4" /> PixelQrypt™ Verified
               </button>
             </div>
             <button 
@@ -167,8 +169,8 @@ export default function GalleryPage() {
               <div key={item.id} className="group bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 hover:border-zinc-700 transition-all hover:shadow-xl hover:shadow-black/50">
                 <div className="relative aspect-square bg-zinc-950 overflow-hidden">
                   {item.isQuantumVerified && (
-                    <div className="absolute top-4 left-4 z-10 bg-purple-500/80 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
-                      <Zap className="w-3 h-3" /> Quantum Verified
+                    <div className="absolute top-4 left-4 z-10 bg-gradient-to-r from-purple-600 to-indigo-600/90 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">
+                      <Zap className="w-3 h-3" /> PixelQrypt™ Verified
                     </div>
                   )}
                   {item.isNft && (
@@ -221,6 +223,14 @@ export default function GalleryPage() {
                       <ShoppingCart className="w-4 h-4" /> Purchase
                     </button>
                   </div>
+                  {item.isQuantumVerified && (
+                    <button 
+                      onClick={() => setPixelQryptModalOpen(true)}
+                      className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-3 py-2 rounded-lg text-sm font-semibold transition-all"
+                    >
+                      <Key className="w-4 h-4" /> Unlock PixelQrypt™
+                    </button>
+                  )}
                   <div className="flex justify-between items-center text-xs text-zinc-500">
                     <span>{new Date(item.createdAt).toLocaleDateString()}</span>
                     <div className="flex items-center gap-2">
@@ -235,6 +245,10 @@ export default function GalleryPage() {
           </div>
         )}
       </main>
+      <PixelQryptModal 
+        isOpen={pixelQryptModalOpen} 
+        onClose={() => setPixelQryptModalOpen(false)} 
+      />
     </div>
   );
 }
