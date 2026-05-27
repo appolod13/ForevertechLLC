@@ -362,7 +362,19 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
   if (loading) return <div className="animate-pulse h-96 bg-zinc-900 rounded-xl"></div>;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+    <div>
+      <div className="mb-6 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-900/70"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
       {/* Preview Area */}
       <div className="relative aspect-square bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 flex items-center justify-center">
          <div className="absolute left-4 top-4 z-20 flex overflow-hidden rounded-lg border border-zinc-700 bg-black/40 backdrop-blur">
@@ -444,14 +456,6 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
       {/* Controls */}
       <div className="space-y-8">
         <div>
-            <button
-              type="button"
-              onClick={() => router.back()}
-              className="mb-3 inline-flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-900/70"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back
-            </button>
             <h1 className="text-3xl font-bold mb-2">Customize Your Gear</h1>
             <p className="text-zinc-400">Apply your generated artwork to premium products.</p>
         </div>
@@ -548,6 +552,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
             )}
         </div>
       </div>
+    </div>
     </div>
   );
 }
