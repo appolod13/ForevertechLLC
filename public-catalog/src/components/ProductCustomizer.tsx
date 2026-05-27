@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
-import { ShoppingCart, Shirt, Coffee } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, ShoppingCart, Shirt, Coffee } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCart } from '@/context/CartContext';
 import QRCode from 'qrcode';
@@ -19,6 +20,7 @@ interface Product {
 }
 
 export function ProductCustomizer({ initialImageUrl, promptOverride }: { initialImageUrl: string | null; promptOverride?: string | null }) {
+  const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedVariant, setSelectedVariant] = useState<string>('');
@@ -442,6 +444,14 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
       {/* Controls */}
       <div className="space-y-8">
         <div>
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="mb-3 inline-flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-900/70"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </button>
             <h1 className="text-3xl font-bold mb-2">Customize Your Gear</h1>
             <p className="text-zinc-400">Apply your generated artwork to premium products.</p>
         </div>
