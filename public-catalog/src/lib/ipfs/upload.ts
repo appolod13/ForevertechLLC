@@ -78,40 +78,10 @@ export async function uploadToIpfs(params: { imageUrl: string; filename?: string
 
     const cid = parseIpfsAddResponse(text);
     const ipfsUrl = `ipfs://${cid}`;
-    const gatewayUrl = gatewayBase ? `${gatewayBase}/${cid}` : `https://ipfs.io/ipfs/${cid}`;
+    const gatewayUrl = gatewayBase ? `${gatewayBase}/${cid}` : undefined;
     return { status: "uploaded", cid, ipfsUrl, gatewayUrl };
   } catch (e) {
     return { status: "failed", error: e instanceof Error ? e.message : "ipfs_upload_failed" };
   }
 }
 
-export async function uploadJsonToIpfs(params: { json: unknown; filename?: string }): Promise<UploadResult> {
-  const apiBase = (process.env.IPFS_API_URL || "").trim();
-  if (!apiBase) return { status: "disabled" };
-
-  const auth = normalizeAuth(process.env.IPFS_API_AUTH || "");
-  const gatewayBase = (process.env.IPFS_GATEWAY_BASE || "").trim().replace(/\/$/, "");
-  const url = `${apiBase.replace(/\/$/, "")}/api/v0/add?pin=true`;
-  const filename = (params.filename || "metadata.json").trim() || "metadata.json";
-
-  try {
-    const payload = JSON.stringify(params.json ?? null);
-    const blob = new Blob([payload], { type: "application/json" });
-
-    const form = new FormData();
-    form.append("file", blob, filename);
-    const headers: Record<string, string> = {};
-    if (auth) headers.authorization = auth;
-
-    const res = await fetch(url, { method: "POST", headers, body: form, cache: "no-store" });
-    const text = await res.text();
-    if (!res.ok) return { status: "failed", error: `ipfs_http_${res.status}` };
-
-    const cid = parseIpfsAddResponse(text);
-    const ipfsUrl = `ipfs://${cid}`;
-    const gatewayUrl = gatewayBase ? `${gatewayBase}/${cid}` : `https://ipfs.io/ipfs/${cid}`;
-    return { status: "uploaded", cid, ipfsUrl, gatewayUrl };
-  } catch (e) {
-    return { status: "failed", error: e instanceof Error ? e.message : "ipfs_upload_failed" };
-  }
-}

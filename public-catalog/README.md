@@ -49,32 +49,19 @@
 ## 3. Testing Strategy
 
 ### Unit Testing
-- **Tools**: Vitest + React Testing Library
+- **Tools**: Jest + React Testing Library
 - **Focus**:
   - Component rendering (CatalogItem, Header).
   - Utility functions (currency conversion, date formatting).
   - Hook logic (SSE connection management).
 
 ### E2E Testing
-- **Tools**: Playwright (`@playwright/test`)
-- **Run**:
-  - `npm run test:e2e`
-  - Starts the Next.js dev server automatically (and reuses an existing server locally).
-- **Cross-platform coverage**:
-  - Browsers: Chromium, Firefox, WebKit
-  - Devices/layouts: Desktop + Mobile (device presets) to validate responsive design
-- **Customer journeys covered (with expected outcomes)**:
-  - Navigation + browsing: core routes render and primary navigation works.
-  - Product browsing + search: catalog loads, search/filter reduces results without breaking layout.
-  - Cart operations: “Buy Now” adds to cart, cart renders items, remove clears the cart UI.
-  - Checkout (guest): checkout form validates required fields, shipping quotes render, submit redirects to a success URL.
-  - Payment processing simulation: `/api/checkout` is mocked in E2E to redirect to `/checkout/success?session_id=...` (no Stripe dependency).
-  - Post-purchase: success page finalization calls are mocked; NFT claim flow is exercised via mocked `/api/nft/claim`.
-  - Account creation + login/logout: register/login calls are mocked (API routes are not required), header state updates, profile route enforces auth.
-  - Error handling: invalid login shows an error banner; shipping quote failures render a user-visible message.
-  - Performance guardrails: key pages load under a conservative budget (to catch regressions, not to enforce Lighthouse-grade numbers).
-- **Test data**:
-  - Diverse customer profiles live in `tests/e2e/fixtures/customerProfiles.ts` (US/GB/JP examples).
+- **Tools**: Cypress
+- **Flows**:
+  - User visits homepage -> Loads initial posts.
+  - New post created on backend -> Appears in grid via SSE.
+  - User filters posts -> Grid updates.
+  - Responsive layout checks on mobile/desktop.
 
 ## 4. Performance Benchmarks (Targets)
 

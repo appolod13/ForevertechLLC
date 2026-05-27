@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Header } from '../../components/Header';
 import { CallAgent } from '../../components/CallAgent';
+import { WalletPanel } from '../../components/WalletPanel';
 
 interface SupportStatus {
   agentsAvailable: number;
@@ -23,7 +24,7 @@ export default function SupportPage() {
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const res = await fetch('/api/support/status');
+        const res = await fetch('http://localhost:3001/api/support/status');
         const contentType = res.headers.get('content-type');
         if (!res.ok) {
           throw new Error(`Server returned ${res.status} ${res.statusText}`);
@@ -45,7 +46,7 @@ export default function SupportPage() {
   const submitTicket = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/support/ticket', {
+      const res = await fetch('http://localhost:3001/api/support/ticket', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(ticket)
@@ -69,7 +70,7 @@ export default function SupportPage() {
     e.preventDefault();
     setCallStatus('Connecting...');
     try {
-      const res = await fetch('/api/support/call', {
+      const res = await fetch('http://localhost:3001/api/support/call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(call)
@@ -117,12 +118,15 @@ export default function SupportPage() {
         {viewMode === 'agent' ? (
           <div className="flex flex-col items-center w-full">
             <h2 className="text-2xl font-bold mb-6 text-blue-400">Agent Voice Console</h2>
-            <div className="grid grid-cols-1 gap-8 w-full max-w-5xl">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 w-full max-w-5xl">
               <div className="flex flex-col items-center">
                 <CallAgent identity="support-agent-1" />
                 <div className="mt-8 w-full max-w-md text-sm text-gray-500 bg-black/20 p-4 rounded-lg">
                   <p><strong>Note:</strong> System is using Test Credentials. Real payments are simulated.</p>
                 </div>
+              </div>
+              <div>
+                <WalletPanel />
               </div>
             </div>
           </div>

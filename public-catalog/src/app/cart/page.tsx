@@ -4,6 +4,7 @@ import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import { Trash2, ShoppingBag, ArrowRight, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function CartPage() {
   const { items, removeFromCart, clearCart, total, isLoading } = useCart();
@@ -58,14 +59,16 @@ export default function CartPage() {
                     </p>
                   </div>
                 ) : item.imageUrl ? (
-                  <img
-                    src={item.imageUrl}
-                    alt={item.title}
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                    decoding="async"
+                  <Image 
+                    src={item.imageUrl} 
+                    alt={item.title} 
+                    fill 
+                    className="object-cover"
                     onError={(e) => {
-                      e.currentTarget.style.display = 'none';
+                       // If image fails here too, fallback?
+                       // We can't easily change state here without a wrapper component or more complex logic.
+                       // For now, rely on CatalogItem's detection or simple replacement.
+                       e.currentTarget.style.display = 'none';
                     }}
                   />
                 ) : (
@@ -127,7 +130,7 @@ export default function CartPage() {
               </div>
               <div className="flex justify-between text-zinc-400">
                 <span>Shipping</span>
-                <span className="text-zinc-300">Calculated at checkout</span>
+                <span className="text-emerald-400">Free</span>
               </div>
               <div className="border-t border-zinc-800 pt-3 flex justify-between font-semibold text-white text-lg">
                 <span>Total</span>

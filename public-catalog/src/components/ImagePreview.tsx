@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import Image from 'next/image';
 import { Maximize2, Minimize2, Download, ZoomIn, ZoomOut, Loader2, AlertCircle, RefreshCw, Info } from 'lucide-react';
 import { Loader2 as Spinner } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -122,12 +123,12 @@ export function ImagePreview({
               height: '100%'
             }}
           >
-            <img
+            <Image
               src={imageUrl}
               alt="Generated Asset"
-              className="object-contain w-full h-full"
-              loading="eager"
-              decoding="async"
+              fill
+              className="object-contain"
+              unoptimized
             />
           </div>
         ) : (

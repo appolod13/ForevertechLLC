@@ -2,93 +2,32 @@ import { Header } from '@/components/Header';
 import { CatalogGrid } from '@/components/CatalogGrid';
 import { TwitterFeed } from '@/components/TwitterFeed';
 import { LatestAIImage } from '@/components/LatestAIImage';
-import Link from 'next/link';
-import fs from 'fs';
-import path from 'path';
+import Image from 'next/image';
 
-type CatalogPost = {
-  id: string;
-  content: string;
-  ipfsHash?: string;
-  timestamp: string;
-  metadata?: { title?: string; mediaUrl?: string; prompt?: string; [key: string]: unknown };
-};
+const API_BASE = process.env.CATALOG_API_BASE || process.env.NEXT_PUBLIC_CART_API_BASE || 'http://localhost:3001';
 
-function resolvePostMediaUrl(post: CatalogPost | undefined): string | null {
-  if (!post) return null;
-  const raw =
-    (post.metadata && typeof post.metadata.mediaUrl === 'string' ? post.metadata.mediaUrl : null) || null;
-  if (!raw) return null;
-  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
-  if (raw.startsWith('Qm') || raw.startsWith('bafy')) return `https://ipfs.io/ipfs/${raw}`;
-  return `${raw.startsWith('/') ? '' : '/'}${raw}`;
-}
-
-async function getInitialPosts(): Promise<CatalogPost[]> {
+async function getPosts() {
   try {
-    const imagesDir = path.join(process.cwd(), '..', 'quantum-image-gen', 'images');
-    const files = fs.existsSync(imagesDir) ? fs.readdirSync(imagesDir) : [];
-    const imageFiles = files.filter((f) => f.endsWith('.png')).sort((a, b) => b.localeCompare(a));
-
-    const posts = imageFiles.map((file, index) => {
-      const parts = file.split('_');
-      const timestampStr = parts[0];
-
-      let date = new Date();
-      if (timestampStr && timestampStr.length >= 15) {
-        const y = timestampStr.substring(0, 4);
-        const m = timestampStr.substring(4, 6);
-        const d = timestampStr.substring(6, 8);
-        const h = timestampStr.substring(9, 11);
-        const min = timestampStr.substring(11, 13);
-        const s = timestampStr.substring(13, 15);
-        date = new Date(`${y}-${m}-${d}T${h}:${min}:${s}Z`);
-      }
-
-      const ipfsHash = index < 3 ? `QmSeeded${String(index + 1).padStart(2, '0')}` : undefined;
-
-      return {
-        id: file,
-        content: `Quantum Generated Asset - ${parts.length > 2 ? parts[2].replace('.png', '') : 'Image'}`,
-        timestamp: date.toISOString(),
-        ipfsHash,
-        metadata: {
-          title: `Quantum Asset ${file.substring(0, 8)}`,
-          mediaUrl: `/api/images/${encodeURIComponent(file)}`,
-          priceUsd: 49.99,
-          prompt: 'seeded',
-        },
-      } satisfies CatalogPost;
+    const res = await fetch(`${API_BASE}/api/catalog/posts`, { 
+      cache: 'no-store' 
     });
-
-    if (posts.length === 0 && process.env.NODE_ENV !== 'production') {
-      return [
-        {
-          id: 'seed-post-1',
-          content: 'Seeded Quantum Generated Asset',
-          timestamp: new Date().toISOString(),
-          ipfsHash: 'QmSeeded01',
-          metadata: {
-            title: 'Quantum Asset Seed',
-            mediaUrl: '/placeholder-future-city.svg',
-            priceUsd: 49.99,
-            prompt: 'seeded',
-          },
-        },
-      ];
+    if (!res.ok) {
+      throw new Error('Failed to fetch posts');
     }
-
-    return posts;
-  } catch {
+    const contentType = res.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      throw new Error('Invalid response format');
+    }
+    const data = await res.json();
+    return data.posts || [];
+  } catch (error) {
+    console.error('Error fetching initial posts:', error);
     return [];
   }
 }
 
 export default async function Home() {
-  const initialPosts = await getInitialPosts();
-  const heroPost = initialPosts[0];
-  const heroImageUrl = resolvePostMediaUrl(heroPost);
-  const heroText = (heroPost?.content || '').trim();
+  const initialPosts = await getPosts();
 
   return (
     <div className="min-h-screen bg-black text-white selection:bg-primary/30">
@@ -97,50 +36,24 @@ export default async function Home() {
         {/* Hero Section */}
         <section className="container mx-auto px-4 pt-8">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-            {/* Main Hero - Latest Drop */}
+            {/* Main Hero - Future City */}
             <div className="relative col-span-1 md:col-span-2 aspect-video w-full overflow-hidden rounded-2xl border border-zinc-800 shadow-2xl shadow-primary/10 group">
-              {heroImageUrl ? (
-                <img
-                  src={heroImageUrl}
-                  alt="Latest community drop"
-                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-                  loading="eager"
-                />
-              ) : (
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.20),transparent_55%),radial-gradient(ellipse_at_bottom,rgba(16,185,129,0.12),transparent_55%)]" />
-              )}
-              <div className="absolute top-4 left-4 z-10">
-                <span className="inline-flex items-center rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white backdrop-blur-md border border-white/10">
-                  Latest Drop
-                </span>
-              </div>
+              <Image
+                src="/placeholder-future-city.svg"
+                alt="ForeverTech Future City"
+                fill
+                priority
+                className="object-cover transition-transform duration-700 group-hover:scale-105"
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 66vw, 800px"
+              />
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex items-end p-8">
                 <div className="max-w-xl">
                   <h1 className="text-3xl md:text-5xl font-bold text-white tracking-tight drop-shadow-lg mb-2">
-                    Turn Prompts into <span className="text-primary">Wearable</span> Art
+                    The Future of <span className="text-primary">Decentralized</span> Tech
                   </h1>
                   <p className="text-zinc-300 text-sm md:text-base line-clamp-2">
-                    Generate an original design, fuse it with your own image, preview it on merch, and check out in minutes.
+                    Build your decentralized presence with IPFS hosting, blockchain verification, and Web3 monetization.
                   </p>
-                  <div className="mt-5 flex flex-wrap items-center gap-3">
-                    <Link
-                      href="/studio"
-                      className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200 transition-colors"
-                    >
-                      Create in Studio
-                    </Link>
-                    <Link
-                      href="/gallery"
-                      className="inline-flex items-center justify-center rounded-lg bg-black/40 px-4 py-2 text-sm font-semibold text-white hover:bg-black/55 border border-white/10 backdrop-blur-md transition-colors"
-                    >
-                      View Your Gallery
-                    </Link>
-                  </div>
-                  {heroText && (
-                    <div className="mt-4 text-xs text-zinc-400 line-clamp-2">
-                      {heroText}
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -160,43 +73,6 @@ export default async function Home() {
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 to-transparent p-4">
                  <p className="text-sm font-medium text-white">AI Generated Art</p>
                  <p className="text-xs text-zinc-400">Fresh from the neural network</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* How It Works Section */}
-        <section className="container mx-auto px-4 pt-12">
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-8 text-center">
-            <h2 className="text-3xl font-bold text-white mb-6">How to Create Your Custom T-Shirt</h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-              <div className="flex flex-col items-center">
-                <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center mb-4 border border-primary/50">
-                  <span className="text-2xl font-bold text-primary">1</span>
-                </div>
-                <h3 className="text-xl font-semibold text-white mb-2">Generate Art</h3>
-                <p className="text-zinc-400 text-sm">Head to the Studio and type a prompt. Our generator creates unique Julia + Mandelbrot fractal fusion designs—Julia uses a fixed equation repeated on every pixel; Mandelbrot uses the pixel itself as the equation’s starting point; we blend them mathematically into one sharp, printable pattern for your shirt.</p>
-              </div>
-              <div className="flex flex-col items-center">
-                <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center mb-4 border border-primary/50">
-                  <span className="text-2xl font-bold text-primary">2</span>
-                </div>
-                <h3 className="text-xl font-semibold text-white mb-2">Teach the AI</h3>
-                <p className="text-zinc-400 text-sm">Like or Dislike the generated images. Your feedback trains the neural network for better results.</p>
-              </div>
-              <div className="flex flex-col items-center">
-                <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center mb-4 border border-primary/50">
-                  <span className="text-2xl font-bold text-primary">3</span>
-                </div>
-                <h3 className="text-xl font-semibold text-white mb-2">Customize Gear</h3>
-                <p className="text-zinc-400 text-sm">Select your favorite design, pick a T-Shirt size (S, M, L, XL, XXL), and add it to your cart.</p>
-              </div>
-              <div className="flex flex-col items-center">
-                <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center mb-4 border border-primary/50">
-                  <span className="text-2xl font-bold text-primary">4</span>
-                </div>
-                <h3 className="text-xl font-semibold text-white mb-2">Automated Print</h3>
-                <p className="text-zinc-400 text-sm">Checkout securely. Your order is automatically sent to Printify for fulfillment and shipping.</p>
               </div>
             </div>
           </div>

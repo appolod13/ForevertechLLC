@@ -47,7 +47,7 @@ export async function fetchWithRetry(
   const retries = retry.retries ?? 3;
   const baseDelay = retry.baseDelayMs ?? 250;
   const maxDelay = retry.maxDelayMs ?? 4000;
-  const timeoutMs = retry.timeoutMs ?? (process.env.NODE_ENV !== 'production' ? 25_000 : 8000);
+  const timeoutMs = retry.timeoutMs ?? 8000;
 
   let attempt = 0;
   let lastError: unknown;
@@ -71,11 +71,7 @@ export async function fetchWithRetry(
       return await res.text();
     } catch (e) {
       clearTimeout(t);
-      if (e instanceof Error && e.name === 'AbortError') {
-        lastError = new Error(`timeout after ${timeoutMs}ms`);
-      } else {
-        lastError = e;
-      }
+      lastError = e;
       attempt++;
       if (attempt > retries) break;
       const delay = Math.min(baseDelay * 2 ** (attempt - 1), maxDelay);

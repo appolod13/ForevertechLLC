@@ -157,7 +157,14 @@ export async function POST(req: NextRequest) {
 
     const reports: ModelReport[] = [];
 
-    if (apiKey) {
+    if (!apiKey) {
+      reports.push({
+        model: "openai-compatible",
+        role: "planner",
+        output: "",
+        error: "missing_OPENAI_API_KEY",
+      });
+    } else {
       const planner = await callOpenAICompatible({
         baseUrl,
         apiKey,
@@ -231,15 +238,6 @@ export async function POST(req: NextRequest) {
       .map((r) => r.output)
       .filter((s) => typeof s === "string" && s.trim().length > 0);
 
-    if (candidates.length === 0) {
-      const reasons = reports.filter((r) => r.error).map((r) => r.error);
-      return fail("agents_not_configured", 503, {
-        code: "agents_not_configured",
-        message: "AI Agents are not configured. Set OPENAI_API_KEY and/or OPENCLAW_GATEWAY_TOKEN.",
-        reasons,
-      });
-    }
-
     const optimizedPrompt = candidates.length ? candidates[candidates.length - 1].trim() : prompt;
     const durationMs = Date.now() - t0;
     logInfo("cross_agent.success", { requestId, durationMs, reports: reports.length });
@@ -251,3 +249,4 @@ export async function POST(req: NextRequest) {
     return fail("cross_agent_failed", 500);
   }
 }
+

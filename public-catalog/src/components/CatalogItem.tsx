@@ -1,7 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import Image from 'next/image';
 import { format } from 'date-fns';
-import { ShoppingCart, ShieldCheck, AlertTriangle, ThumbsUp, ThumbsDown, Eye } from 'lucide-react';
+import { ShoppingCart, Coins, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useCart } from '@/context/CartContext';
@@ -32,88 +33,21 @@ export function CatalogItem({
     return typeof m?.priceUsd === 'number' ? m!.priceUsd! : 49.99;
   })()
 }: CatalogItemProps) {
+  const fcPrice = (priceUsd * 10).toFixed(0); // Mock conversion 1 USD = 10 FC
   const { addToCart } = useCart();
-
-  const stableNumber = (input: string, min: number, max: number) => {
-    let h = 2166136261;
-    for (let i = 0; i < input.length; i++) {
-      h ^= input.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    const span = Math.max(1, max - min + 1);
-    return min + ((h >>> 0) % span);
-  };
   
   // Handle image URL
   const getImageUrl = (url?: string | null) => {
     if (!url) return '/placeholder-future-city.svg';
-    if (url.startsWith('http')) {
-      try {
-        const u = new URL(url);
-        if ((u.hostname === 'localhost' || u.hostname === '127.0.0.1') && u.port === '5328' && u.pathname.startsWith('/images/')) {
-          const filename = u.pathname.split('/').pop() || '';
-          return filename ? `/api/images/${encodeURIComponent(filename)}` : '/placeholder-future-city.svg';
-        }
-      } catch {
-      }
-      return url;
-    }
+    if (url.startsWith('http')) return url;
     if (url.startsWith('Qm') || url.startsWith('bafy')) return `https://ipfs.io/ipfs/${url}`;
-    return `${url.startsWith('/') ? '' : '/'}${url}`;
+    return `http://localhost:3001${url.startsWith('/') ? '' : '/'}${url}`;
   };
 
   const [imgSrc, setImgSrc] = React.useState(getImageUrl(mediaUrl));
   const [isLoading, setIsLoading] = React.useState(true);
   const [hasError, setHasError] = useState(false);
   const [isFallback, setIsFallback] = useState(false);
-  const [likes, setLikes] = useState(() => stableNumber(`likes|${id}`, 10, 59));
-  const [isLiked, setIsLiked] = useState(false);
-  const [dislikeTime, setDislikeTime] = useState<number | null>(null);
-  const [isHidden, setIsHidden] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
-  const [selectedSize, setSelectedSize] = useState<'S'|'M'|'L'|'XL'|'XXL'>('L');
-
-  useEffect(() => {
-    // Check if it was disliked more than 30 mins ago
-    if (dislikeTime) {
-      const checkHidden = () => {
-        if (Date.now() - dislikeTime > 30 * 60 * 1000) {
-          setIsHidden(true);
-        }
-      };
-      checkHidden();
-      const interval = setInterval(checkHidden, 60000); // Check every minute
-      return () => clearInterval(interval);
-    }
-  }, [dislikeTime]);
-
-  const handleFeedback = async (type: 'like' | 'dislike') => {
-    try {
-      const prompt = (() => {
-        const p = metadata?.prompt ?? metadata?.title;
-        return typeof p === 'string' ? p : (p ? JSON.stringify(p) : '');
-      })();
-
-      await fetch('/api/ai/feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageId: id, type, prompt, mediaUrl: mediaUrl || undefined })
-      });
-      
-      if (type === 'like') {
-        if (!isLiked) {
-          setLikes(prev => prev + 1);
-          setIsLiked(true);
-          toast.success('You liked this design! The AI will learn from this.');
-        }
-      } else {
-        setDislikeTime(Date.now());
-        toast.info('You disliked this design. It will be hidden in 30 minutes.');
-      }
-    } catch (e) {
-      console.error('Feedback error:', e);
-    }
-  };
 
   React.useEffect(() => {
     setImgSrc(getImageUrl(mediaUrl));
@@ -121,26 +55,23 @@ export function CatalogItem({
     setHasError(false);
   }, [mediaUrl]);
 
-  const [isPurchasing, setIsPurchasing] = React.useState(false);
-
   // Truncate content
   const safeContent = content || '';
   const description = safeContent.length > 200 
     ? safeContent.substring(0, 200) + '...' 
     : safeContent;
 
-  if (isHidden) return null;
+  const [isPurchasing, setIsPurchasing] = React.useState(false);
 
-  const handlePurchase = async () => {
+  const handlePurchase = async (currency: 'usd' | 'fc') => {
     setIsPurchasing(true);
     try {
       await addToCart({ 
-        id: `${id}-${selectedSize}`, 
-        title: `${metadata?.title || 'Digital Asset'} (Size: ${selectedSize})`, 
+        id, 
+        title: metadata?.title || 'Digital Asset', 
         price: priceUsd,
         quantity: 1,
-        currency: 'usd',
-        size: selectedSize,
+        currency,
         imageUrl: hasError ? undefined : imgSrc,
         description: safeContent,
         imageError: hasError,
@@ -155,7 +86,7 @@ export function CatalogItem({
           originalPrompt: metadata?.prompt || metadata?.title || 'Unknown Prompt'
         }
       });
-      toast.success('Added to cart!');
+      toast.success(`Added to cart! (${currency.toUpperCase()})`);
       
     } catch (e) {
       console.error('Purchase error:', e);
@@ -181,18 +112,21 @@ export function CatalogItem({
         )}
         
         {!hasError ? (
-          <img
+          <Image
             src={imgSrc}
             alt="Item thumbnail"
+            fill
             className={cn(
-              "absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-110",
+              "object-cover transition-transform duration-500 group-hover:scale-110",
               isLoading ? "opacity-0" : "opacity-100"
             )}
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             onLoad={() => setIsLoading(false)}
             onError={() => {
               setHasError(true);
               setIsLoading(false);
-              fetch('/api/log/error', {
+              // Log error to backend
+              fetch('http://localhost:3001/api/log/error', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -202,7 +136,6 @@ export function CatalogItem({
                 })
               }).catch(console.error);
             }}
-            loading="lazy"
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 p-4 text-center">
@@ -244,54 +177,17 @@ export function CatalogItem({
       {/* Content Section */}
       <div className="flex flex-1 flex-col p-5">
         <div className="mb-4">
-          <div className="flex justify-between items-start">
-            <h3 className="mb-2 text-xl font-bold text-white line-clamp-1 flex-1">
-              {metadata?.title || 'Exclusive Digital Asset'}
-            </h3>
-            <button 
-              onClick={() => setShowPreview(true)}
-              className="ml-2 p-1.5 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
-              title="Preview Image"
-            >
-              <Eye className="h-4 w-4" />
-            </button>
-          </div>
+          <h3 className="mb-2 text-xl font-bold text-white line-clamp-1">
+            {metadata?.title || 'Exclusive Digital Asset'}
+          </h3>
           <p className="text-sm text-zinc-400 line-clamp-3">
             {description}
           </p>
         </div>
 
-        {/* Feedback Section */}
-        <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 pb-4">
-          <button 
-            onClick={() => handleFeedback('like')}
-            className={cn("flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full transition-colors", 
-              isLiked ? "bg-primary/20 text-primary" : "bg-zinc-800/50 text-zinc-400 hover:bg-zinc-800 hover:text-white"
-            )}
-          >
-            <ThumbsUp className="h-3.5 w-3.5" />
-            <span>{likes} Likes</span>
-          </button>
-          <button 
-            onClick={() => handleFeedback('dislike')}
-            className={cn("flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full transition-colors",
-              dislikeTime ? "bg-red-500/20 text-red-500" : "bg-zinc-800/50 text-zinc-400 hover:bg-zinc-800 hover:text-white"
-            )}
-            title={dislikeTime ? "Will be hidden in 30 mins" : "Dislike to teach AI"}
-          >
-            <ThumbsDown className="h-3.5 w-3.5" />
-            <span>Dislike</span>
-          </button>
-          {dislikeTime && (
-            <span className="text-[10px] text-amber-500/80 animate-pulse ml-auto">
-              Hiding soon...
-            </span>
-          )}
-        </div>
-
         {/* Pricing */}
         <div className="mt-auto space-y-4">
-          <div className="flex items-end justify-between pt-1">
+          <div className="flex items-end justify-between border-t border-zinc-800 pt-4">
             <div>
               <p className="text-xs text-zinc-500 uppercase tracking-wider">Price</p>
               <div className="flex items-baseline gap-2">
@@ -299,70 +195,39 @@ export function CatalogItem({
                 <span className="text-sm text-zinc-500">USD</span>
               </div>
             </div>
-          </div>
-
-          {/* Size Selector */}
-          <div className="mb-3">
-            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">T-Shirt Size</p>
-            <div className="flex gap-2">
-              {['S', 'M', 'L', 'XL', 'XXL'].map((size) => (
-                <button
-                  key={size}
-                  onClick={() => setSelectedSize(size as 'S'|'M'|'L'|'XL'|'XXL')}
-                  className={cn(
-                    "flex-1 py-1 text-xs font-semibold rounded-md border transition-colors",
-                    selectedSize === size 
-                      ? "bg-primary border-primary text-black" 
-                      : "bg-zinc-900 border-zinc-700 text-zinc-300 hover:border-primary/50"
-                  )}
-                >
-                  {size}
-                </button>
-              ))}
+            <div className="text-right">
+              <p className="text-xs text-amber-500 uppercase tracking-wider">FC Price</p>
+              <div className="flex items-baseline gap-1 justify-end">
+                <Coins className="h-4 w-4 text-amber-400" />
+                <span className="text-xl font-bold text-amber-400">{fcPrice}</span>
+                <span className="text-xs text-amber-500">FC</span>
+              </div>
             </div>
           </div>
 
           {/* Actions */}
-          <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <button 
-              onClick={handlePurchase}
+              onClick={() => handlePurchase('usd')}
               disabled={isPurchasing}
               className="flex items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              data-testid="buy-now"
+              data-testid="buy-usd"
             >
               {isPurchasing ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-black border-t-transparent" /> : <ShoppingCart className="h-4 w-4" />}
-              Buy Now
+              Buy Crypto
+            </button>
+            <button 
+              onClick={() => handlePurchase('fc')}
+              disabled={isPurchasing}
+              className="flex items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed"
+              data-testid="buy-fc"
+            >
+              {isPurchasing ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-black border-t-transparent" /> : <Coins className="h-4 w-4" />}
+              Buy w/ FC
             </button>
           </div>
         </div>
       </div>
-
-      {/* Preview Modal */}
-      {showPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setShowPreview(false)}>
-          <div className="relative max-w-4xl w-full aspect-square md:aspect-video rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800" onClick={(e) => e.stopPropagation()}>
-            <img
-              src={imgSrc}
-              alt="Preview"
-              className="absolute inset-0 h-full w-full object-contain"
-              onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-                const target = e.currentTarget;
-                target.src = 'https://via.placeholder.com/400x300?text=Preview+Not+Available';
-              }}
-              loading="eager"
-            />
-            <button 
-              onClick={() => setShowPreview(false)}
-              className="absolute top-4 right-4 h-10 w-10 bg-black/50 hover:bg-black/80 text-white rounded-full flex items-center justify-center transition-colors"
-            >
-              &times;
-            </button>
-            <div className="absolute bottom-4 left-4 bg-black/60 px-4 py-2 rounded-lg text-sm text-white backdrop-blur-md">
-              <span className="font-semibold text-primary">{likes} Likes</span> - AI generated
-            </div>
-          </div>
-        </div>
-      )}
     </motion.div>
   );
 }

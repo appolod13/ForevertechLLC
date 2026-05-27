@@ -11,7 +11,7 @@ function generateUUID() {
   });
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_CART_API_BASE || '';
+const API_BASE = process.env.NEXT_PUBLIC_CART_API_BASE || 'http://localhost:3001';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -32,7 +32,6 @@ export interface CartItem {
   originalPrompt?: string;
   originalFilename?: string;
   currency?: 'usd' | 'fc';
-  size?: 'S' | 'M' | 'L' | 'XL' | 'XXL';
   metadata?: Record<string, unknown>;
   [key: string]: unknown;
 }

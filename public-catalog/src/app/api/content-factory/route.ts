@@ -4,7 +4,6 @@ import { generateCaptions, generateAutoSocialCaptions } from '@/lib/contentFacto
 import { generateImageForPlatform } from '@/lib/contentFactory/image';
 import { validateFactoryRequest, validateFactoryOutput } from '@/lib/contentFactory/validate';
 import { addLog, getLogs } from '@/lib/logging';
-import { addGalleryItem } from '@/lib/galleryStore';
 
 type Platform = 'linkedin' | 'instagram' | 'twitter';
 type Provider = 'mock' | 'dalle' | 'stablediffusion' | 'midjourney';
@@ -98,18 +97,6 @@ export async function POST(req: NextRequest) {
         image_url: img.image_url,
         generation_metadata: meta,
       });
-
-      // Save to gallery
-      try {
-        addGalleryItem({
-          imageUrl: img.image_url,
-          prompt: safeTopic,
-          userName: 'Content Factory',
-          catalogName: 'Automated Catalog'
-        });
-      } catch (err) {
-        console.error('Failed to add gallery item', err);
-      }
     }
 
     const outValidation = validateFactoryOutput(results);

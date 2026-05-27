@@ -5,7 +5,6 @@ export async function GET() {
     ? Number(process.env.APP_STARTED_AT)
     : Date.now();
   const uptimeSec = Math.round(process.uptime());
-  const env = process.env as Record<string, string | undefined>;
   const payload = {
     ok: true,
     time: new Date().toISOString(),
@@ -22,18 +21,6 @@ export async function GET() {
       port: 3001,
       dependencies: {
         database: "not-configured",
-      },
-      integrations: {
-        stripe: {
-          hasSecretKey: Boolean(env.STRIPE_SECRET_KEY),
-          hasWebhookSecret: Boolean(env.STRIPE_WEBHOOK_SECRET),
-        },
-        printify: {
-          hasApiToken: Boolean(env.PRINTIFY_API_TOKEN),
-          hasShopId: Boolean(env.PRINTIFY_SHOP_ID),
-          hasDefaultSku: Boolean(env.PRINTIFY_DEFAULT_SKU),
-          hasSizeSkus: ["S", "M", "L", "XL", "XXL"].some(size => Boolean(env[`PRINTIFY_SKU_${size}`])),
-        },
       },
     },
     startedAt,

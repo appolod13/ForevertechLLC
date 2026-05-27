@@ -6,20 +6,6 @@ import { Header } from '../../components/Header';
 import { Play, CheckCircle, AlertCircle, Phone, ShoppingCart, Truck, CreditCard } from 'lucide-react';
 
 export default function WorkflowTestPage() {
-  if (process.env.NODE_ENV === 'production') {
-    return (
-      <div className="min-h-screen bg-gray-900 text-white">
-        <Header />
-        <main className="max-w-3xl mx-auto p-8">
-          <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700">
-            <h1 className="text-2xl font-bold mb-2">Workflow Test</h1>
-            <p className="text-gray-400">This page is disabled in production.</p>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
   const [logs, setLogs] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);

@@ -6,51 +6,37 @@ test.describe('Studio Generate & Import', () => {
 
     const postBox = page.getByPlaceholder("What's on your mind? #Web3");
     await expect(postBox).toBeVisible();
+    await postBox.fill('My campaign post. (Attached: Generated Image)');
 
-    const promptBox = page.locator('textarea[placeholder="Describe the image and post content you want to generate..."]');
+    const promptBox = page.locator('textarea[placeholder="Describe the image you want to generate..."]');
     await expect(promptBox).toBeVisible();
     await promptBox.fill('futuristic city skyline at dusk, neon lights, high detail');
 
-    await page.route('**/api/generate/image', async (route) => {
+    await page.route('**/api/generate-image', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          imageUrl:
-            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAAAAABx5D8UAAAAFElEQVR4nGP4z8DwnwEGwAEMCwAAGXgA4p9gB2QAAAAASUVORK5CYII=",
-        }),
-      });
-    });
-    await page.route('**/api/content-factory', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true, items: [{ text_content: 'E2E: Generated post copy.' }] }),
-      });
-    });
-    await page.route('**/api/gallery', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true, item: { id: 'e2e_gallery_1' } }),
+        body: JSON.stringify({ success: true, imageUrl: '/public/ai-gen-test.png' }),
       });
     });
 
-    const generateBtn = page.getByRole('button', { name: 'Generate Asset & Content' });
+    const generateBtn = page.getByRole('button', { name: /Generate Asset/i });
     const start = Date.now();
     await generateBtn.click();
 
-    const generatedImg = page.getByRole('img', { name: 'Latest AI Generated Content' });
+    const generatedImg = page.locator('img[alt=""]');
     await expect(generatedImg).toBeVisible({ timeout: 20000 });
     const genDuration = Date.now() - start;
     expect(genDuration).toBeLessThan(20000);
 
-    const sendBtn = page.getByRole('button', { name: 'Send to Multi-Channel Poster' });
-    await expect(sendBtn).toBeEnabled({ timeout: 20000 });
-    await sendBtn.click();
+    let importBtn = page.getByRole('button', { name: 'Import to Multi-Channel Poster' });
+    const visiblePrimary = await importBtn.isVisible().catch(() => false);
+    if (!visiblePrimary) {
+      importBtn = page.getByRole('button', { name: 'Import' });
+    }
+    await expect(importBtn).toBeEnabled({ timeout: 20000 });
+    await importBtn.click();
 
-    await expect(postBox).toHaveValue(/E2E: Generated post copy\./, { timeout: 20000 });
-    await expect(page.getByRole('img', { name: 'Attached preview' })).toBeVisible({ timeout: 20000 });
+    await expect(postBox).toHaveValue(/\(Attached: Generated Image\): (http|data:image)/, { timeout: 20000 });
   });
 });

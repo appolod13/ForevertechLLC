@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from quantum_gen.wolfram_qiskit import generate_quantum_image
+from quantum_gen.wolfram_qiskit import _contains_future_city, _future_city_concept
 
 
 class GenerationRequest(BaseModel):
@@ -19,12 +19,10 @@ class GenerationRequest(BaseModel):
     steps: int = Field(default=30, ge=1, le=200)
     quantum_mode: bool = Field(default=False)
     ipfs_upload: bool = Field(default=False)
-    seed_salt: str | None = Field(default=None)
 
 
-def _request_id(prompt: str, width: int, height: int, quantum_mode: bool, seed_salt: str | None) -> str:
-    salt = (seed_salt or "").strip()
-    raw = f"{prompt}|{width}x{height}|q={int(quantum_mode)}|salt={salt}".encode("utf-8")
+def _request_id(prompt: str, width: int, height: int, quantum_mode: bool) -> str:
+    raw = f"{prompt}|{width}x{height}|q={int(quantum_mode)}".encode("utf-8")
     return hashlib.sha256(raw).hexdigest()[:16]
 
 
@@ -50,18 +48,17 @@ def generate(req: GenerationRequest):
     prompt = (req.prompt or "").strip()
     width = int(req.width)
     height = int(req.height)
-    seed_salt = (req.seed_salt or "").strip() or None
 
-    rule = int(_request_id(prompt, width, height, req.quantum_mode, seed_salt), 16) % 128
-    img = generate_quantum_image(prompt, width, height, rule=rule, force_quantum=req.quantum_mode, seed_salt=seed_salt)
-    provider = "quantum_julia_v1" if req.quantum_mode else "standard_v1"
+    if _contains_future_city(prompt):
+        rule = int(_request_id(prompt, width, height, req.quantum_mode), 16) % 128
+        img = _future_city_concept(prompt, width, height, rule=rule)
+        provider = "future_city_concept_v1"
+    else:
+        rule = int(_request_id(prompt, width, height, req.quantum_mode), 16) % 128
+        img = _future_city_concept(f"future city | {prompt}", width, height, rule=rule)
+        provider = "fallback_concept_v1"
 
-    derived_prompt = getattr(img, "info", {}).get("qf_derived_prompt")
-    image_hash = getattr(img, "info", {}).get("qf_image_hash")
-    quantum_seed_hash = getattr(img, "info", {}).get("qf_quantum_seed_hash")
-    quantum_engine = getattr(img, "info", {}).get("qf_quantum_engine")
-
-    rid = _request_id(prompt, width, height, req.quantum_mode, seed_salt)
+    rid = _request_id(prompt, width, height, req.quantum_mode)
     filename = f"{_now_tag()}_{rid}_{width}x{height}.png"
     out = IMAGES_DIR / filename
     img.save(out, format="PNG", optimize=True)
@@ -75,16 +72,6 @@ def generate(req: GenerationRequest):
         "request_id": rid,
         "filename": filename,
     }
-    if seed_salt:
-        meta["seed_salt"] = seed_salt
-    if derived_prompt:
-        meta["derived_prompt"] = derived_prompt
-    if image_hash:
-        meta["image_hash"] = image_hash
-    if quantum_seed_hash:
-        meta["qf_quantum_seed_hash"] = quantum_seed_hash
-    if quantum_engine:
-        meta["qf_quantum_engine"] = quantum_engine
 
     if req.ipfs_upload:
         meta["ipfs_url"] = None

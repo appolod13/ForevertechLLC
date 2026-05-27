@@ -15,7 +15,7 @@ services:
       - "8080:8080" # Dashboard (optional, auth in prod)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./config/traefik-static.yml:/etc/traefik/traefik.yml:ro
+      - ./config/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./config/dynamic:/etc/traefik/dynamic:ro
       - ./certs:/etc/traefik/certs
       - ./logs:/var/log/traefik
@@ -96,7 +96,7 @@ services:
       - "traefik.http.routers.catalog.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`app.${DOMAIN}`)"
       - "traefik.http.routers.catalog.entrypoints=websecure"
       - "traefik.http.routers.catalog.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
-      - "traefik.http.routers.catalog.middlewares=secure-headers@file,upload-limit@file"
+      - "traefik.http.routers.catalog.middlewares=secure-headers@file"
       - "traefik.http.services.catalog.loadbalancer.server.port=3000"
     healthcheck:
       test:
@@ -133,7 +133,7 @@ services:
       - "traefik.http.routers.fusion.rule=Host(`fusion.${DOMAIN}`)"
       - "traefik.http.routers.fusion.entrypoints=websecure"
       - "traefik.http.routers.fusion.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
-      - "traefik.http.routers.fusion.middlewares=secure-headers@file,rate-limit@file,upload-limit@file"
+      - "traefik.http.routers.fusion.middlewares=secure-headers@file,rate-limit@file"
       - "traefik.http.services.fusion.loadbalancer.server.port=8000"
     healthcheck:
       test:

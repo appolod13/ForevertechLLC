@@ -1,43 +1,22 @@
 import os
-import math
 import torch
 import numpy as np
 import uuid
 import time
-from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
+from PIL import Image
 from typing import List, Tuple
 from fastapi import UploadFile, HTTPException
-from hashlib import blake2b
-
-try:
-    import clip
-except Exception:
-    clip = None
+import clip
 
 class ImageProcessor:
     def __init__(self, upload_dir: str = "uploads"):
         self.upload_dir = upload_dir
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model = None
-        self.preprocess = None
+        self.model, self.preprocess = clip.load("ViT-B/32", device=self.device)
         os.makedirs(upload_dir, exist_ok=True)
 
-    def _ensure_clip(self):
-        if self.model is not None and self.preprocess is not None:
-            return
-        if clip is None:
-            self.model = None
-            self.preprocess = None
-            return
-
-        try:
-            self.model, self.preprocess = clip.load("ViT-B/32", device=self.device)
-        except Exception:
-            self.model = None
-            self.preprocess = None
-
-    async def process_uploads(self, file_paths: List[str]) -> List[torch.Tensor]:
-        processed_tensors: List[torch.Tensor] = []
+    async def process_uploads(self, file_paths: List[str]) -> List[str]:
+        processed_paths = []
         for file_path in file_paths:
             # 1. Validation (≤20 MB, JPG/PNG/WebP)
             with open(file_path, "rb") as f:
@@ -58,314 +37,29 @@ class ImageProcessor:
             tensor_path = os.path.join(self.upload_dir, f"tensor_{os.path.basename(file_path)}.pt")
             
             # 4. Compute CLIP embeddings
-            self._ensure_clip()
-            if self.model is not None and self.preprocess is not None:
-                with torch.no_grad():
-                    image_input = self.preprocess(img_512).unsqueeze(0).to(self.device)
-                    image_features = self.model.encode_image(image_input)
-                    torch.save(image_features, os.path.join(self.upload_dir, f"clip_{os.path.basename(file_path)}.pt"))
+            with torch.no_grad():
+                image_input = self.preprocess(img).unsqueeze(0).to(self.device)
+                image_features = self.model.encode_image(image_input)
+                torch.save(image_features, os.path.join(self.upload_dir, f"clip_{os.path.basename(file_path)}.pt"))
 
             # Save 512x512 normalized tensor
             img_np = np.array(img_512).astype(np.float32) / 255.0
-            tensor = torch.from_numpy(img_np).permute(2, 0, 1).contiguous()
-            torch.save(tensor, tensor_path)
+            torch.save(torch.from_numpy(img_np), tensor_path)
             
-            processed_tensors.append(tensor)
+            processed_paths.append(tensor_path)
             
-        return processed_tensors
+        return processed_paths
 
     def compute_clip_similarity(self, image: Image.Image, text: str) -> float:
-        self._ensure_clip()
-        if self.model is not None and self.preprocess is not None and clip is not None:
-            with torch.no_grad():
-                image_input = self.preprocess(image).unsqueeze(0).to(self.device)
-                text_input = clip.tokenize([text]).to(self.device)
-
-                image_features = self.model.encode_image(image_input)
-                text_features = self.model.encode_text(text_input)
-
-                image_features /= image_features.norm(dim=-1, keepdim=True)
-                text_features /= text_features.norm(dim=-1, keepdim=True)
-
-                similarity = (image_features @ text_features.T).item()
-            return float(similarity)
-
-        img = image.convert("RGB").resize((64, 64), Image.Resampling.BILINEAR)
-        img_np = (np.asarray(img).astype(np.float32) / 255.0).reshape(-1, 3)
-        img_feat = img_np.mean(axis=0)
-
-        h = blake2b(text.encode("utf-8"), digest_size=24).digest()
-        txt_feat = np.frombuffer(h, dtype=np.uint8).astype(np.float32)
-        txt_feat = txt_feat.reshape(3, 8).mean(axis=1)
-        txt_feat = txt_feat / (np.linalg.norm(txt_feat) + 1e-8)
-        img_feat = img_feat / (np.linalg.norm(img_feat) + 1e-8)
-
-        similarity = float(np.clip(np.dot(img_feat, txt_feat), -1.0, 1.0))
+        with torch.no_grad():
+            image_input = self.preprocess(image).unsqueeze(0).to(self.device)
+            text_input = clip.tokenize([text]).to(self.device)
+            
+            image_features = self.model.encode_image(image_input)
+            text_features = self.model.encode_text(text_input)
+            
+            image_features /= image_features.norm(dim=-1, keepdim=True)
+            text_features /= text_features.norm(dim=-1, keepdim=True)
+            
+            similarity = (image_features @ text_features.T).item()
         return similarity
-
-    def create_tshirt_mockup(
-        self,
-        design: Image.Image,
-        canvas_size: int = 1024,
-        shirt_color: Tuple[int, int, int] = (245, 245, 245),
-        background_color: Tuple[int, int, int] = (245, 246, 248),
-        outline_only: bool = False,
-    ) -> Image.Image:
-        w = canvas_size
-        h = canvas_size
-        cx = w // 2
-
-        base = Image.new("RGBA", (w, h), (*background_color, 255))
-        vignette = Image.new("L", (w, h), 0)
-        vdraw = ImageDraw.Draw(vignette)
-        for i in range(18):
-            a = int(8 + i * 3)
-            inset = int(i * w * 0.02)
-            vdraw.ellipse([inset, inset, w - inset, h - inset], outline=a, width=2)
-        vignette = vignette.filter(ImageFilter.GaussianBlur(radius=int(w * 0.05)))
-        vignette_rgba = Image.new("RGBA", (w, h), (0, 0, 0, 40))
-        vignette_rgba.putalpha(vignette)
-        base = Image.alpha_composite(base, vignette_rgba)
-
-        mask = Image.new("L", (canvas_size, canvas_size), 0)
-        mask_draw = ImageDraw.Draw(mask)
-        body_top = int(h * 0.19)
-        body_bottom = int(h * 0.90)
-        body_w = int(w * 0.52)
-        body_h = body_bottom - body_top
-        body_l = cx - body_w // 2
-        body_r = cx + body_w // 2
-        radius = int(w * 0.06)
-        mask_draw.rounded_rectangle([body_l, body_top, body_r, body_bottom], radius=radius, fill=255)
-
-        sleeve_top = int(h * 0.24)
-        sleeve_mid = int(h * 0.36)
-        sleeve_w = int(w * 0.19)
-        sleeve_out = int(w * 0.08)
-
-        left_sleeve = [
-            (body_l, sleeve_top),
-            (body_l - sleeve_w, sleeve_mid),
-            (body_l - sleeve_w + sleeve_out, sleeve_mid + int(h * 0.09)),
-            (body_l + int(w * 0.03), sleeve_mid + int(h * 0.05)),
-        ]
-        right_sleeve = [
-            (body_r, sleeve_top),
-            (body_r + sleeve_w, sleeve_mid),
-            (body_r + sleeve_w - sleeve_out, sleeve_mid + int(h * 0.09)),
-            (body_r - int(w * 0.03), sleeve_mid + int(h * 0.05)),
-        ]
-        mask_draw.polygon(left_sleeve, fill=255)
-        mask_draw.polygon(right_sleeve, fill=255)
-
-        neck_w = int(w * 0.20)
-        neck_h = int(h * 0.10)
-        neck_y = int(h * 0.14)
-        mask_draw.ellipse([cx - neck_w // 2, neck_y, cx + neck_w // 2, neck_y + neck_h], fill=0)
-
-        mask = mask.filter(ImageFilter.GaussianBlur(radius=1.2))
-        mask = mask.point(lambda p: 255 if p > 96 else 0)
-
-        shirt_layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-
-        shirt_fill = Image.new("RGBA", (canvas_size, canvas_size), (*shirt_color, 255))
-        shirt_fill.putalpha(mask)
-        shirt_layer = Image.alpha_composite(shirt_layer, shirt_fill)
-
-        shade = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-        sdraw = ImageDraw.Draw(shade)
-        for i in range(24):
-            a = int(40 - i)
-            inset = int(i * w * 0.01)
-            sdraw.rounded_rectangle(
-                [body_l + inset, body_top + inset, body_r - inset, body_bottom - inset],
-                radius=max(2, radius - inset),
-                outline=(0, 0, 0, max(0, a)),
-                width=2,
-            )
-        shade = shade.filter(ImageFilter.GaussianBlur(radius=int(w * 0.02)))
-        shade.putalpha(ImageChops.multiply(shade.split()[-1], mask))
-        shirt_layer = Image.alpha_composite(shirt_layer, shade)
-
-        highlight = Image.new("RGBA", (w, h), (255, 255, 255, 0))
-        hdraw = ImageDraw.Draw(highlight)
-        for i in range(18):
-            a = int(55 - i * 2)
-            inset = int(i * w * 0.012)
-            hdraw.ellipse(
-                [body_l + inset - int(w * 0.08), body_top + inset - int(h * 0.05), cx + int(w * 0.08), body_bottom - int(h * 0.22) - inset],
-                fill=(255, 255, 255, max(0, a)),
-            )
-        highlight = highlight.filter(ImageFilter.GaussianBlur(radius=int(w * 0.03)))
-        hl_alpha = ImageChops.multiply(highlight.split()[-1], mask)
-        highlight.putalpha(hl_alpha)
-        shirt_layer = Image.alpha_composite(shirt_layer, highlight)
-
-        collar = Image.new("L", (w, h), 0)
-        cdraw = ImageDraw.Draw(collar)
-        outer = [cx - int(neck_w * 0.62), neck_y + int(neck_h * 0.16), cx + int(neck_w * 0.62), neck_y + int(neck_h * 1.08)]
-        inner = [cx - int(neck_w * 0.50), neck_y + int(neck_h * 0.25), cx + int(neck_w * 0.50), neck_y + int(neck_h * 0.98)]
-        cdraw.ellipse(outer, fill=255)
-        cdraw.ellipse(inner, fill=0)
-        collar = collar.filter(ImageFilter.GaussianBlur(radius=1.5))
-        collar_rgba = Image.new("RGBA", (w, h), (220, 220, 225, 100))
-        collar_rgba.putalpha(ImageChops.multiply(collar, mask))
-        shirt_layer = Image.alpha_composite(shirt_layer, collar_rgba)
-
-        noise = (np.random.rand(128, 128) * 255).astype(np.uint8)
-        noise_img = Image.fromarray(noise, mode="L").resize((w, h), Image.Resampling.BICUBIC)
-        noise_img = noise_img.filter(ImageFilter.GaussianBlur(radius=0.6))
-        texture = Image.new("RGBA", (w, h), (255, 255, 255, 0))
-        texture.putalpha(ImageChops.multiply(noise_img.point(lambda p: int(p * 0.08)), mask))
-        shirt_layer = Image.alpha_composite(shirt_layer, texture)
-
-        yy = np.linspace(0.0, 1.0, h, dtype=np.float32)[:, None]
-        xx = np.linspace(-1.0, 1.0, w, dtype=np.float32)[None, :]
-        center_w = np.exp(-(xx**2) * 2.4).astype(np.float32)
-
-        fold1 = np.sin((yy * 1.6 + 0.12) * np.pi * 2.0) * np.exp(-((yy - 0.50) / 0.17) ** 2)
-        fold2 = np.sin((yy * 2.6 + 0.33) * np.pi * 2.0) * np.exp(-((yy - 0.70) / 0.22) ** 2)
-        fold3 = np.sin((yy * 3.4 + 0.77) * np.pi * 2.0) * np.exp(-((yy - 0.33) / 0.12) ** 2)
-        foldx = np.sin(((xx * 2.6) + (yy * 0.8) + 0.15) * np.pi * 2.0) * np.exp(-((yy - 0.62) / 0.34) ** 2) * np.exp(-(xx**2) * 1.2)
-        fold = (0.90 * fold1 + 0.75 * fold2 + 0.55 * fold3 + 0.22 * foldx) * center_w
-        fold = np.clip(fold, -1.0, 1.0)
-
-        fold_dark = np.clip(-fold, 0.0, 1.0)
-        fold_light = np.clip(fold, 0.0, 1.0)
-
-        mask_np = np.asarray(mask).astype(np.float32) / 255.0
-        dark_a = (fold_dark * 58.0 * mask_np).astype(np.uint8)
-        light_a = (fold_light * 48.0 * mask_np).astype(np.uint8)
-
-        dark_img = Image.fromarray(dark_a, mode="L").filter(ImageFilter.GaussianBlur(radius=int(w * 0.02)))
-        light_img = Image.fromarray(light_a, mode="L").filter(ImageFilter.GaussianBlur(radius=int(w * 0.02)))
-
-        dark_rgba = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-        dark_rgba.putalpha(dark_img)
-        light_rgba = Image.new("RGBA", (w, h), (255, 255, 255, 0))
-        light_rgba.putalpha(light_img)
-
-        shirt_layer = Image.alpha_composite(shirt_layer, dark_rgba)
-        shirt_layer = Image.alpha_composite(shirt_layer, light_rgba)
-
-        design_rgba = design.convert("RGBA")
-        target = int(w * 0.34)
-        design_rgba = ImageOps.fit(design_rgba, (target, target), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
-        if not outline_only:
-            design_rgb = design_rgba.convert("RGB")
-            arr = np.asarray(design_rgb).astype(np.float32) / 255.0
-            arr = np.clip(arr ** 0.92, 0.0, 1.0)
-            arr = np.clip(0.5 + (arr - 0.5) * 1.12, 0.0, 1.0)
-            arr = np.clip(arr * 1.02 + 0.01, 0.0, 1.0)
-            design_rgba = Image.fromarray((arr * 255).astype(np.uint8), mode="RGB").convert("RGBA")
-
-        print_mask = Image.new("L", (target, target), 0)
-        pm = ImageDraw.Draw(print_mask)
-        pm.rounded_rectangle([0, 0, target - 1, target - 1], radius=0, fill=255)
-        alpha = design_rgba.getchannel("A")
-        alpha = ImageChops.multiply(alpha, print_mask)
-        design_rgba.putalpha(alpha)
-
-        chest_x = cx - (target // 2)
-        chest_y = int(h * 0.44) - (target // 2)
-
-        if not outline_only:
-            print_mask_at = Image.new("L", (w, h), 0)
-            print_mask_at.paste(print_mask, (chest_x, chest_y))
-            flatten = Image.new("RGBA", (w, h), (255, 255, 255, 0))
-            flatten_alpha = print_mask_at.filter(ImageFilter.GaussianBlur(radius=1.2)).point(lambda p: int(p * 0.18))
-            flatten.putalpha(flatten_alpha)
-            shirt_layer = Image.alpha_composite(shirt_layer, flatten)
-
-            underbase = Image.new("RGBA", (target, target), (255, 255, 255, 0))
-            ub_alpha = print_mask.point(lambda p: int(p * 0.86))
-            underbase.putalpha(ub_alpha)
-            shirt_layer.paste(underbase, (chest_x, chest_y), underbase)
-        else:
-            # Outline prints: add only a subtle under-stroke (not a full white square) for visibility.
-            a = design_rgba.getchannel("A")
-            under_a = a.filter(ImageFilter.MaxFilter(size=5)).filter(ImageFilter.GaussianBlur(radius=0.8)).point(lambda p: int(p * 0.55))
-            under = Image.new("RGBA", (target, target), (255, 255, 255, 0))
-            under.putalpha(under_a)
-            shirt_layer.paste(under, (chest_x, chest_y), under)
-
-        shirt_layer.paste(design_rgba, (chest_x, chest_y), design_rgba)
-
-        drop = mask.filter(ImageFilter.GaussianBlur(radius=int(w * 0.032)))
-        drop_rgba = Image.new("RGBA", (w, h), (0, 0, 0, 92))
-        drop_rgba.putalpha(drop)
-        drop_layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-        drop_layer.paste(drop_rgba, (0, int(h * 0.022)), drop_rgba)
-        base = Image.alpha_composite(base, drop_layer)
-
-        base = Image.alpha_composite(base, shirt_layer)
-        return base.convert("RGB")
-
-    def to_outline_rgba(
-        self,
-        image: Image.Image,
-        line_color: Tuple[int, int, int] = (12, 16, 22),
-        thickness: int = 2,
-        threshold: float = 0.14,
-    ) -> Image.Image:
-        img = image.convert("RGB")
-        arr = np.asarray(img).astype(np.float32) / 255.0
-        gray = (0.2126 * arr[:, :, 0] + 0.7152 * arr[:, :, 1] + 0.0722 * arr[:, :, 2]).astype(np.float32)
-
-        gx = np.zeros_like(gray)
-        gy = np.zeros_like(gray)
-        gx[:, 1:-1] = gray[:, 2:] - gray[:, :-2]
-        gy[1:-1, :] = gray[2:, :] - gray[:-2, :]
-        mag = np.sqrt(gx * gx + gy * gy)
-
-        m = np.clip((mag - threshold) / max(1e-6, (0.40 - threshold)), 0.0, 1.0)
-        m = np.clip(m ** 0.65, 0.0, 1.0)
-        alpha = (m * 255.0).astype(np.uint8)
-
-        aimg = Image.fromarray(alpha, mode="L")
-        if thickness > 1:
-            aimg = aimg.filter(ImageFilter.MaxFilter(size=int(thickness * 2 + 1)))
-        aimg = aimg.filter(ImageFilter.GaussianBlur(radius=0.6))
-
-        rgba = Image.new("RGBA", img.size, (*line_color, 0))
-        rgba.putalpha(aimg)
-        return rgba
-
-    def to_outline_color_rgba(
-        self,
-        image: Image.Image,
-        thickness: int = 3,
-        threshold: float = 0.12,
-        saturation: float = 1.35,
-    ) -> Image.Image:
-        img = image.convert("RGB")
-        arr = np.asarray(img).astype(np.float32) / 255.0
-        gray = (0.2126 * arr[:, :, 0] + 0.7152 * arr[:, :, 1] + 0.0722 * arr[:, :, 2]).astype(np.float32)
-
-        gx = np.zeros_like(gray)
-        gy = np.zeros_like(gray)
-        gx[:, 1:-1] = gray[:, 2:] - gray[:, :-2]
-        gy[1:-1, :] = gray[2:, :] - gray[:-2, :]
-        mag = np.sqrt(gx * gx + gy * gy)
-
-        m = np.clip((mag - threshold) / max(1e-6, (0.35 - threshold)), 0.0, 1.0)
-        m = np.clip(m ** 0.60, 0.0, 1.0)
-        alpha = (m * 255.0).astype(np.uint8)
-        aimg = Image.fromarray(alpha, mode="L")
-        if thickness > 1:
-            aimg = aimg.filter(ImageFilter.MaxFilter(size=int(thickness * 2 + 1)))
-        aimg = aimg.filter(ImageFilter.GaussianBlur(radius=0.5))
-
-        mean = arr.mean(axis=2, keepdims=True)
-        col = np.clip(mean + (arr - mean) * float(saturation), 0.0, 1.0)
-        col = np.clip(col ** 0.92, 0.0, 1.0)
-
-        # Dark stroke behind to keep edges crisp on light shirts.
-        back_a = aimg.filter(ImageFilter.MaxFilter(size=7)).filter(ImageFilter.GaussianBlur(radius=0.8))
-        back = Image.new("RGBA", img.size, (12, 16, 22, 0))
-        back.putalpha(back_a.point(lambda p: int(p * 0.70)))
-
-        front = Image.fromarray((col * 255).astype(np.uint8), mode="RGB").convert("RGBA")
-        front.putalpha(aimg)
-
-        return Image.alpha_composite(back, front)

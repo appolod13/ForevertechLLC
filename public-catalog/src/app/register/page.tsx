@@ -14,22 +14,12 @@ export default function RegisterPage() {
   const { register, isLoading } = useAuth();
   const router = useRouter();
 
-  const [redirectPath, setRedirectPath] = useState('/');
-
-  // Run on mount to safely get window.location
-  useState(() => {
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      setRedirectPath(urlParams.get('redirect') || '/');
-    }
-  });
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     try {
       await register(email, password, name);
-      router.push(redirectPath);
+      router.push('/');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     }
@@ -90,7 +80,7 @@ export default function RegisterPage() {
 
         <p className="mt-6 text-center text-sm text-zinc-500">
           Already have an account?{' '}
-          <Link href={redirectPath !== '/' ? `/login?redirect=${encodeURIComponent(redirectPath)}` : "/login"} className="text-white hover:underline">
+          <Link href="/login" className="text-white hover:underline">
             Sign in
           </Link>
         </p>

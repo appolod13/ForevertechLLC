@@ -50,7 +50,7 @@ describe('FusionAI Component', () => {
   });
 
   it('handles file uploads and displays previews', async () => {
-    render(<FusionAI prompt="a valid prompt" onImageGenerated={onImageGenerated} baseImageUrl="http://example.com/base.png" />);
+    render(<FusionAI prompt="a valid prompt" onImageGenerated={onImageGenerated} />);
     fireEvent.click(screen.getByText('Advanced Fusion Extension'));
 
     const file = new File(['(⌐□_□)'], 'chuck.png', { type: 'image/png' });
@@ -82,16 +82,9 @@ describe('FusionAI Component', () => {
   });
 
   it('initiates fusion process and shows progress', async () => {
-    fetchMock.mockReset();
-    fetchMock.mockImplementation((input: RequestInfo | URL) => {
-      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url;
-      if (url.startsWith('/api/fuse')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ jobId: 'test-job-123' }) } as Response);
-      }
-      return Promise.resolve({ ok: false, status: 500 } as Response);
-    });
+    fetchMock.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ jobId: 'test-job-123' }) });
 
-    render(<FusionAI prompt="a valid prompt" onImageGenerated={onImageGenerated} baseImageUrl="http://example.com/base.png" />);
+    render(<FusionAI prompt="a valid prompt" onImageGenerated={onImageGenerated} />);
     fireEvent.click(screen.getByText('Advanced Fusion Extension'));
 
     const file = new File(['(⌐□_□)'], 'test.png', { type: 'image/png' });
@@ -105,7 +98,8 @@ describe('FusionAI Component', () => {
     fireEvent.click(fuseButton);
 
     await waitFor(() => {
-        expect(webSocketSpy).toHaveBeenCalledWith('ws://127.0.0.1:8000/progress/test-job-123');
+        expect(screen.getByText(/Initializing/i)).toBeInTheDocument();
+        expect(webSocketSpy).toHaveBeenCalledWith('ws://localhost:8000/progress/test-job-123');
     });
   });
 });

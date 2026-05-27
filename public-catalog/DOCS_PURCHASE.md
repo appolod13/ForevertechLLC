@@ -37,17 +37,6 @@ The system is configured for end-to-end testing:
 ### Automated Test
 Run the `WorkflowTestPage` (`/workflow-test`) which now implicitly tests this logic via the "Cart Integration" phase.
 
-### Playwright E2E Test Suite (Customer Journeys)
-Run:
-- `npm run test:e2e`
-
-Covered scenarios (high level):
-- Browse + search + filter: validates catalog UI renders and search/filter interactions update results.
-- Cart operations: add item from catalog, view cart, remove item.
-- Guest checkout: fills shipping form, validates shipping quote rendering, stubs `/api/checkout` redirect to success page.
-- Post-purchase: stubs dev finalize calls and exercises NFT claim flow.
-- Account flows: register/login/logout simulated via mocked auth APIs; profile access gated by auth state.
-
 ## Debugging
 - **Console Logs**: Detailed logs are emitted for `Initiating purchase` and `Purchase successful`.
 - **Error Handling**: Network errors or backend failures trigger a `Failed to process purchase` alert and error log.

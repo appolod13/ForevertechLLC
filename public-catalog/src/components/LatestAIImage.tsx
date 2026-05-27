@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { cn, MIRROR_API_URL } from '@/lib/utils';
 import { Loader2, ImageOff, ShoppingBag } from 'lucide-react';
 
@@ -30,9 +31,7 @@ export function LatestAIImage({ overrideUrl }: { overrideUrl?: string }) {
 
     async function fetchImage() {
       try {
-        const res = await fetch(`${MIRROR_API_URL}/api/latest-ai-image`).catch(() => {
-          throw new Error('Network error: Failed to fetch');
-        });
+        const res = await fetch(`${MIRROR_API_URL}/api/latest-ai-image`);
         if (!res.ok) throw new Error('Failed to fetch');
         
         const contentType = res.headers.get('content-type');
@@ -51,6 +50,7 @@ export function LatestAIImage({ overrideUrl }: { overrideUrl?: string }) {
           setError(true);
         }
       } catch (err) {
+        console.error('Error loading AI image:', err);
         setError(true);
       } finally {
         setLoading(false);
@@ -78,13 +78,18 @@ export function LatestAIImage({ overrideUrl }: { overrideUrl?: string }) {
       )}
       {imageUrl && (
         <>
-          <img
+          <Image
             src={imageUrl}
             alt="Latest AI Generated Content"
-            className={cn("absolute inset-0 h-full w-full object-cover transition-opacity duration-700", loading ? "opacity-0" : "opacity-100")}
+            fill
+            className={cn(
+              "object-cover transition-opacity duration-700",
+              loading ? "opacity-0" : "opacity-100"
+            )}
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             onLoad={() => setLoading(false)}
             onError={() => setError(true)}
-            loading="eager"
+            priority
           />
           {!loading && (
             <div className="absolute bottom-0 left-0 right-0 translate-y-full transform bg-black/70 p-4 backdrop-blur-sm transition-transform duration-300 group-hover:translate-y-0">

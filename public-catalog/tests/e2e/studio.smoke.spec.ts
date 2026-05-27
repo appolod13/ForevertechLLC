@@ -6,7 +6,7 @@ test.describe("Studio Smoke", () => {
     const heading = page.getByRole("heading", { name: "AI Asset Generator" });
     await expect(heading).toBeVisible({ timeout: 20000 });
 
-    const promptBox = page.locator('textarea[placeholder="Describe the image and post content you want to generate..."]');
+    const promptBox = page.locator('textarea[placeholder="Describe the image you want to generate..."]');
     await expect(promptBox).toBeVisible({ timeout: 20000 });
     await promptBox.fill("futuristic city skyline at dusk, neon lights, high detail");
 
@@ -21,36 +21,36 @@ test.describe("Studio Smoke", () => {
         }),
       });
     });
-    await page.route("**/api/content-factory", async (route) => {
+    await page.route("**/api/upload", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
           success: true,
-          items: [{ text_content: "E2E: Generated post copy." }],
+          url:
+            "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAAQABADASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAwT/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwD3gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB//Z",
         }),
       });
     });
-    await page.route("**/api/gallery", async (route) => {
+    await page.route("**/api/post", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ success: true, item: { id: "e2e_gallery_1" } }),
+        body: JSON.stringify({ success: true }),
       });
     });
 
-    const generateBtn = page.getByRole("button", { name: "Generate Asset & Content" });
+    const generateBtn = page.getByRole("button", { name: /Generate Asset/i });
     await generateBtn.click();
 
-    const generatedImg = page.locator('img[src^="data:image"]');
-    await expect(generatedImg.first()).toBeVisible({ timeout: 30000 });
+    const generatedImg = page.locator('img[alt=""]');
+    await expect(generatedImg).toBeVisible({ timeout: 30000 });
 
-    const sendBtn = page.getByRole("button", { name: "Send to Multi-Channel Poster" });
-    await expect(sendBtn).toBeEnabled({ timeout: 30000 });
-    await sendBtn.click();
+    const importBtn = page.getByRole("button", { name: "Import" });
+    await expect(importBtn).toBeEnabled({ timeout: 30000 });
+    await importBtn.click();
 
     const postBox = page.getByPlaceholder("What's on your mind? #Web3");
-    await expect(postBox).toHaveValue(/E2E: Generated post copy\./, { timeout: 30000 });
-    await expect(page.getByRole("img", { name: "Attached preview" })).toBeVisible({ timeout: 30000 });
+    await expect(postBox).toHaveValue(/\(Attached: Generated Image\): (http|data:image)/, { timeout: 30000 });
   });
 });

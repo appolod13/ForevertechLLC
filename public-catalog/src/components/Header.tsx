@@ -1,36 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { ShoppingBag, Menu, X, User } from 'lucide-react';
 import { LiveBadge } from './LiveBadge';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null;
-}
-
 export function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { itemCount } = useCart();
   const { user, logout } = useAuth();
-  const [showAdmin, setShowAdmin] = useState(false);
-  const showDevTools = process.env.NODE_ENV !== 'production' || showAdmin;
-
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      const res = await fetch('/api/admin/me', { cache: 'no-store' }).catch(() => null);
-      const json: unknown = res ? await res.json().catch(() => null) : null;
-      const ok = Boolean(res && res.ok && isRecord(json) && json.success === true);
-      if (!cancelled) setShowAdmin(ok);
-    };
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-md">
@@ -38,12 +19,13 @@ export function Header() {
         <div className="flex items-center gap-2">
           <Link href="/" className="flex items-center gap-2">
             <div className="relative h-12 w-12 overflow-hidden rounded-full border-2 border-white shadow-lg shadow-primary/20">
-              <img
-                src="/images/Forevertech_logo.jpg"
-                alt="ForeverTech Logo"
-                className="absolute inset-0 h-full w-full object-cover"
-                loading="eager"
-                decoding="async"
+              <Image 
+                src="/images/Forevertech_logo.jpg" 
+                alt="ForeverTech Logo" 
+                fill
+                className="object-cover"
+                sizes="48px"
+                priority
               />
             </div>
             <span className="hidden text-xl font-bold text-white sm:inline-block">
@@ -59,46 +41,24 @@ export function Header() {
           <Link href="/" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
             Latest Drops
           </Link>
-          {showAdmin ? (
-            <Link href="/admin" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-              Admin
-            </Link>
-          ) : null}
-          <Link href="/about" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-            About
-          </Link>
           <Link href="/governance" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
             Governance
           </Link>
           <Link href="/studio" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
             Studio
           </Link>
-          {showDevTools ? (
-            <Link href="/scanner" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-              Scanner
-            </Link>
-          ) : null}
           <Link href="/gallery" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
             Gallery
           </Link>
-          <Link href="/faqs" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-            FAQs
-          </Link>
           <Link href="/support" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
             Support
-          </Link>
-          <Link href="/privacy-policy" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-            Privacy
           </Link>
         </nav>
 
         <div className="flex items-center gap-4">
           {user ? (
-             <div className="hidden md:flex items-center gap-4">
-               <Link href="/profile" className="text-sm text-zinc-400 hover:text-white flex items-center gap-1">
-                 <User className="h-4 w-4" />
-                 <span>My Profile</span>
-               </Link>
+             <div className="hidden md:flex items-center gap-2">
+               <span className="text-sm text-zinc-400">Hi, {user.name}</span>
                <button onClick={logout} className="text-xs text-red-400 hover:text-red-300">Logout</button>
              </div>
           ) : (
@@ -138,9 +98,7 @@ export function Header() {
             
             {user ? (
                <div className="flex justify-between items-center py-2 border-b border-zinc-900">
-                  <Link href="/profile" onClick={() => setIsMobileMenuOpen(false)} className="text-zinc-300 flex items-center gap-2">
-                    <User className="h-4 w-4" /> My Profile
-                  </Link>
+                  <span className="text-zinc-300">Signed in as {user.name}</span>
                   <button onClick={logout} className="text-sm text-red-400">Logout</button>
                </div>
             ) : (
@@ -149,29 +107,12 @@ export function Header() {
                </Link>
             )}
 
-            {showAdmin ? (
-              <Link
-                href="/admin"
-                className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Admin
-              </Link>
-            ) : null}
-
             <Link 
               href="/" 
               className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
               onClick={() => setIsMobileMenuOpen(false)}
             >
               Latest Drops
-            </Link>
-            <Link 
-              href="/about" 
-              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              About
             </Link>
             <Link 
               href="/governance" 
@@ -187,15 +128,6 @@ export function Header() {
             >
               Studio
             </Link>
-            {showDevTools ? (
-              <Link 
-                href="/scanner" 
-                className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Scanner
-              </Link>
-            ) : null}
             <Link 
               href="/gallery" 
               className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
@@ -204,25 +136,11 @@ export function Header() {
               Gallery
             </Link>
             <Link 
-              href="/faqs" 
-              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              FAQs
-            </Link>
-            <Link 
               href="/support" 
               className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
               onClick={() => setIsMobileMenuOpen(false)}
             >
               Support
-            </Link>
-            <Link 
-              href="/privacy-policy" 
-              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Privacy Policy
             </Link>
           </div>
         </div>
