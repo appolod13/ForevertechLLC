@@ -1,38 +1,204 @@
 import os
-import uuid
 import time
+import uuid
 import asyncio
-import torch
-from typing import List
-from fastapi import FastAPI, UploadFile, File, WebSocket, WebSocketDisconnect, BackgroundTasks, HTTPException, Form
+from typing import Optional, List, Literal, Dict, Any
+from io import BytesIO
+import struct
+import zlib
+import binascii
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ValidationError
-import json
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
-from fastapi.responses import Response
-from processors.image_processor import ImageProcessor
-from trainer.fusion_trainer import FusionTrainer
+from starlette.responses import Response, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+import json
+try:
+    from PIL import Image  # type: ignore
+except Exception:
+    Image = None  # type: ignore
 
-app = FastAPI(title="Fusion AI Microservice")
+# --- Mocked AI Generation for compatibility with Python 3.14 ---
+# Removed torch, diffusers, etc. to allow the service to run locally.
 
-# Initialize components
-processor = ImageProcessor()
-trainer = FusionTrainer()
+app = FastAPI(title="Fusion Service (Mocked)")
 
-# CORS for external UI integration
+import random
+import glob
+
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+
+
+def _png_chunk(tag: bytes, data: bytes) -> bytes:
+    chunk = tag + data
+    return struct.pack("!I", len(data)) + chunk + struct.pack("!I", binascii.crc32(chunk) & 0xFFFFFFFF)
+
+
+def write_png_rgb(path: str, width: int, height: int, rgb: bytes) -> None:
+    if len(rgb) != width * height * 3:
+        raise ValueError("invalid_rgb_buffer")
+    rows = []
+    stride = width * 3
+    for y in range(height):
+        rows.append(b"\x00" + rgb[y * stride : (y + 1) * stride])
+    raw = b"".join(rows)
+    compressed = zlib.compress(raw, level=6)
+    ihdr = struct.pack("!IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    png = PNG_SIGNATURE + _png_chunk(b"IHDR", ihdr) + _png_chunk(b"IDAT", compressed) + _png_chunk(b"IEND", b"")
+    with open(path, "wb") as f:
+        f.write(png)
+
+
+def _blend_channel(dst: int, src: int, a: int) -> int:
+    return (dst * (255 - a) + src * a + 127) // 255
+
+
+def procedural_rgb(width: int, height: int, prompt: str, seed: int) -> bytes:
+    rng = random.Random(seed)
+    buf = bytearray(width * height * 3)
+
+    top = (rng.randint(5, 40), rng.randint(10, 60), rng.randint(30, 90))
+    bottom = (rng.randint(90, 180), rng.randint(90, 180), rng.randint(130, 220))
+    for y in range(height):
+        t = y / max(1, height - 1)
+        r = int(top[0] * (1 - t) + bottom[0] * t)
+        g = int(top[1] * (1 - t) + bottom[1] * t)
+        b = int(top[2] * (1 - t) + bottom[2] * t)
+        row_start = y * width * 3
+        for x in range(width):
+            i = row_start + x * 3
+            buf[i] = r
+            buf[i + 1] = g
+            buf[i + 2] = b
+
+    shape_count = max(12, min(80, (width * height) // 25000))
+    for _ in range(shape_count):
+        x0 = rng.randint(-width // 10, width)
+        y0 = rng.randint(-height // 10, height)
+        x1 = x0 + rng.randint(max(8, width // 40), max(12, width // 3))
+        y1 = y0 + rng.randint(max(8, height // 40), max(12, height // 3))
+        r = rng.randint(40, 255)
+        g = rng.randint(40, 255)
+        b = rng.randint(40, 255)
+        a = rng.randint(25, 110)
+        x_min = max(0, min(x0, x1))
+        x_max = min(width - 1, max(x0, x1))
+        y_min = max(0, min(y0, y1))
+        y_max = min(height - 1, max(y0, y1))
+
+        if rng.random() < 0.55:
+            cx = (x_min + x_max) / 2.0
+            cy = (y_min + y_max) / 2.0
+            rx = max(1.0, (x_max - x_min) / 2.0)
+            ry = max(1.0, (y_max - y_min) / 2.0)
+            inv_rx2 = 1.0 / (rx * rx)
+            inv_ry2 = 1.0 / (ry * ry)
+            for yy in range(y_min, y_max + 1):
+                dy = yy - cy
+                dy2 = (dy * dy) * inv_ry2
+                row_start = yy * width * 3
+                for xx in range(x_min, x_max + 1):
+                    dx = xx - cx
+                    if (dx * dx) * inv_rx2 + dy2 <= 1.0:
+                        i = row_start + xx * 3
+                        buf[i] = _blend_channel(buf[i], r, a)
+                        buf[i + 1] = _blend_channel(buf[i + 1], g, a)
+                        buf[i + 2] = _blend_channel(buf[i + 2], b, a)
+        else:
+            for yy in range(y_min, y_max + 1):
+                row_start = yy * width * 3
+                for xx in range(x_min, x_max + 1):
+                    i = row_start + xx * 3
+                    buf[i] = _blend_channel(buf[i], r, a)
+                    buf[i + 1] = _blend_channel(buf[i + 1], g, a)
+                    buf[i + 2] = _blend_channel(buf[i + 2], b, a)
+
+    return bytes(buf)
+
+class MockTrainer:
+    device = "mock_cpu"
+    style_memory = None
+    style_memory_path = "mock_path"
+    shape_memory = None
+    shape_memory_path = "mock_path"
+
+    async def train(self, tensors, prompt, job_callback=None):
+        if job_callback:
+            await job_callback("training", 0.5)
+        return "mock_pipe"
+
+    def generate(self, pipe, prompt, strength, steps, seed):
+        if Image is None:
+            raise RuntimeError("pillow_missing")
+        return Image.new("RGB", (512, 512), (160, 180, 220))
+
+    def brain_roulette(self, dataset_path, steps, size):
+        images = []
+        if os.path.exists(dataset_path):
+            for ext in ('*.png', '*.jpg', '*.jpeg', '*.webp'):
+                images.extend(glob.glob(os.path.join(dataset_path, ext)))
+        
+        if images:
+            if Image is None:
+                raise RuntimeError("pillow_missing")
+            base_img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+            for i, img_path in enumerate(images):
+                try:
+                    with Image.open(img_path) as im:
+                        img = im.convert("RGBA").resize((size, size))
+                        alpha = 1.0 / (i + 1)
+                        base_img = Image.blend(base_img, img, alpha)
+                except Exception:
+                    pass
+            # Create a randomized overlay or tint to make each generation unique
+            r, g, b = random.randint(0, 50), random.randint(0, 50), random.randint(0, 50)
+            tint = Image.new("RGBA", (size, size), (r, g, b, 50))
+            base_img = Image.alpha_composite(base_img, tint)
+            final_img = base_img.convert("RGB")
+        else:
+            if Image is None:
+                raise RuntimeError("pillow_missing")
+            final_img = Image.new("RGB", (size, size), (255, 100, 100))
+            
+        return final_img, {"mode": "roulette", "dataset": dataset_path, "blended_count": len(images)}
+
+class MockProcessor:
+    async def process_uploads(self, file_paths):
+        return []
+
+    def compute_clip_similarity(self, image, prompt):
+        return 0.85
+        
+    def to_outline_rgba(self, image, line_color, thickness):
+        return image.convert("RGBA")
+        
+    def to_outline_color_rgba(self, image, thickness):
+        return image.convert("RGBA")
+        
+    def create_tshirt_mockup(self, design, outline_only=False):
+        # Return the design directly as the mockup for simplicity in the mock
+        return design
+
+processor = MockProcessor()
+trainer = MockTrainer()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Metrics
-LATENCY = Histogram("fusion_latency_seconds", "End-to-end latency", ["device"])
+REQUESTS = Counter('fusion_requests_total', 'Total requests to Fusion API', ['endpoint'])
+LATENCY = Histogram('fusion_request_latency_seconds', 'Latency of Fusion requests', ['device'])
 CLIP_SCORE = Histogram("fusion_clip_score", "CLIP similarity scores")
-REQUESTS = Counter("fusion_requests_total", "Total requests", ["endpoint"])
 
-# Job management
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+app.mount("/ui", StaticFiles(directory="web", html=True), name="ui")
+
 jobs = {}
 
 class FusionRequest(BaseModel):
@@ -41,9 +207,76 @@ class FusionRequest(BaseModel):
     steps: int = 50
     seed: int = -1
 
+class BrainRequest(BaseModel):
+    prompt: Optional[str] = None
+    steps: int = 8
+    seed: int = -1
+    mode: Literal["procedural", "diffusion", "auto"] = "procedural"
+    randomize: bool = True
+    realism: Literal["none", "photo"] = "none"
+
+class StyleFitRequest(BaseModel):
+    dataset_path: str
+    style_name: str = "default"
+    limit: int = 200
+    resize: int = 128
+
+class ShapeFitRequest(BaseModel):
+    dataset_path: str
+    style_name: str = "default"
+    limit: int = 200
+    resize: int = 256
+
+class GenerateRequest(BaseModel):
+    prompt: str
+    negative_prompt: Optional[str] = ""
+    width: int = 512
+    height: int = 512
+    steps: int = 30
+    seed: int = -1
+    guidance_scale: float = 7.5
+
+@app.post("/generate")
+async def generate_image(payload: GenerateRequest):
+    REQUESTS.labels(endpoint="/generate").inc()
+    start_time = time.time()
+    job_id = str(uuid.uuid4())
+
+    width = int(payload.width) if payload.width else 512
+    height = int(payload.height) if payload.height else 512
+    width = max(64, min(1536, width))
+    height = max(64, min(1536, height))
+    seed = payload.seed if isinstance(payload.seed, int) and payload.seed != -1 else (abs(hash(payload.prompt)) % (2**31))
+
+    rgb = procedural_rgb(width, height, payload.prompt, seed)
+    os.makedirs("uploads", exist_ok=True)
+    filename = f"gen_{job_id}_{width}x{height}.png"
+    out_path = os.path.join("uploads", filename)
+    write_png_rgb(out_path, width, height, rgb)
+    image_url = f"/uploads/{filename}"
+
+    latency = time.time() - start_time
+    LATENCY.labels(device="mock_cpu").observe(latency)
+    
+    return {
+        "success": True,
+        "imageUrl": image_url,
+        "meta": {
+            "provider": "fusion-service-procedural",
+            "latency": latency,
+            "seed": seed,
+            "width": width,
+            "height": height
+        }
+    }
+
 @app.get("/health")
 async def health():
-    return {"status": "ok", "device": trainer.device, "timestamp": time.time()}
+    return {"status": "ok", "device": "mock_cpu", "timestamp": time.time()}
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/ui/randomize.html")
 
 @app.get("/metrics")
 async def metrics():
@@ -89,6 +322,240 @@ async def fuse(
     background_tasks.add_task(run_fusion_pipeline, job_id, fusion_request, file_paths)
     
     return {"jobId": job_id}
+
+
+@app.post("/brain")
+async def brain_generate(payload: BrainRequest):
+    REQUESTS.labels(endpoint="/brain").inc()
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {"status": "brain_start", "progress": 0, "result": None, "error": None}
+    start_time = time.time()
+    try:
+        jobs[job_id]["status"] = "brain_generate"
+        jobs[job_id]["progress"] = 0.3
+        design, meta = trainer.brain_generate(
+            prompt=payload.prompt,
+            seed=payload.seed,
+            steps=payload.steps,
+            mode=payload.mode,
+            randomize=payload.randomize,
+            realism=payload.realism,
+        )
+
+        jobs[job_id]["status"] = "brain_mockup"
+        jobs[job_id]["progress"] = 0.7
+        mockup = processor.create_tshirt_mockup(design)
+
+        filename = f"brain_{job_id}.png"
+        path = os.path.join("uploads", filename)
+        mockup.save(path)
+
+        jobs[job_id]["status"] = "done"
+        jobs[job_id]["progress"] = 1.0
+        jobs[job_id]["result"] = f"/uploads/{filename}"
+        jobs[job_id]["meta"] = meta
+
+        latency = time.time() - start_time
+        LATENCY.labels(device=trainer.device).observe(latency)
+
+        buf = BytesIO()
+        mockup.save(buf, format="PNG")
+        body = buf.getvalue()
+        headers = {
+            "X-Job-Id": job_id,
+            "X-Image-Url": jobs[job_id]["result"],
+            "X-Emotion": str(meta.get("emotion", "")),
+            "X-Seed": str(meta.get("seed", "")),
+        }
+        return Response(content=body, media_type="image/png", headers=headers)
+    except Exception as e:
+        jobs[job_id]["status"] = "error"
+        jobs[job_id]["error"] = str(e)
+        raise
+
+
+@app.post("/brain/img2img")
+async def brain_img2img(
+    prompt: str = Form(...),
+    negative_prompt: str = Form(""),
+    file: UploadFile = File(...),
+    seed: int = Form(-1),
+    steps: int = Form(12),
+    strength: float = Form(0.55),
+    guidance_scale: float = Form(7.0),
+    size: int = Form(512),
+    realism: Literal["none", "photo"] = Form("photo"),
+):
+    REQUESTS.labels(endpoint="/brain/img2img").inc()
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {"status": "img2img_start", "progress": 0, "result": None, "error": None}
+    start_time = time.time()
+    try:
+        jobs[job_id]["status"] = "img2img_decode"
+        jobs[job_id]["progress"] = 0.15
+
+        raw = await file.read()
+        try:
+            init_image = Image.open(BytesIO(raw)).convert("RGB")
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid image upload")
+
+        jobs[job_id]["status"] = "img2img_generate"
+        jobs[job_id]["progress"] = 0.55
+        design, meta = trainer.brain_img2img(
+            init_image=init_image,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            seed=seed,
+            steps=steps,
+            strength=strength,
+            guidance_scale=guidance_scale,
+            size=size,
+            realism=realism,
+        )
+
+        jobs[job_id]["status"] = "img2img_mockup"
+        jobs[job_id]["progress"] = 0.85
+        mockup = processor.create_tshirt_mockup(design)
+
+        filename = f"img2img_{job_id}.png"
+        path = os.path.join("uploads", filename)
+        mockup.save(path)
+
+        jobs[job_id]["status"] = "done"
+        jobs[job_id]["progress"] = 1.0
+        jobs[job_id]["result"] = f"/uploads/{filename}"
+        jobs[job_id]["meta"] = meta
+
+        latency = time.time() - start_time
+        LATENCY.labels(device=trainer.device).observe(latency)
+
+        buf = BytesIO()
+        mockup.save(buf, format="PNG")
+        body = buf.getvalue()
+        headers = {
+            "X-Job-Id": job_id,
+            "X-Image-Url": jobs[job_id]["result"],
+            "X-Seed": str(meta.get("seed", "")),
+            "X-Mode": str(meta.get("mode", "")),
+        }
+        return Response(content=body, media_type="image/png", headers=headers)
+    except Exception as e:
+        jobs[job_id]["status"] = "error"
+        jobs[job_id]["error"] = str(e)
+        raise
+
+
+@app.post("/brain/roulette")
+async def brain_roulette(payload: Dict[str, Any] = Body(default={})):
+    REQUESTS.labels(endpoint="/brain/roulette").inc()
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {"status": "roulette_start", "progress": 0, "result": None, "error": None}
+    start_time = time.time()
+    try:
+        dataset_path = str(payload.get("dataset_path") or os.getenv("CITY_DATASET_PATH") or "/Users/Administrator/Datasets/utopian_clean_city/images")
+        steps = int(payload.get("steps") or 12)
+        size = int(payload.get("size") or 512)
+        outline = bool(payload.get("outline") or False)
+        outline_style = str(payload.get("outline_style") or "color")
+        outline_color = payload.get("outline_color")
+        outline_thickness = int(payload.get("outline_thickness") or (3 if outline_style == "color" else 2))
+        jobs[job_id]["status"] = "roulette_generate"
+        jobs[job_id]["progress"] = 0.55
+
+        design, meta = trainer.brain_roulette(
+            dataset_path=dataset_path,
+            steps=steps,
+            size=size,
+        )
+
+        jobs[job_id]["status"] = "roulette_mockup"
+        jobs[job_id]["progress"] = 0.85
+        if outline:
+            if outline_style == "mono":
+                if isinstance(outline_color, list) and len(outline_color) == 3:
+                    oc = (int(outline_color[0]), int(outline_color[1]), int(outline_color[2]))
+                else:
+                    oc = (12, 16, 22)
+                design = processor.to_outline_rgba(design, line_color=oc, thickness=outline_thickness)
+            else:
+                design = processor.to_outline_color_rgba(design, thickness=outline_thickness)
+        mockup = processor.create_tshirt_mockup(design, outline_only=outline)
+
+        filename = f"roulette_{job_id}.png"
+        path = os.path.join("uploads", filename)
+        mockup.save(path)
+
+        jobs[job_id]["status"] = "done"
+        jobs[job_id]["progress"] = 1.0
+        jobs[job_id]["result"] = f"/uploads/{filename}"
+        jobs[job_id]["meta"] = meta
+
+        latency = time.time() - start_time
+        LATENCY.labels(device=trainer.device).observe(latency)
+
+        buf = BytesIO()
+        mockup.save(buf, format="PNG")
+        body = buf.getvalue()
+        headers = {
+            "X-Job-Id": job_id,
+            "X-Image-Url": jobs[job_id]["result"],
+            "X-Seed": str(meta.get("seed", "")),
+            "X-Mode": str(meta.get("mode", "")),
+            "X-Prompt": str(meta.get("prompt", "")),
+            "X-Init": str(meta.get("init", "")),
+            "X-Outline": "1" if outline else "0",
+            "X-Outline-Style": outline_style,
+        }
+        return Response(content=body, media_type="image/png", headers=headers)
+    except Exception as e:
+        jobs[job_id]["status"] = "error"
+        jobs[job_id]["error"] = str(e)
+        raise
+
+
+@app.get("/brain/style")
+async def brain_style_status():
+    REQUESTS.labels(endpoint="/brain/style").inc()
+    mem = trainer.style_memory
+    if mem is None:
+        return {"loaded": False, "styleMemoryPath": trainer.style_memory_path}
+    return {"loaded": True, "styleMemoryPath": trainer.style_memory_path, **mem.__dict__}
+
+
+@app.post("/brain/style/fit")
+async def brain_style_fit(payload: StyleFitRequest):
+    REQUESTS.labels(endpoint="/brain/style/fit").inc()
+    result = trainer.fit_style_memory(
+        dataset_path=payload.dataset_path,
+        style_name=payload.style_name,
+        limit=payload.limit,
+        resize=payload.resize,
+        save_path=trainer.style_memory_path,
+    )
+    return {"ok": True, **result}
+
+
+@app.get("/brain/shape")
+async def brain_shape_status():
+    REQUESTS.labels(endpoint="/brain/shape").inc()
+    mem = trainer.shape_memory
+    if mem is None:
+        return {"loaded": False, "shapeMemoryPath": trainer.shape_memory_path}
+    return {"loaded": True, "shapeMemoryPath": trainer.shape_memory_path, **mem.__dict__}
+
+
+@app.post("/brain/shape/fit")
+async def brain_shape_fit(payload: ShapeFitRequest):
+    REQUESTS.labels(endpoint="/brain/shape/fit").inc()
+    result = trainer.fit_shape_memory(
+        dataset_path=payload.dataset_path,
+        style_name=payload.style_name,
+        limit=payload.limit,
+        resize=payload.resize,
+        save_path=trainer.shape_memory_path,
+    )
+    return {"ok": True, **result}
 
 @app.websocket("/progress/{job_id}")
 async def progress_websocket(websocket: WebSocket, job_id: str):

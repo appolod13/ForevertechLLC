@@ -1,0 +1,13 @@
+diffusers==0.21.4
+huggingface-hub==0.20.3
+transformers==4.36.2
+accelerate==0.25.0
+numpy==1.26.4
+torch
+invisible-watermark==0.2.0
+flask
+requests
+gunicorn
+torchvision
+stripe
+Pillow

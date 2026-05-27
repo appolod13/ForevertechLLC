@@ -13,12 +13,22 @@ export default function LoginPage() {
   const { login, isLoading } = useAuth();
   const router = useRouter();
 
+  const [redirectPath, setRedirectPath] = useState('/');
+
+  // Run on mount to safely get window.location
+  useState(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      setRedirectPath(urlParams.get('redirect') || '/');
+    }
+  });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     try {
       await login(email, password);
-      router.push('/');
+      router.push(redirectPath);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Login failed');
     }
@@ -69,7 +79,7 @@ export default function LoginPage() {
 
         <p className="mt-6 text-center text-sm text-zinc-500">
           Don&apos;t have an account?{' '}
-          <Link href="/register" className="text-white hover:underline">
+          <Link href={redirectPath !== '/' ? `/register?redirect=${encodeURIComponent(redirectPath)}` : "/register"} className="text-white hover:underline">
             Sign up
           </Link>
         </p>

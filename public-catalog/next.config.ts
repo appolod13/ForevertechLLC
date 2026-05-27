@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  serverExternalPackages: ["@napi-rs/canvas"],
   async headers() {
     return [
       {
@@ -13,18 +14,6 @@ const nextConfig: NextConfig = {
         headers: [{ key: "cache-control", value: "no-store" }],
       },
     ];
-  },
-  images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "**",
-      },
-      {
-        protocol: "http",
-        hostname: "**",
-      },
-    ],
   },
 };
 

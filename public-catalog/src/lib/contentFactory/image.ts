@@ -18,7 +18,7 @@ function svgPlaceholder(text: string, w: number, h: number) {
     <text x='50%' y='60%' font-size='${Math.round(h*0.04)}'>${t}</text>
   </g>
 </svg>`;
-  return `data:image/svg+xml;utf8,${svg}`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
 }
 
 export async function generateImageForPlatform(provider: Provider, prompt: string, platform: Platform) {
