@@ -4,6 +4,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { ShoppingCart, Shirt, Coffee } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCart } from '@/context/CartContext';
+import QRCode from 'qrcode';
 
 interface Product {
   id: string;
@@ -205,6 +206,105 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
     return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
   }, [bannerText]);
 
+  const backAbstractSvgDataUrl = useMemo(() => {
+    const clean = (bannerText || 'CUSTOM')
+      .trim()
+      .replace(/\s+/g, ' ')
+      .replace(/[^A-Za-z0-9 ]/g, '')
+      .trim()
+      .slice(0, 96) || 'CUSTOM';
+    const width = 800;
+    const height = 2000;
+
+    const seed = (() => {
+      let h = 2166136261;
+      for (let i = 0; i < clean.length; i++) {
+        h ^= clean.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return h >>> 0;
+    })();
+
+    const rng = (() => {
+      let a = seed || 1;
+      return () => {
+        a |= 0;
+        a = (a + 0x6d2b79f5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    })();
+
+    const gradA = `hsl(${Math.floor(rng() * 30) + 280} 85% 55%)`;
+    const gradB = `hsl(${Math.floor(rng() * 30) + 190} 80% 45%)`;
+    const gradC = `hsl(${Math.floor(rng() * 20) + 320} 90% 50%)`;
+
+    const lines = Array.from({ length: 38 })
+      .map((_, i) => {
+        const y = Math.floor((height * (0.12 + rng() * 0.76)) | 0);
+        const amp = 40 + rng() * 140;
+        const freq = 1.4 + rng() * 2.8;
+        const phase = rng() * Math.PI * 2;
+        const stroke = i % 3 === 0 ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.18)';
+        const sw = 2 + Math.floor(rng() * 3);
+        const p0 = `M 0 ${y}`;
+        const c1y = y + Math.sin(phase) * amp;
+        const c2y = y + Math.sin(phase + freq) * amp;
+        const endY = y + Math.sin(phase + freq * 2) * amp * 0.55;
+        const d = `${p0} C ${Math.floor(width * 0.33)} ${Math.floor(c1y)}, ${Math.floor(width * 0.66)} ${Math.floor(c2y)}, ${width} ${Math.floor(endY)}`;
+        return `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${sw}" opacity="${0.35 + rng() * 0.4}"/>`;
+      })
+      .join('');
+
+    const shards = Array.from({ length: 24 })
+      .map(() => {
+        const cx = Math.floor(rng() * width);
+        const cy = Math.floor(height * (0.08 + rng() * 0.84));
+        const r = 40 + rng() * 140;
+        const rot = -35 + rng() * 70;
+        const opacity = 0.08 + rng() * 0.18;
+        const fill = rng() > 0.5 ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.18)';
+        const w = Math.max(60, Math.floor(r * (0.6 + rng() * 0.9)));
+        const h = Math.max(60, Math.floor(r * (0.6 + rng() * 0.9)));
+        return `<g transform="translate(${cx} ${cy}) rotate(${rot})"><rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="${Math.floor(12 + rng() * 24)}" ry="${Math.floor(12 + rng() * 24)}" fill="${fill}" opacity="${opacity}"/></g>`;
+      })
+      .join('');
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${gradA}"/><stop offset="55%" stop-color="${gradB}"/><stop offset="100%" stop-color="${gradC}"/></linearGradient></defs><rect width="${width}" height="${height}" fill="url(#bg)" opacity="0.28"/><rect width="${width}" height="${height}" fill="rgba(0,0,0,0.72)"/>${shards}${lines}</svg>`;
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  }, [bannerText]);
+
+  const qrTargetUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const origin = window.location.origin;
+    const u = new URL('/pixelqrypt', origin);
+    u.searchParams.set('src', 'shirt');
+    return u.toString();
+  }, []);
+
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!qrTargetUrl) return;
+    let cancelled = false;
+    QRCode.toDataURL(qrTargetUrl, {
+      errorCorrectionLevel: 'H',
+      margin: 1,
+      width: 280,
+      color: { dark: '#26000f', light: '#ff1f5d' },
+    })
+      .then((url) => {
+        if (!cancelled) setQrDataUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setQrDataUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [qrTargetUrl]);
+
   const handleAddToCart = async () => {
     if (!selectedProduct || !initialImageUrl) return;
     setOrderStatus('processing');
@@ -314,7 +414,14 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
          )}
 
          {view === 'back' && (
-            <div className="relative z-10 h-[70%] w-[70%] rounded-md bg-black/0">
+            <div className="relative z-10 h-[70%] w-[70%] rounded-md bg-black/0 overflow-hidden">
+              <img
+                src={backAbstractSvgDataUrl}
+                alt="Back abstract"
+                className="absolute inset-0 h-full w-full object-contain"
+                loading="eager"
+                decoding="async"
+              />
               <img
                 src={backWordSvgDataUrl}
                 alt={`Back banner: ${bannerText}`}
@@ -322,6 +429,11 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
                 loading="eager"
                 decoding="async"
               />
+              {qrDataUrl ? (
+                <div className="absolute bottom-[14%] right-[14%] w-[28%] max-w-[170px] aspect-square rounded-2xl bg-[#ff1f5d]/95 border border-white/20 shadow-2xl overflow-hidden">
+                  <img src={qrDataUrl} alt="QR code" className="h-full w-full object-contain p-2" loading="eager" decoding="async" />
+                </div>
+              ) : null}
             </div>
          )}
          
