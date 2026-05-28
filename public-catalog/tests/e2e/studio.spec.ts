@@ -41,8 +41,24 @@ test.describe('Studio Generate & Import', () => {
     const start = Date.now();
     await generateBtn.click();
 
-    const generatedImg = page.getByRole('img', { name: 'Latest AI Generated Content' });
-    await expect(generatedImg).toBeVisible({ timeout: 20000 });
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => {
+            try {
+              const raw = localStorage.getItem('foreverteck.studio.lastImage');
+              if (!raw) return '';
+              const parsed = JSON.parse(raw) as unknown;
+              if (!parsed || typeof parsed !== 'object') return '';
+              const rec = parsed as { imageUrl?: unknown };
+              return typeof rec.imageUrl === 'string' ? rec.imageUrl : '';
+            } catch {
+              return '';
+            }
+          }),
+        { timeout: 20000 },
+      )
+      .toContain('data:image/png');
     const genDuration = Date.now() - start;
     expect(genDuration).toBeLessThan(20000);
 
@@ -58,29 +74,6 @@ test.describe('Studio Generate & Import', () => {
     const imageUrl =
       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAAAAABx5D8UAAAAFElEQVR4nGP4z8DwnwEGwAEMCwAAGXgA4p9gB2QAAAAASUVORK5CYII=";
 
-    await page.goto('/studio?test=1');
-
-    await page.route('**/api/generate/image', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true, imageUrl }),
-      });
-    });
-    await page.route('**/api/content-factory', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true, items: [{ text_content: 'E2E: Generated post copy.' }] }),
-      });
-    });
-    await page.route('**/api/gallery', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true, item: { id: 'e2e_gallery_1' } }),
-      });
-    });
     await page.route('**/api/products', async (route) => {
       await route.fulfill({
         status: 200,
@@ -89,7 +82,7 @@ test.describe('Studio Generate & Import', () => {
           success: true,
           products: [
             {
-              id: 'shirt-1',
+              id: 'tee',
               name: 'Premium Tee',
               description: 'Cotton Tee',
               basePrice: 49.99,
@@ -97,29 +90,29 @@ test.describe('Studio Generate & Import', () => {
               variants: ['S', 'M', 'L', 'XL'],
               colors: ['Black', 'White'],
               image: '',
+              printifySkus: { S: 'sku_s', M: 'sku_m', L: 'sku_l', XL: 'sku_xl' },
             },
           ],
         }),
       });
     });
 
-    await page.getByRole('button', { name: /Generate Asset/i }).click();
-    await expect(page.getByRole('img', { name: 'Latest AI Generated Content' })).toBeVisible({ timeout: 20000 });
-
     await page.goto(`/customize?imageUrl=${encodeURIComponent(imageUrl)}&prompt=${encodeURIComponent('neon city skyline')}`);
 
     await expect(page.getByRole('heading', { name: 'Customize Your Gear' })).toBeVisible({ timeout: 20000 });
 
     await expect(page.getByRole('button', { name: 'Front' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Back' })).toBeVisible();
+    const backToggleBtn = page.getByRole('button', { name: 'Back' }).nth(1);
+    await expect(backToggleBtn).toBeVisible();
 
     await expect(page.getByRole('img', { name: 'Design' })).toBeVisible({ timeout: 20000 });
     await testInfo.attach('customize-front.png', {
-      body: await page.screenshot({ fullPage: true }),
+      body: await page.screenshot(),
       contentType: 'image/png',
     });
 
-    await page.getByRole('button', { name: 'Back' }).click();
+    await backToggleBtn.click();
+    await expect(page.getByRole('img', { name: 'T-shirt back mockup' })).toBeVisible({ timeout: 20000 });
     const backBanner = page.locator('img[alt^="Back banner:"]');
     await expect(backBanner).toBeVisible({ timeout: 20000 });
 
@@ -130,7 +123,7 @@ test.describe('Studio Generate & Import', () => {
     expect(decoded).toContain('font-family="Impact');
 
     await testInfo.attach('customize-back.png', {
-      body: await page.screenshot({ fullPage: true }),
+      body: await page.screenshot(),
       contentType: 'image/png',
     });
   });

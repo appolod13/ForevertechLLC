@@ -29,6 +29,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
   const [orderStatus, setOrderStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
   const [view, setView] = useState<'front' | 'back'>('front');
   const { addToCart } = useCart();
+  const teeBackMockupUrl = 'https://pfy-prod-image-storage.s3.us-east-2.amazonaws.com/27072493/16a5087a-ce02-45dd-b86a-a148cd91a36d';
 
   useEffect(() => {
     fetch('/api/products')
@@ -361,6 +362,9 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
 
   if (loading) return <div className="animate-pulse h-96 bg-zinc-900 rounded-xl"></div>;
 
+  const isMug = Boolean(selectedProduct?.id.includes('mug'));
+  const isBackMockup = !isMug && view === 'back';
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -401,11 +405,21 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
          </div>
 
          {/* Product Base Layer */}
-         <div className="absolute inset-0 flex items-center justify-center opacity-50">
-             {selectedProduct?.id.includes('mug') ? (
+         <div className={cn("absolute inset-0 flex items-center justify-center", isBackMockup ? "opacity-100" : "opacity-50")}>
+             {isMug ? (
                  <Coffee className="w-[70%] h-[70%] text-zinc-700" />
              ) : (
-                 <Shirt strokeWidth={1} className="w-[140%] h-[140%] min-w-[500px] min-h-[500px] text-zinc-700 -mt-[5%]" />
+                 isBackMockup ? (
+                   <img
+                     src={teeBackMockupUrl}
+                     alt="T-shirt back mockup"
+                     className="h-full w-full object-contain"
+                     loading="eager"
+                     decoding="async"
+                   />
+                 ) : (
+                   <Shirt strokeWidth={1} className="w-[140%] h-[140%] min-w-[500px] min-h-[500px] text-zinc-700 -mt-[5%]" />
+                 )
              )}
          </div>
          
@@ -413,7 +427,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
          {view === 'front' && initialImageUrl && (
              <div className={cn(
                  "relative z-10 transition-all",
-                 selectedProduct?.id.includes('mug') 
+                 isMug 
                     ? "w-1/2 h-1/2 mix-blend-overlay opacity-90 shadow-2xl" 
                     : "w-[35%] h-[35%] -mt-[15%] shadow-xl rounded-lg overflow-hidden bg-zinc-950/50 backdrop-blur-sm border border-white/10 p-1 mix-blend-multiply opacity-95" 
              )}>
@@ -428,7 +442,12 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
          )}
 
          {view === 'back' && (
-            <div className="relative z-10 h-[70%] w-[70%] rounded-md bg-black/0 overflow-hidden">
+            <div
+              className={cn(
+                "relative z-10 rounded-md bg-black/0 overflow-hidden",
+                isMug ? "h-[70%] w-[70%]" : "h-[58%] w-[42%] -mt-[6%] shadow-xl border border-white/10 bg-black/10 backdrop-blur-sm"
+              )}
+            >
               <img
                 src={backAbstractSvgDataUrl}
                 alt="Back abstract"
