@@ -761,7 +761,7 @@ function drawExpressYourselfHeader(params: {
   fontWeight: number;
 }) {
   const { ctx, bgX, bgY, bgW, bgH, fontFamily, fontWeight } = params;
-  const text = "Prixal Crypted";
+  const text = "Pixel Crypted";
   const len = Math.max(1, text.length);
   const fontSize = Math.max(72, Math.min(320, Math.floor((bgW * 1.08) / (len * 0.50))));
   const x = bgX + bgW / 2;

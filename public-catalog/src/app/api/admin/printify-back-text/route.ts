@@ -231,7 +231,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
     .png()
     .toBuffer();
 
-  const brandText = "Prixal Crypted";
+  const brandText = "Pixel Crypted";
   const verificationUrl = "https://www.pixelqrypt.com";
 
   const leftBound = 8 + border;
