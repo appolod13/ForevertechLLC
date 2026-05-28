@@ -440,9 +440,9 @@ function drawFuturisticLines(params: {
   const darker = shade(base, -58);
   const thick = 2.4;
   const black = { r: 0, g: 0, b: 0 };
-  const strokeMain = variant === "abstract" ? rgba(black, 0.95) : rgba({ r: 255, g: 255, b: 255 }, 0.18);
-  const strokeSecondary = variant === "abstract" ? rgba(black, 0.92) : rgba(light, 0.16);
-  const strokeAccent = variant === "abstract" ? rgba(black, 0.88) : rgba(darker, 0.26);
+  const strokeMain = variant === "abstract" ? rgba(black, 1) : rgba({ r: 255, g: 255, b: 255 }, 0.18);
+  const strokeSecondary = variant === "abstract" ? rgba(black, 0.98) : rgba(light, 0.16);
+  const strokeAccent = variant === "abstract" ? rgba(black, 0.96) : rgba(darker, 0.26);
 
   ctx.save();
   ctx.globalAlpha = 1;
@@ -451,7 +451,7 @@ function drawFuturisticLines(params: {
 
   const pad =
     variant === "abstract"
-      ? Math.max(22, Math.round(Math.min(bgW, bgH) * 0.03))
+      ? Math.max(16, Math.round(Math.min(bgW, bgH) * 0.018))
       : Math.max(50, Math.round(Math.min(bgW, bgH) * 0.06));
   const x0 = bgX + pad;
   const y0 = bgY + pad;
@@ -460,9 +460,9 @@ function drawFuturisticLines(params: {
 
   const gridStep = Math.max(90, Math.round(Math.min(bgW, bgH) * 0.11));
   ctx.save();
-  ctx.globalAlpha = variant === "abstract" ? 0.18 : 0.06;
+  ctx.globalAlpha = variant === "abstract" ? 0.26 : 0.06;
   ctx.strokeStyle = variant === "abstract" ? rgba(black, 0.85) : rgba(light, 0.20);
-  ctx.lineWidth = variant === "abstract" ? 4 : 1 * thick;
+  ctx.lineWidth = variant === "abstract" ? 5 : 1 * thick;
   for (let x = x0; x <= x0 + w; x += gridStep) {
     ctx.beginPath();
     ctx.moveTo(x, y0);
@@ -479,8 +479,8 @@ function drawFuturisticLines(params: {
 
   const cx = x0 + w * (0.48 + (rng() - 0.5) * 0.08);
   const cy = y0 + h * ((variant === "abstract" ? 0.50 : 0.44) + (rng() - 0.5) * 0.08);
-  const baseR = Math.min(w, h) * (variant === "abstract" ? 0.42 + rng() * 0.07 : 0.28 + rng() * 0.06);
-  const spokes = variant === "abstract" ? 26 : 20;
+  const baseR = Math.min(w, h) * (variant === "abstract" ? 0.50 + rng() * 0.08 : 0.28 + rng() * 0.06);
+  const spokes = variant === "abstract" ? 30 : 20;
   const radii: number[] = [];
   for (let i = 0; i < spokes; i++) radii.push(baseR * (0.75 + rng() * 0.55));
   for (let pass = 0; pass < 2; pass++) {
@@ -661,15 +661,15 @@ function drawFuturisticLines(params: {
 
   if (variant === "abstract") {
     const orng = makeRng(seed ^ 0x2b13a41f);
-    const pad = Math.max(24, Math.round(thick * 10));
+    const pad = Math.max(18, Math.round(thick * 8));
     const x0 = bgX + pad;
     const y0 = bgY + pad;
     const w = bgW - pad * 2;
     const h = bgH - pad * 2;
     const centerX = x0 + w * (0.46 + (orng() - 0.5) * 0.04);
     const centerY = y0 + h * (0.54 + (orng() - 0.5) * 0.05);
-    const size = Math.min(w, h) * (0.42 + orng() * 0.05);
-    const depth = size * (0.18 + orng() * 0.03);
+    const size = Math.min(w, h) * (0.54 + orng() * 0.07);
+    const depth = size * (0.22 + orng() * 0.04);
     const rot = (orng() - 0.5) * 0.14;
 
     const mkDiamond = (cx: number, cy: number, s: number, r: number) => {
@@ -706,7 +706,7 @@ function drawFuturisticLines(params: {
       ctx.stroke();
     };
 
-    ctx.lineWidth = 12;
+    ctx.lineWidth = 14;
     strokePoly(front);
     strokePoly(back);
 

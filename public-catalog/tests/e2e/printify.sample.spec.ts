@@ -116,7 +116,7 @@ test.describe("Printify Sample", () => {
     const origin = String(baseURL);
 
     const nowTag = Date.now().toString(36);
-    const prompt = `pixel-crypted stamp sample ${nowTag}: julia + mandelbrot fusion, crystal lattice, bold black linework, high contrast, print-ready`;
+    const prompt = `pixel-crypted abstract stamp sample ${nowTag}: julia + mandelbrot fusion, crystal lattice, bold black linework, high contrast, print-ready`;
     const text = `PIXELQRYPT VERIFIED ${nowTag}`.toUpperCase();
 
     const res = await request.post("/api/admin/printify-back-text", {
@@ -126,7 +126,7 @@ test.describe("Printify Sample", () => {
         origin,
         prompt,
         text,
-        backStyle: "words",
+        backStyle: "abstract",
         seedSalt: `e2e-printify-pixel-crypted-${nowTag}`,
       },
     });
