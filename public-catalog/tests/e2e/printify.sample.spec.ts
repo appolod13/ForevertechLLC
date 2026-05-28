@@ -106,7 +106,7 @@ test.describe("Printify Sample", () => {
     );
   });
 
-  test("creates a shirt sample product with updated verification stamp (Pixel Crypted + QV square + pixelqrypt url)", async ({ request }) => {
+  test("creates a shirt sample product with updated verification stamp (no QV badge, pixelqrypt url)", async ({ request }) => {
     test.skip(process.env.PRINTIFY_E2E !== "1", "Set PRINTIFY_E2E=1 to run live Printify sample creation.");
     test.skip(test.info().project.name !== "Chromium", "Run live Printify sample creation only once (Chromium).");
     test.setTimeout(180_000);
