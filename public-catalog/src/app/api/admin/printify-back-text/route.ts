@@ -60,8 +60,10 @@ function normalizeCustomerQrUrl(input: unknown): string {
 
 function getBackStyle(input: unknown): "words" | "abstract" {
   const raw = typeof input === "string" ? input.trim().toLowerCase() : "";
+  if (raw === "words") return "words";
   if (raw === "abstract") return "abstract";
   const env = (process.env.PRINTIFY_BACK_STYLE || "").trim().toLowerCase();
+  if (env === "words") return "words";
   if (env === "abstract") return "abstract";
   return "abstract";
 }

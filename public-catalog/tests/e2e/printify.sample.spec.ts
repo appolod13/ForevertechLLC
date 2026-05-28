@@ -64,6 +64,48 @@ test.describe("Printify Sample", () => {
     }
   });
 
+  test("creates a shirt sample product with WORDS back + QR stamp (customer preview)", async ({ request }) => {
+    test.skip(process.env.PRINTIFY_E2E !== "1", "Set PRINTIFY_E2E=1 to run live Printify sample creation.");
+    test.skip(test.info().project.name !== "Chromium", "Run live Printify sample creation only once (Chromium).");
+    test.setTimeout(180_000);
+
+    const baseURL = test.info().project.use.baseURL;
+    expect(baseURL).toBeTruthy();
+    const origin = String(baseURL);
+
+    const nowTag = Date.now().toString(36);
+    const prompt = `customer sample ${nowTag}: julia + mandelbrot fusion, hypercube lattice, bold black linework, high contrast, print-ready`;
+    const text = `PIXELQRYPT VERIFIED ${nowTag}`.toUpperCase();
+
+    const res = await request.post("/api/admin/printify-back-text", {
+      headers: { origin },
+      data: {
+        createProductSample: true,
+        origin,
+        prompt,
+        text,
+        backStyle: "words",
+        seedSalt: `e2e-printify-customer-${nowTag}`,
+      },
+    });
+
+    expect(res.ok()).toBeTruthy();
+    const json = await res.json();
+    expect(json?.success).toBe(true);
+    expect(json?.data?.shopId).toBeTruthy();
+    expect(json?.data?.productId).toBeTruthy();
+    expect(json?.data?.backStyle).toBe("words");
+
+    console.log("PRINTIFY_CUSTOMER_PROMPT", prompt);
+    console.log("PRINTIFY_CUSTOMER_BACK_TEXT", json?.data?.backText || text);
+    console.log("PRINTIFY_CUSTOMER_FRONT_UPLOAD_PREVIEW", json?.data?.frontUploadUrl);
+    console.log("PRINTIFY_CUSTOMER_BACK_UPLOAD_PREVIEW", json?.data?.backUploadUrl);
+    console.log(
+      "PRINTIFY_PRODUCT_URL_CUSTOMER",
+      `https://printify.com/app/store/${json.data.shopId}/products/${json.data.productId}`,
+    );
+  });
+
   test("creates a shirt sample product seeded from real IBM quantum job", async ({ request }) => {
     test.skip(process.env.PRINTIFY_E2E !== "1", "Set PRINTIFY_E2E=1 to run live Printify sample creation.");
     test.skip(process.env.REAL_QUANTUM_E2E !== "1", "Set REAL_QUANTUM_E2E=1 to run the real IBM quantum seed + Printify test.");

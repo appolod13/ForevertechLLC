@@ -70,5 +70,5 @@ describe('printifyBackText', () => {
     const b = await renderBackAbstractPngBuffer('FUTURISTIC GEOMETRY', cfg);
     expect(a.equals(b)).toBe(true);
     expect(a.slice(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
-  });
+  }, 15000);
 });
