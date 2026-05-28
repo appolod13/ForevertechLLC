@@ -106,7 +106,7 @@ test.describe("Printify Sample", () => {
     );
   });
 
-  test("creates a shirt sample product with updated PixelQrypt verification stamp (customer preview)", async ({ request }) => {
+  test("creates a shirt sample product with updated verification stamp (Prixal Crypted + QV square + pixelqrypt url)", async ({ request }) => {
     test.skip(process.env.PRINTIFY_E2E !== "1", "Set PRINTIFY_E2E=1 to run live Printify sample creation.");
     test.skip(test.info().project.name !== "Chromium", "Run live Printify sample creation only once (Chromium).");
     test.setTimeout(180_000);
@@ -116,8 +116,8 @@ test.describe("Printify Sample", () => {
     const origin = String(baseURL);
 
     const nowTag = Date.now().toString(36);
-    const prompt = `pixelqrypt stamp ${nowTag}: bold geometric fractal fusion, clean vector-like contrast, printify-safe, no text in art`;
-    const text = `PIXELQRYPT BACK ${nowTag}`.toUpperCase();
+    const prompt = `prixal-crypted stamp sample ${nowTag}: julia + mandelbrot fusion, crystal lattice, bold black linework, high contrast, print-ready`;
+    const text = `PIXELQRYPT VERIFIED ${nowTag}`.toUpperCase();
 
     const res = await request.post("/api/admin/printify-back-text", {
       headers: { origin },
@@ -127,7 +127,7 @@ test.describe("Printify Sample", () => {
         prompt,
         text,
         backStyle: "words",
-        seedSalt: `e2e-printify-pixelqrypt-stamp-${nowTag}`,
+        seedSalt: `e2e-printify-prixal-crypted-${nowTag}`,
       },
     });
 
@@ -137,12 +137,12 @@ test.describe("Printify Sample", () => {
     expect(json?.data?.shopId).toBeTruthy();
     expect(json?.data?.productId).toBeTruthy();
 
-    console.log("PRINTIFY_PIXELQRYPT_STAMP_PROMPT", prompt);
-    console.log("PRINTIFY_PIXELQRYPT_STAMP_BACK_TEXT", json?.data?.backText || text);
-    console.log("PRINTIFY_PIXELQRYPT_STAMP_FRONT_UPLOAD_PREVIEW", json?.data?.frontUploadUrl);
-    console.log("PRINTIFY_PIXELQRYPT_STAMP_BACK_UPLOAD_PREVIEW", json?.data?.backUploadUrl);
+    console.log("PRINTIFY_PRIXAL_CRYPTED_PROMPT", prompt);
+    console.log("PRINTIFY_PRIXAL_CRYPTED_BACK_TEXT", json?.data?.backText || text);
+    console.log("PRINTIFY_PRIXAL_CRYPTED_FRONT_UPLOAD_PREVIEW", json?.data?.frontUploadUrl);
+    console.log("PRINTIFY_PRIXAL_CRYPTED_BACK_UPLOAD_PREVIEW", json?.data?.backUploadUrl);
     console.log(
-      "PRINTIFY_PRODUCT_URL_PIXELQRYPT_STAMP",
+      "PRINTIFY_PRODUCT_URL_PRIXAL_CRYPTED",
       `https://printify.com/app/store/${json.data.shopId}/products/${json.data.productId}`,
     );
   });

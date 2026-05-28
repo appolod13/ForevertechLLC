@@ -231,23 +231,34 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
     .png()
     .toBuffer();
 
-  const labelText = "Prixal Crypted";
-  const labelFontSize = Math.max(18, Math.round(stampSide * 0.075));
-  const labelCenterX = 8 + stampSide / 2;
-  const urlText = "https://www.pixelqrypt.com";
-  const urlFontSize = Math.max(12, Math.round(labelFontSize * 0.38));
-  const labelY = 8 + stampSide - Math.max(14, Math.round(border * 0.60)) - Math.round(urlFontSize * 1.25);
-  const approxHalfW = (labelFontSize * 0.62 * labelText.length) / 2;
-  const iconSide = Math.max(18, Math.round(labelFontSize * 0.92));
-  const iconRx = Math.max(4, Math.round(iconSide * 0.18));
-  const iconCx = Math.min(8 + stampSide - border - iconSide / 2, labelCenterX + approxHalfW + iconSide / 2 + Math.round(labelFontSize * 0.22));
-  const iconCy = labelY - Math.round(labelFontSize * 0.55);
-  const iconLeft = Math.round(iconCx - iconSide / 2);
-  const iconTop = Math.round(iconCy - iconSide / 2);
-  const iconStroke = Math.max(2, Math.round(iconSide * 0.12));
-  const checkStroke = Math.max(2, Math.round(iconSide * 0.12));
-  const checkPath = `M ${iconLeft + Math.round(iconSide * 0.22)} ${iconTop + Math.round(iconSide * 0.56)} L ${iconLeft + Math.round(iconSide * 0.44)} ${iconTop + Math.round(iconSide * 0.74)} L ${iconLeft + Math.round(iconSide * 0.78)} ${iconTop + Math.round(iconSide * 0.30)}`;
-  const labelSvg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${stampSide + 24}" height="${stampSide + 24}">\n  <text x="${labelCenterX}" y="${labelY}" text-anchor="middle" font-family="Impact, Arial Black, Arial, sans-serif" font-weight="900" font-size="${labelFontSize}" fill="rgba(255,255,255,0.92)" stroke="rgba(0,0,0,0.45)" stroke-width="${Math.max(2, Math.round(labelFontSize * 0.06))}">${labelText}</text>\n  <rect x="${iconLeft}" y="${iconTop}" width="${iconSide}" height="${iconSide}" rx="${iconRx}" ry="${iconRx}" fill="rgba(255,255,255,0.92)" stroke="rgba(0,0,0,0.75)" stroke-width="${iconStroke}" />\n  <path d="${checkPath}" fill="none" stroke="rgba(0,0,0,0.92)" stroke-width="${checkStroke}" stroke-linecap="round" stroke-linejoin="round" />\n  <text x="${labelCenterX}" y="${labelY + Math.round(urlFontSize * 1.2)}" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif" font-weight="700" font-size="${urlFontSize}" fill="rgba(255,255,255,0.88)" stroke="rgba(0,0,0,0.35)" stroke-width="${Math.max(1, Math.round(urlFontSize * 0.08))}">${urlText}</text>\n</svg>`;
+  const brandText = "Prixal Crypted";
+  const verificationUrl = "https://www.pixelqrypt.com";
+
+  const leftBound = 8 + border;
+  const rightBound = 8 + stampSide - border;
+  const centerX = 8 + stampSide / 2;
+
+  let brandFontSize = Math.max(20, Math.min(72, Math.round(stampSide * 0.13)));
+  let badgeSize = Math.max(18, Math.round(brandFontSize * 1.05));
+  const badgeGap = Math.max(10, Math.round(stampSide * 0.02));
+  const brandAvailable = Math.max(1, rightBound - leftBound - badgeSize - badgeGap);
+  const brandMaxFont = Math.floor(brandAvailable / (0.62 * brandText.length));
+  brandFontSize = Math.max(18, Math.min(brandFontSize, brandMaxFont || brandFontSize));
+  badgeSize = Math.max(18, Math.round(brandFontSize * 1.05));
+
+  const brandY = 8 + Math.max(Math.round(border * 1.1), Math.round(stampSide * 0.10)) + brandFontSize;
+  const brandApproxW = Math.round(brandFontSize * 0.62 * brandText.length);
+  const badgeX = Math.min(rightBound - badgeSize, leftBound + brandApproxW + badgeGap);
+  const badgeY = brandY - Math.round(brandFontSize * 0.92);
+  const badgeRadius = Math.max(6, Math.round(badgeSize * 0.18));
+  const badgeFontSize = Math.max(10, Math.round(badgeSize * 0.62));
+
+  const urlFontSize = Math.max(12, Math.min(26, Math.round(stampSide * 0.034)));
+  const quantumFontSize = Math.max(18, Math.min(46, Math.round(stampSide * 0.072)));
+  const urlY = 8 + stampSide - Math.max(14, Math.round(border * 0.65));
+  const quantumY = urlY - Math.round(quantumFontSize * 0.95);
+
+  const labelSvg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${stampSide + 24}" height="${stampSide + 24}">\n  <text x="${leftBound}" y="${brandY}" text-anchor="start" font-family="Impact, Arial Black, Arial, sans-serif" font-weight="900" font-size="${brandFontSize}" fill="rgba(255,255,255,0.92)" stroke="rgba(0,0,0,0.45)" stroke-width="${Math.max(2, Math.round(brandFontSize * 0.06))}" paint-order="stroke">${brandText}</text>\n  <rect x="${badgeX}" y="${badgeY}" width="${badgeSize}" height="${badgeSize}" rx="${badgeRadius}" ry="${badgeRadius}" fill="rgba(255,255,255,0.92)" stroke="rgba(0,0,0,0.78)" stroke-width="${Math.max(2, Math.round(badgeSize * 0.10))}" />\n  <text x="${badgeX + badgeSize / 2}" y="${badgeY + badgeSize / 2}" text-anchor="middle" dominant-baseline="middle" font-family="Impact, Arial Black, Arial, sans-serif" font-weight="900" font-size="${badgeFontSize}" fill="rgba(0,0,0,0.92)">QV</text>\n  <text x="${centerX}" y="${quantumY}" text-anchor="middle" font-family="Impact, Arial Black, Arial, sans-serif" font-weight="900" font-size="${quantumFontSize}" fill="rgba(255,255,255,0.92)" stroke="rgba(0,0,0,0.45)" stroke-width="${Math.max(2, Math.round(quantumFontSize * 0.06))}" paint-order="stroke">Quantum Verified</text>\n  <text x="${centerX}" y="${urlY}" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif" font-weight="700" font-size="${urlFontSize}" fill="rgba(255,255,255,0.88)" stroke="rgba(0,0,0,0.25)" stroke-width="${Math.max(1, Math.round(urlFontSize * 0.06))}" paint-order="stroke">${verificationUrl}</text>\n</svg>`;
 
   const out = await sharp({
     create: { width: stampSide + 24, height: stampSide + 24, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },

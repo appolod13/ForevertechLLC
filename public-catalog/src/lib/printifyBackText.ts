@@ -761,22 +761,26 @@ function drawExpressYourselfHeader(params: {
   fontWeight: number;
 }) {
   const { ctx, bgX, bgY, bgW, bgH, fontFamily, fontWeight } = params;
-  const text = "EMOTIONAL QUANTUM";
+  const text = "Prixal Crypted";
   const len = Math.max(1, text.length);
   const fontSize = Math.max(72, Math.min(320, Math.floor((bgW * 1.08) / (len * 0.50))));
   const x = bgX + bgW / 2;
 
   ctx.save();
   ctx.globalAlpha = 0.96;
-  ctx.textAlign = "center";
+  ctx.textAlign = "left";
   ctx.textBaseline = "middle";
   const weight = Math.max(700, Math.min(1000, Math.round(fontWeight || 900)));
   const family = fontFamily || "Impact, Arial Black, Arial, sans-serif";
   ctx.font = `${weight} ${fontSize}px ${family}`;
 
-  const measured = typeof ctx.measureText === "function" ? ctx.measureText(text).width : fontSize * (len * 0.62);
+  const measuredTextW = typeof ctx.measureText === "function" ? ctx.measureText(text).width : fontSize * (len * 0.62);
+  const badgeGap = Math.max(10, Math.round(fontSize * 0.20));
+  const badgeSizeRaw = Math.round(fontSize * 0.90);
+  const badgeSize = Math.max(54, Math.min(180, badgeSizeRaw));
+  const totalW = measuredTextW + badgeGap + badgeSize;
   const targetW = bgW * 0.995;
-  const scaleX = measured > 0 ? Math.min(1.25, Math.max(0.7, targetW / measured)) : 1;
+  const scaleX = totalW > 0 ? Math.min(1.25, Math.max(0.7, targetW / totalW)) : 1;
   const scaleY = 1.08;
 
   ctx.fillStyle = "#ffffff";
@@ -787,8 +791,38 @@ function drawExpressYourselfHeader(params: {
   const y = bgY + Math.round(fontSize * (0.52 + (scaleY - 1) * 0.12)) + strokeW + 8;
   ctx.translate(x, y);
   ctx.scale(scaleX, scaleY);
-  ctx.strokeText(text, 0, 0);
-  ctx.fillText(text, 0, 0);
+  const left = -totalW / 2;
+  ctx.strokeText(text, left, 0);
+  ctx.fillText(text, left, 0);
+
+  const badgeX = left + measuredTextW + badgeGap;
+  const badgeY = -badgeSize / 2;
+  const r = Math.max(10, Math.round(badgeSize * 0.18));
+  ctx.save();
+  ctx.fillStyle = "rgba(255,255,255,0.92)";
+  ctx.strokeStyle = "rgba(0,0,0,0.78)";
+  ctx.lineWidth = Math.max(6, Math.round(badgeSize * 0.10));
+  ctx.beginPath();
+  ctx.moveTo(badgeX + r, badgeY);
+  ctx.lineTo(badgeX + badgeSize - r, badgeY);
+  ctx.arc(badgeX + badgeSize - r, badgeY + r, r, -Math.PI / 2, 0);
+  ctx.lineTo(badgeX + badgeSize, badgeY + badgeSize - r);
+  ctx.arc(badgeX + badgeSize - r, badgeY + badgeSize - r, r, 0, Math.PI / 2);
+  ctx.lineTo(badgeX + r, badgeY + badgeSize);
+  ctx.arc(badgeX + r, badgeY + badgeSize - r, r, Math.PI / 2, Math.PI);
+  ctx.lineTo(badgeX, badgeY + r);
+  ctx.arc(badgeX + r, badgeY + r, r, Math.PI, (Math.PI * 3) / 2);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(0,0,0,0.92)";
+  const qvSize = Math.max(10, Math.round(badgeSize * 0.62));
+  ctx.font = `${weight} ${qvSize}px ${family}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("QV", badgeX + badgeSize / 2, badgeY + badgeSize / 2);
+  ctx.restore();
   ctx.restore();
 }
 
