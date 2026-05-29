@@ -29,7 +29,7 @@ function StudioPageInner() {
   const testMode = (searchParams?.get('test') || '') === '1';
   const scannedBackText = (searchParams?.get('back') || '').trim();
   const [hydrated, setHydrated] = useState(false);
-  const [prompt, setPrompt] = useState('Cinematic wide establishing shot of a vast futuristic megacity at golden hour, dense urban grid filled with thousands of warm amber lights in the foreground, distant layered mountains and a sharp jagged peak on the horizon, a cluster of ultra-tall sleek curved glass-and-metal skyscrapers dominating the right side with vertical electric-blue illuminated seams, atmospheric haze and volumetric light, soft bloom, high detail, realistic materials, epic scale, warm peach sunset sky with a large soft cloud mass in the upper left, sharp architecture silhouettes, ultra high quality sci‑fi concept art, photoreal lighting, 1024x1024');
+  const [prompt, setPrompt] = useState('');
   const [crossOptimizeLoading, setCrossOptimizeLoading] = useState(false);
   const [crossOptimizeError, setCrossOptimizeError] = useState<string | null>(null);
   const [crossOptimizeReports, setCrossOptimizeReports] = useState<Array<{ model: string; role: string; output: string; error?: string }> | null>(null);
@@ -192,7 +192,9 @@ function StudioPageInner() {
         setGeneratedImage(rec.imageUrl);
       }
       if (typeof rec.prompt === 'string') {
-        setPrompt(rec.prompt);
+        const restored = rec.prompt.trim();
+        const legacyPrefix = 'cinematic wide establishing shot of a vast futuristic megacity';
+        if (restored && !restored.toLowerCase().startsWith(legacyPrefix)) setPrompt(restored);
       }
       if (typeof rec.quantumMode === 'boolean') {
         setQuantumMode(rec.quantumMode);

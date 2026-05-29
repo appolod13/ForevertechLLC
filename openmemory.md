@@ -39,6 +39,7 @@
 - public-catalog: Playwright E2E suite (tests/e2e) runs cross-browser + mobile presets via playwright.config.ts webServer; customer journeys are mocked for auth/checkout/stripe/nft while validating real UI flows; test data lives in tests/e2e/fixtures/customerProfiles.ts. /api/generate/image responses are wrapped as { success: true, data: { image_url, meta, requestId } } (clients/tests should handle both image_url and legacy imageUrl shapes).
 - public-catalog: Live Printify sample tests: tests/e2e/printify.sample.spec.ts can create a real Printify product seeded from a real IBM quantum job when PRINTIFY_E2E=1 REAL_QUANTUM_E2E=1 and IBM_QUANTUM_SEED_SERVICE_URL is set; it logs PRINTIFY_PRODUCT_URL_REAL_QUANTUM and qf_quantum_engine.
 - “Build” expectation: use Python 3.11 to satisfy torch==2.2.0 wheels on macOS; add pytest-asyncio to run async tests.
+- Studio prompt UX: /studio no longer pre-fills the prompt with the long “futuristic megacity” example; prompt starts blank (and ignores that legacy default if it’s found in restored localStorage).
 
 ## public-catalog (Next.js)
 - App: public-catalog/src/app (Next.js 16 App Router, runs on port 3001)
