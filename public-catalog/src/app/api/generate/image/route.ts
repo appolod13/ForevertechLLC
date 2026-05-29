@@ -159,8 +159,11 @@ async function tryAIGenerate(
     }
 
     const rawImageUrl = d.imageUrl.trim();
-    const publicQuantumBase = cfg.quantum.publicBaseUrl.trim().replace(/\/$/, "");
-    const imageUrl = rawImageUrl.startsWith("/") && publicQuantumBase ? `${publicQuantumBase}${rawImageUrl}` : rawImageUrl;
+    const imageUrl = rawImageUrl.startsWith("/images/")
+      ? `/api/images/${encodeURIComponent(rawImageUrl.slice("/images/".length))}`
+      : rawImageUrl.startsWith("/") && cfg.quantum.publicBaseUrl.trim()
+        ? `${cfg.quantum.publicBaseUrl.trim().replace(/\/$/, "")}${rawImageUrl}`
+        : rawImageUrl;
 
     return {
       success: true,
@@ -204,8 +207,11 @@ async function tryFusionGenerate(prompt: string, width: number, height: number, 
     const d = isRecord(data) ? data : {};
     if (d.success === true && typeof d.imageUrl === "string") {
       const rawImageUrl = (d.imageUrl as string).trim();
-      const publicFusionBase = cfg.fusion.publicBaseUrl.replace(/\/$/, "");
-      const imageUrl = rawImageUrl.startsWith("/") ? `${publicFusionBase}${rawImageUrl}` : rawImageUrl;
+      const imageUrl = rawImageUrl.startsWith("/images/")
+        ? `/api/images/${encodeURIComponent(rawImageUrl.slice("/images/".length))}`
+        : rawImageUrl.startsWith("/") && cfg.fusion.publicBaseUrl.trim()
+          ? `${cfg.fusion.publicBaseUrl.trim().replace(/\/$/, "")}${rawImageUrl}`
+          : rawImageUrl;
       return { image_url: imageUrl, meta: isRecord(d.meta) ? (d.meta as Record<string, unknown>) : { provider: "fusion" } };
     }
     return null;
