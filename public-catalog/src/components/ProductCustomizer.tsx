@@ -322,9 +322,11 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
 
   const [backPreviewNonce, setBackPreviewNonce] = useState(() => Math.random().toString(36).slice(2, 10));
 
+  const [customerBackText, setCustomerBackText] = useState('');
+
   useEffect(() => {
     setBackPreviewNonce(Math.random().toString(36).slice(2, 10));
-  }, [backPreviewSeed]);
+  }, [customerBackText, backPreviewSeed]);
 
   const backPreviewUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
@@ -334,9 +336,11 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
     u.searchParams.set('style', 'abstract');
     if (backPreviewSeed) u.searchParams.set('seed', backPreviewSeed);
     if (backPreviewNonce) u.searchParams.set('v', backPreviewNonce);
+    const cleanedCustomerBack = (customerBackText || '').trim();
+    if (cleanedCustomerBack) u.searchParams.set('customerText', cleanedCustomerBack);
     if (qrTargetUrl) u.searchParams.set('qrUrl', qrTargetUrl);
     return `${u.pathname}?${u.searchParams.toString()}`;
-  }, [bannerText, backPreviewNonce, backPreviewSeed, qrTargetUrl]);
+  }, [bannerText, backPreviewNonce, backPreviewSeed, customerBackText, qrTargetUrl]);
 
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
@@ -397,6 +401,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
                 color: selectedColor,
                 variant: selectedVariant,
                 printifySku,
+                backCustomerText: (customerBackText || '').trim(),
                 originalPrompt: resolvedPrompt,
                 ipfs_url,
                 ipfs_gateway,
@@ -597,6 +602,19 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
                 </div>
             </div>
         )}
+
+        {!isMug ? (
+          <div className="pt-6 border-t border-zinc-800">
+            <label className="text-sm font-medium text-zinc-300 mb-2 block">Back Text (optional)</label>
+            <input
+              value={customerBackText}
+              onChange={(e) => setCustomerBackText(e.target.value.slice(0, 48))}
+              placeholder="Add your own text for the back of the shirt"
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none focus:ring-2 focus:ring-white/15"
+            />
+            <div className="mt-2 text-xs text-zinc-500">{customerBackText.length}/48</div>
+          </div>
+        ) : null}
 
         <div className="pt-6 border-t border-zinc-800">
             <div className="flex items-center justify-between mb-6">

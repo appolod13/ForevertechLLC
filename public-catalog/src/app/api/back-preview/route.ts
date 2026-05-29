@@ -20,6 +20,15 @@ function sanitizeBannerText(text: string, maxChars = 96): string {
   return t.slice(0, Math.max(1, maxChars));
 }
 
+function sanitizeCustomerBackText(text: string, maxChars = 48): string {
+  const t = (text || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/[^A-Za-z0-9 .,'"!?:;@#&()/-]/g, "")
+    .trim();
+  return t.slice(0, Math.max(0, maxChars));
+}
+
 function normalizeCustomerQrUrl(input: unknown): string {
   const raw = typeof input === "string" ? input.trim() : "";
   if (!raw) return "";
@@ -294,6 +303,48 @@ async function buildHeaderOverlayPng(params: { panelW: number; panelH: number; t
   return canvas.toBuffer("image/png");
 }
 
+async function buildCustomerBackTextOverlayPng(params: { panelW: number; panelH: number; text: string }) {
+  const panelW = Math.max(360, Math.trunc(params.panelW));
+  const panelH = Math.max(600, Math.trunc(params.panelH));
+  const text = sanitizeCustomerBackText(params.text || "", 48);
+  if (!text) return null;
+
+  const canvas = createCanvas(panelW, panelH);
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, panelW, panelH);
+
+  const x = panelW / 2;
+  const y = Math.round(panelH * 0.18);
+  const paddingX = Math.max(18, Math.round(panelW * 0.06));
+  const maxW = Math.max(120, panelW - paddingX * 2);
+  const weight = 900;
+
+  let fontSize = Math.max(28, Math.min(92, Math.round(panelW * 0.08)));
+  for (let i = 0; i < 14; i++) {
+    ctx.font = `${weight} ${fontSize}px sans-serif`;
+    const w = typeof ctx.measureText === "function" ? ctx.measureText(text).width : fontSize * (text.length * 0.52);
+    if (w <= maxW || fontSize <= 18) break;
+    fontSize = Math.max(18, Math.floor(fontSize * 0.92));
+  }
+
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "rgba(255,255,255,0.96)";
+  ctx.strokeStyle = "rgba(0,0,0,0.65)";
+  ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.10));
+  ctx.miterLimit = 2;
+  ctx.font = `${weight} ${fontSize}px sans-serif`;
+  if (typeof (ctx as unknown as { strokeText?: unknown }).strokeText === "function") {
+    ctx.strokeText(text, x, y);
+  }
+  ctx.fillText(text, x, y);
+  ctx.restore();
+
+  return canvas.toBuffer("image/png");
+}
+
 function getBackStyle(raw: string | null): "words" | "abstract" {
   const v = (raw || "").trim().toLowerCase();
   if (v === "words") return "words";
@@ -311,6 +362,7 @@ export async function GET(req: NextRequest) {
     const style = getBackStyle(q.get("style"));
     const seedSaltRaw = (q.get("seed") || "").trim().replace(/[^a-z0-9-]/gi, "").slice(0, 128);
     const qrUrl = normalizeCustomerQrUrl(q.get("qrUrl"));
+    const customerText = sanitizeCustomerBackText(q.get("customerText") || "", 48);
 
     const backText = sanitizeBannerText(textRaw, cfg.render.maxChars) || "CUSTOM";
     const salted = seedSaltRaw ? { ...cfg, version: `${cfg.version}|${seedSaltRaw}` } : cfg;
@@ -341,9 +393,14 @@ export async function GET(req: NextRequest) {
     const baseFull = style === "abstract" ? await renderBackAbstractPngBuffer(backText, salted) : await renderBackTextPngBuffer(backText, salted);
     const basePanel = await sharp(baseFull).extract({ left: bgX, top: bgY, width: bgW, height: bgH }).png().toBuffer();
     const headerOverlay = await buildHeaderOverlayPng({ panelW, panelH, text: "Pixel Crypted" });
+    const customerOverlay = customerText ? await buildCustomerBackTextOverlayPng({ panelW, panelH, text: customerText }) : null;
 
     const out = await sharp(basePanel)
-      .composite([{ input: headerOverlay, left: 0, top: 0 }, { input: stamp, left, top }])
+      .composite([
+        { input: headerOverlay, left: 0, top: 0 },
+        ...(customerOverlay ? [{ input: customerOverlay, left: 0, top: 0 }] : []),
+        { input: stamp, left, top },
+      ])
       .png({ compressionLevel: 9, adaptiveFiltering: true })
       .toBuffer();
 

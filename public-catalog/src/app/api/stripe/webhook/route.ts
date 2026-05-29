@@ -9,6 +9,7 @@ import QRCode from 'qrcode';
 import path from 'path';
 import { readFile } from 'fs/promises';
 import { createHash } from 'crypto';
+import { createCanvas } from '@napi-rs/canvas';
 
 function getStripeClient() {
   const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -128,6 +129,15 @@ function sanitizeBannerText(text: string): string {
     .replace(/[^A-Za-z0-9 ]/g, '')
     .trim();
   return t.slice(0, 96);
+}
+
+function sanitizeCustomerBackText(text: string): string {
+  const t = (text || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/[^A-Za-z0-9 .,'"!?:;@#&()/-]/g, '')
+    .trim();
+  return t.slice(0, 48);
 }
 
 function normalizeCustomerQrUrl(input: unknown): string {
@@ -304,6 +314,58 @@ function bannerTextFromCartItem(item: CartItem, metadata: Record<string, unknown
   const prompt = promptFromCartItem(item, metadata);
   const phrase = summarizePromptToBannerText(prompt);
   return phrase ? phrase.toUpperCase() : 'CUSTOM';
+}
+
+function customerBackTextFromCartItem(metadata: Record<string, unknown>): string {
+  const raw = metadata['backCustomerText'];
+  return typeof raw === 'string' ? sanitizeCustomerBackText(raw) : '';
+}
+
+async function buildCustomerBackTextOverlayPng(params: { width: number; height: number; bgX: number; bgY: number; bgW: number; bgH: number; text: string }) {
+  const text = sanitizeCustomerBackText(params.text || '');
+  if (!text) return null;
+
+  const width = Math.max(64, Math.trunc(params.width));
+  const height = Math.max(64, Math.trunc(params.height));
+  const bgX = Math.max(0, Math.trunc(params.bgX));
+  const bgY = Math.max(0, Math.trunc(params.bgY));
+  const bgW = Math.max(1, Math.trunc(params.bgW));
+  const bgH = Math.max(1, Math.trunc(params.bgH));
+
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, width, height);
+
+  const x = bgX + bgW / 2;
+  const y = bgY + Math.round(bgH * 0.18);
+  const paddingX = Math.max(18, Math.round(bgW * 0.06));
+  const maxW = Math.max(120, bgW - paddingX * 2);
+  const weight = 900;
+
+  let fontSize = Math.max(28, Math.min(92, Math.round(bgW * 0.08)));
+  for (let i = 0; i < 14; i++) {
+    ctx.font = `${weight} ${fontSize}px sans-serif`;
+    const w = typeof ctx.measureText === 'function' ? ctx.measureText(text).width : fontSize * (text.length * 0.52);
+    if (w <= maxW || fontSize <= 18) break;
+    fontSize = Math.max(18, Math.floor(fontSize * 0.92));
+  }
+
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(255,255,255,0.96)';
+  ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+  ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.10));
+  ctx.miterLimit = 2;
+  ctx.font = `${weight} ${fontSize}px sans-serif`;
+  if (typeof (ctx as unknown as { strokeText?: unknown }).strokeText === 'function') {
+    ctx.strokeText(text, x, y);
+  }
+  ctx.fillText(text, x, y);
+  ctx.restore();
+
+  return canvas.toBuffer('image/png');
 }
 
 async function renderBackBannerBase64(text: string, seedSalt?: string) {
@@ -523,7 +585,14 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
   return out;
 }
 
-async function renderBackQrStampBase64(params: { origin: string; text: string; seedSalt?: string; backStyle: 'words' | 'abstract'; qrUrl?: string }) {
+async function renderBackQrStampBase64(params: {
+  origin: string;
+  text: string;
+  seedSalt?: string;
+  backStyle: 'words' | 'abstract';
+  qrUrl?: string;
+  customerText?: string;
+}) {
   const cfg = getPrintifyBackTextConfig();
   const clean = sanitizeBannerText(params.text) || 'CUSTOM';
   const salted = params.seedSalt ? { ...cfg, version: `${cfg.version}|${params.seedSalt}` } : cfg;
@@ -545,16 +614,19 @@ async function renderBackQrStampBase64(params: { origin: string; text: string; s
   const stamp = await buildQrStampPng({ url: targetUrl, stampSide, backgroundColor: cfg.render.backgroundColor });
 
   const basePng = params.backStyle === 'abstract' ? await renderBackAbstractPngBuffer(clean, salted) : await renderBackTextPngBuffer(clean, salted);
+  const customerOverlay = params.customerText
+    ? await buildCustomerBackTextOverlayPng({ width, height, bgX, bgY, bgW, bgH, text: params.customerText })
+    : null;
 
   const out = await sharp(basePng)
-    .composite([{ input: stamp, left, top }])
+    .composite([...(customerOverlay ? [{ input: customerOverlay, left: 0, top: 0 }] : []), { input: stamp, left, top }])
     .png({ compressionLevel: 9, adaptiveFiltering: true, palette: true })
     .toBuffer();
 
   return out.toString('base64');
 }
 
-async function getBackWordPreviewUrl(keyword: string, origin: string | null, seedSalt?: string, qrUrl?: string) {
+async function getBackWordPreviewUrl(keyword: string, origin: string | null, seedSalt?: string, qrUrl?: string, customerText?: string) {
   const cfg = getPrintifyBackTextConfig();
   const ttlMs = 24 * 60 * 60 * 1000;
   const kw = sanitizeBannerText(keyword) || 'CUSTOM';
@@ -562,6 +634,8 @@ async function getBackWordPreviewUrl(keyword: string, origin: string | null, see
   const mode = getBackMode();
   const style = getBackStyle();
   const qrKey = qrUrl ? `|u|${fnv1a32Hex(qrUrl).slice(0, 8)}` : '';
+  const ct = sanitizeCustomerBackText(customerText || '');
+  const ctKey = ct ? `|t|${fnv1a32Hex(ct).slice(0, 8)}` : '';
   const originKey = origin ? (() => {
     try {
       return new URL(origin).host;
@@ -569,20 +643,21 @@ async function getBackWordPreviewUrl(keyword: string, origin: string | null, see
       return origin;
     }
   })() : 'no_origin';
-  const cacheKey = `${mode}|${style}|back_v1|${originKey}${qrKey}|${cfg.version}${saltKey}|${kw.toUpperCase()}`;
+  const cacheKey = `${mode}|${style}|back_v1|${originKey}${qrKey}${ctKey}|${cfg.version}${saltKey}|${kw.toUpperCase()}`;
   const cached = cachedBackWordPreviewUrls.get(cacheKey);
   if (cached && Date.now() - cached.at < ttlMs) return cached.url;
 
   const base64 =
     mode === 'qr_stamp' && origin
-      ? await renderBackQrStampBase64({ origin, text: kw, seedSalt, backStyle: style, qrUrl })
+      ? await renderBackQrStampBase64({ origin, text: kw, seedSalt, backStyle: style, qrUrl, customerText: ct || undefined })
       : style === 'abstract'
         ? await renderBackAbstractBase64(kw, seedSalt)
         : await renderBackBannerBase64(kw, seedSalt);
   const fileSafe = (kw || 'CUSTOM').replace(/\s+/g, '-').replace(/[^A-Za-z0-9-]/g, '').slice(0, 48) || 'CUSTOM';
   const saltTag = seedSalt ? `-q-${seedSalt.slice(0, 8)}` : '';
+  const ctTag = ct ? `-t-${fnv1a32Hex(ct).slice(0, 6)}` : '';
   const prefix = mode === 'qr_stamp' ? `back-qr-stamp-${style}-v1` : `back-${style}-v1`;
-  const previewUrl = await uploadImageToPrintify(`${prefix}-${cfg.version}${saltTag}-${fileSafe}.png`, base64);
+  const previewUrl = await uploadImageToPrintify(`${prefix}-${cfg.version}${saltTag}${ctTag}-${fileSafe}.png`, base64);
   cachedBackWordPreviewUrls.set(cacheKey, { url: previewUrl, at: Date.now() });
   return previewUrl;
 }
@@ -1142,6 +1217,7 @@ export async function POST(request: Request) {
 
       if (backKey) {
         const bannerText = bannerTextFromCartItem(item, metadata);
+        const customerBackText = customerBackTextFromCartItem(metadata);
         const seedSalt = buildBackSeedSalt({
           sessionId: session.id,
           itemId: String(item.id || ''),
@@ -1149,7 +1225,7 @@ export async function POST(request: Request) {
           quantumSeed: quantumProof?.seed || null,
         });
         const customerQrUrl = normalizeCustomerQrUrl(session.metadata?.qrUrl);
-        const backPreviewUrl = await getBackWordPreviewUrl(bannerText, origin || null, seedSalt, customerQrUrl || undefined);
+        const backPreviewUrl = await getBackWordPreviewUrl(bannerText, origin || null, seedSalt, customerQrUrl || undefined, customerBackText || undefined);
 
         printAreas[backKey] = [
           {
