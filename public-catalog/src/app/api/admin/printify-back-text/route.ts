@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/adminAuth";
 import { buildBackTextSvg, getPrintifyBackTextConfig, renderBackAbstractPngBuffer, renderBackTextPngBuffer, resetPrintifyBackTextConfig, updatePrintifyBackTextConfig, type PrintifyBackTextConfig, type PrintifyBackTextConfigPatch } from "@/lib/printifyBackText";
 import { getAiGeneratorsConfig } from "@/lib/aiGeneratorsConfig";
+import { createCanvas, loadImage } from "@napi-rs/canvas";
 import sharp from "sharp";
 import QRCode from "qrcode";
 import path from "path";
@@ -232,17 +233,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
     .toBuffer();
 
   const verificationUrl = "https://www.pixelqrypt.com";
-
-  const centerX = 8 + stampSide / 2;
-
-  const urlFontSize = Math.max(12, Math.min(26, Math.round(stampSide * 0.034)));
-  const quantumFontSize = Math.max(18, Math.min(46, Math.round(stampSide * 0.072)));
-  const urlY = 8 + stampSide - Math.max(14, Math.round(border * 0.65));
-  const quantumY = urlY - Math.round(quantumFontSize * 0.95);
-
-  const labelSvg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${stampSide + 24}" height="${stampSide + 24}">\n  <text x="${centerX}" y="${quantumY}" text-anchor="middle" font-family="Impact, Arial Black, Arial, sans-serif" font-weight="900" font-size="${quantumFontSize}" fill="rgba(255,255,255,0.92)" stroke="rgba(0,0,0,0.45)" stroke-width="${Math.max(2, Math.round(quantumFontSize * 0.06))}" paint-order="stroke">Quantum Verified</text>\n  <text x="${centerX}" y="${urlY}" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif" font-weight="700" font-size="${urlFontSize}" fill="rgba(255,255,255,0.88)" stroke="rgba(0,0,0,0.25)" stroke-width="${Math.max(1, Math.round(urlFontSize * 0.06))}" paint-order="stroke">${verificationUrl}</text>\n</svg>`;
-
-  const out = await sharp({
+  const base = await sharp({
     create: { width: stampSide + 24, height: stampSide + 24, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
   })
     .composite([
@@ -250,12 +241,45 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
       { input: frame, left: 8, top: 8 },
       ...(logoFull ? [{ input: logoFull, left: 8 + qrLeft, top: 8 + qrTop }] : []),
       { input: qrModulesOnly, left: 8 + qrLeft, top: 8 + qrTop },
-      { input: Buffer.from(labelSvg), left: 0, top: 0 },
     ])
     .png()
     .toBuffer();
 
-  return out;
+  const img = await loadImage(base);
+  const canvas = createCanvas(img.width, img.height);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0);
+
+  const centerX = 8 + stampSide / 2;
+  const urlFontSize = Math.max(12, Math.min(26, Math.round(stampSide * 0.034)));
+  const quantumFontSize = Math.max(18, Math.min(46, Math.round(stampSide * 0.072)));
+  const urlY = 8 + stampSide - Math.max(14, Math.round(border * 0.65));
+  const quantumY = urlY - Math.round(quantumFontSize * 0.95);
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = "rgba(255,255,255,0.92)";
+  ctx.strokeStyle = "rgba(0,0,0,0.45)";
+  ctx.lineWidth = Math.max(2, Math.round(quantumFontSize * 0.06));
+  ctx.miterLimit = 2;
+  ctx.font = `900 ${quantumFontSize}px sans-serif`;
+  if (typeof (ctx as unknown as { strokeText?: unknown }).strokeText === "function") {
+    ctx.strokeText("Quantum Verified", centerX, quantumY);
+  }
+  ctx.fillText("Quantum Verified", centerX, quantumY);
+
+  ctx.fillStyle = "rgba(255,255,255,0.88)";
+  ctx.strokeStyle = "rgba(0,0,0,0.25)";
+  ctx.lineWidth = Math.max(1, Math.round(urlFontSize * 0.06));
+  ctx.font = `700 ${urlFontSize}px sans-serif`;
+  if (typeof (ctx as unknown as { strokeText?: unknown }).strokeText === "function") {
+    ctx.strokeText(verificationUrl, centerX, urlY);
+  }
+  ctx.fillText(verificationUrl, centerX, urlY);
+  ctx.restore();
+
+  return canvas.toBuffer("image/png");
 }
 
 async function renderBackQrStampBase64(params: { origin: string; text: string; backStyle: "words" | "abstract"; seedSalt?: string; qrUrl?: string }) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPrintifyBackTextConfig, renderBackAbstractPngBuffer, renderBackTextPngBuffer } from "@/lib/printifyBackText";
+import { createCanvas, loadImage } from "@napi-rs/canvas";
 import sharp from "sharp";
 import QRCode from "qrcode";
 import path from "path";
@@ -201,16 +202,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
     .toBuffer();
 
   const verificationUrl = "https://www.pixelqrypt.com";
-  const centerX = 8 + stampSide / 2;
-
-  const urlFontSize = Math.max(12, Math.min(26, Math.round(stampSide * 0.034)));
-  const quantumFontSize = Math.max(18, Math.min(46, Math.round(stampSide * 0.072)));
-  const urlY = 8 + stampSide - Math.max(14, Math.round(border * 0.65));
-  const quantumY = urlY - Math.round(quantumFontSize * 0.95);
-
-  const labelSvg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${stampSide + 24}" height="${stampSide + 24}">\n  <text x="${centerX}" y="${quantumY}" text-anchor="middle" font-family="Impact, Arial Black, Arial, sans-serif" font-weight="900" font-size="${quantumFontSize}" fill="rgba(255,255,255,0.92)" stroke="rgba(0,0,0,0.45)" stroke-width="${Math.max(2, Math.round(quantumFontSize * 0.06))}" paint-order="stroke">Quantum Verified</text>\n  <text x="${centerX}" y="${urlY}" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif" font-weight="700" font-size="${urlFontSize}" fill="rgba(255,255,255,0.88)" stroke="rgba(0,0,0,0.25)" stroke-width="${Math.max(1, Math.round(urlFontSize * 0.06))}" paint-order="stroke">${verificationUrl}</text>\n</svg>`;
-
-  const out = await sharp({
+  const base = await sharp({
     create: { width: stampSide + 24, height: stampSide + 24, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
   })
     .composite([
@@ -218,42 +210,51 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
       { input: frame, left: 8, top: 8 },
       ...(logoFull ? [{ input: logoFull, left: 8 + qrLeft, top: 8 + qrTop }] : []),
       { input: qrModulesOnly, left: 8 + qrLeft, top: 8 + qrTop },
-      { input: Buffer.from(labelSvg), left: 0, top: 0 },
     ])
     .png()
     .toBuffer();
 
-  return out;
+  const img = await loadImage(base);
+  const canvas = createCanvas(img.width, img.height);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0);
+
+  const centerX = 8 + stampSide / 2;
+  const urlFontSize = Math.max(12, Math.min(26, Math.round(stampSide * 0.034)));
+  const quantumFontSize = Math.max(18, Math.min(46, Math.round(stampSide * 0.072)));
+  const urlY = 8 + stampSide - Math.max(14, Math.round(border * 0.65));
+  const quantumY = urlY - Math.round(quantumFontSize * 0.95);
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = "rgba(255,255,255,0.92)";
+  ctx.strokeStyle = "rgba(0,0,0,0.45)";
+  ctx.lineWidth = Math.max(2, Math.round(quantumFontSize * 0.06));
+  ctx.miterLimit = 2;
+  ctx.font = `900 ${quantumFontSize}px sans-serif`;
+  if (typeof (ctx as unknown as { strokeText?: unknown }).strokeText === "function") {
+    ctx.strokeText("Quantum Verified", centerX, quantumY);
+  }
+  ctx.fillText("Quantum Verified", centerX, quantumY);
+
+  ctx.fillStyle = "rgba(255,255,255,0.88)";
+  ctx.strokeStyle = "rgba(0,0,0,0.25)";
+  ctx.lineWidth = Math.max(1, Math.round(urlFontSize * 0.06));
+  ctx.font = `700 ${urlFontSize}px sans-serif`;
+  if (typeof (ctx as unknown as { strokeText?: unknown }).strokeText === "function") {
+    ctx.strokeText(verificationUrl, centerX, urlY);
+  }
+  ctx.fillText(verificationUrl, centerX, urlY);
+  ctx.restore();
+
+  return canvas.toBuffer("image/png");
 }
 
 function getBackStyle(raw: string | null): "words" | "abstract" {
   const v = (raw || "").trim().toLowerCase();
   if (v === "words") return "words";
   return "abstract";
-}
-
-function buildHeaderSvg(params: { panelW: number; text: string }) {
-  const panelW = Math.max(360, Math.trunc(params.panelW));
-  const text = params.text || "Pixel Crypted";
-  const len = Math.max(1, text.length);
-  const fontSize = Math.max(72, Math.min(320, Math.floor((panelW * 1.08) / (len * 0.5))));
-  const badgeGap = Math.max(10, Math.round(fontSize * 0.2));
-  const badgeSize = Math.max(54, Math.min(180, Math.round(fontSize * 0.9)));
-  const approxTextW = Math.round(fontSize * (len * 0.5));
-  const totalW = approxTextW + badgeGap + badgeSize;
-  const targetW = panelW * 0.995;
-  const scaleX = totalW > 0 ? Math.min(1.25, Math.max(0.7, targetW / totalW)) : 1;
-  const scaleY = 1.08;
-  const strokeW = Math.max(4, Math.round(fontSize * 0.1));
-  const y = Math.round(fontSize * (0.52 + (scaleY - 1) * 0.12)) + strokeW + 8;
-  const centerX = panelW / 2;
-  const left = -totalW / 2;
-  const badgeX = left + approxTextW + badgeGap;
-  const badgeY = -badgeSize / 2;
-  const r = Math.max(10, Math.round(badgeSize * 0.18));
-  const qvSize = Math.max(10, Math.round(badgeSize * 0.62));
-
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${panelW}" height="${Math.max(260, Math.round(fontSize * 1.7))}">\n  <g transform="translate(${centerX} ${y}) scale(${scaleX} ${scaleY})" opacity="0.96">\n    <text x="${left}" y="0" text-anchor="start" dominant-baseline="middle" font-family="Impact, Arial Black, Arial, sans-serif" font-weight="900" font-size="${fontSize}" fill="#ffffff" stroke="rgba(0,0,0,0.55)" stroke-width="${strokeW}" paint-order="stroke">${text}</text>\n    <path d="M ${badgeX + r} ${badgeY} L ${badgeX + badgeSize - r} ${badgeY} A ${r} ${r} 0 0 1 ${badgeX + badgeSize} ${badgeY + r} L ${badgeX + badgeSize} ${badgeY + badgeSize - r} A ${r} ${r} 0 0 1 ${badgeX + badgeSize - r} ${badgeY + badgeSize} L ${badgeX + r} ${badgeY + badgeSize} A ${r} ${r} 0 0 1 ${badgeX} ${badgeY + badgeSize - r} L ${badgeX} ${badgeY + r} A ${r} ${r} 0 0 1 ${badgeX + r} ${badgeY} Z" fill="rgba(255,255,255,0.92)" stroke="rgba(0,0,0,0.78)" stroke-width="${Math.max(6, Math.round(badgeSize * 0.1))}"/>\n    <text x="${badgeX + badgeSize / 2}" y="${badgeY + badgeSize / 2}" text-anchor="middle" dominant-baseline="middle" font-family="Impact, Arial Black, Arial, sans-serif" font-weight="900" font-size="${qvSize}" fill="rgba(0,0,0,0.92)">QV</text>\n  </g>\n</svg>`;
 }
 
 export async function GET(req: NextRequest) {
@@ -296,10 +297,9 @@ export async function GET(req: NextRequest) {
     const stamp = await buildQrStampPng({ url: targetUrl, stampSide, backgroundColor: cfg.render.backgroundColor });
     const baseFull = style === "abstract" ? await renderBackAbstractPngBuffer(backText, salted) : await renderBackTextPngBuffer(backText, salted);
     const basePanel = await sharp(baseFull).extract({ left: bgX, top: bgY, width: bgW, height: bgH }).png().toBuffer();
-    const headerSvg = buildHeaderSvg({ panelW, text: "Pixel Crypted" });
 
     const out = await sharp(basePanel)
-      .composite([{ input: Buffer.from(headerSvg), left: 0, top: 0 }, { input: stamp, left, top }])
+      .composite([{ input: stamp, left, top }])
       .png({ compressionLevel: 9, adaptiveFiltering: true, palette: true })
       .toBuffer();
 

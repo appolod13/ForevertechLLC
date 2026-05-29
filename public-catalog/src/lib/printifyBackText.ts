@@ -762,41 +762,48 @@ function drawExpressYourselfHeader(params: {
 }) {
   const { ctx, bgX, bgY, bgW, bgH, fontFamily, fontWeight } = params;
   const text = "Pixel Crypted";
-  const len = Math.max(1, text.length);
-  const fontSize = Math.max(72, Math.min(320, Math.floor((bgW * 1.08) / (len * 0.50))));
-  const x = bgX + bgW / 2;
+  const paddingX = Math.max(12, Math.round(bgW * 0.02));
+  const centerX = bgX + bgW / 2;
+  const weight = Math.max(700, Math.min(1000, Math.round(fontWeight || 900)));
+  const family = (fontFamily || "sans-serif").includes("sans-serif") ? (fontFamily || "sans-serif") : `${fontFamily || ""}, sans-serif`;
 
   ctx.save();
   ctx.globalAlpha = 0.96;
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-  const weight = Math.max(700, Math.min(1000, Math.round(fontWeight || 900)));
-  const family = fontFamily || "Impact, Arial Black, Arial, sans-serif";
-  ctx.font = `${weight} ${fontSize}px ${family}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
 
-  const measuredTextW = typeof ctx.measureText === "function" ? ctx.measureText(text).width : fontSize * (len * 0.62);
-  const badgeGap = Math.max(10, Math.round(fontSize * 0.20));
-  const badgeSizeRaw = Math.round(fontSize * 0.90);
-  const badgeSize = Math.max(54, Math.min(180, badgeSizeRaw));
-  const totalW = measuredTextW + badgeGap + badgeSize;
-  const targetW = bgW * 0.995;
-  const scaleX = totalW > 0 ? Math.min(1.25, Math.max(0.7, targetW / totalW)) : 1;
-  const scaleY = 1.08;
+  let fontSize = Math.max(58, Math.min(260, Math.round(bgW * 0.12)));
+  let badgeGap = Math.max(10, Math.round(fontSize * 0.20));
+  let badgeSize = Math.max(54, Math.min(180, Math.round(fontSize * 0.90)));
 
   ctx.fillStyle = "#ffffff";
   ctx.strokeStyle = "rgba(0,0,0,0.55)";
-  const strokeW = Math.max(4, Math.round(fontSize * 0.10));
-  ctx.lineWidth = strokeW;
   ctx.miterLimit = 2;
-  const y = bgY + Math.round(fontSize * (0.52 + (scaleY - 1) * 0.12)) + strokeW + 8;
-  ctx.translate(x, y);
-  ctx.scale(scaleX, scaleY);
-  const left = -totalW / 2;
-  ctx.strokeText(text, left, 0);
-  ctx.fillText(text, left, 0);
 
-  const badgeX = left + measuredTextW + badgeGap;
-  const badgeY = -badgeSize / 2;
+  let measuredTextW = 0;
+  for (let i = 0; i < 12; i++) {
+    ctx.font = `${weight} ${fontSize}px ${family}`;
+    measuredTextW = typeof ctx.measureText === "function" ? ctx.measureText(text).width : fontSize * (text.length * 0.52);
+    const totalW = measuredTextW + badgeGap + badgeSize;
+    if (totalW <= bgW - paddingX * 2 || fontSize <= 42) break;
+    fontSize = Math.max(42, Math.floor(fontSize * 0.93));
+    badgeGap = Math.max(10, Math.round(fontSize * 0.20));
+    badgeSize = Math.max(50, Math.min(170, Math.round(fontSize * 0.90)));
+  }
+
+  const y = bgY + Math.max(18, Math.round(bgH * 0.04));
+  const totalW = measuredTextW + badgeGap + badgeSize;
+  const startX = centerX - totalW / 2;
+  const textCenterX = startX + measuredTextW / 2;
+  const strokeW = Math.max(3, Math.round(fontSize * 0.08));
+  ctx.lineWidth = strokeW;
+  if (typeof (ctx as unknown as { strokeText?: unknown }).strokeText === "function") {
+    ctx.strokeText(text, textCenterX, y);
+  }
+  ctx.fillText(text, textCenterX, y);
+
+  const badgeX = startX + measuredTextW + badgeGap;
+  const badgeY = y + Math.round(fontSize * 0.06);
   const r = Math.max(10, Math.round(badgeSize * 0.18));
   ctx.save();
   ctx.fillStyle = "rgba(255,255,255,0.92)";
