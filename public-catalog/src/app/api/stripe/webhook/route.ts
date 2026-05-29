@@ -337,7 +337,7 @@ async function buildCustomerBackTextOverlayPng(params: { width: number; height: 
   ctx.clearRect(0, 0, width, height);
 
   const x = bgX + bgW / 2;
-  const y = bgY + Math.round(bgH * 0.18);
+  const y = bgY + Math.max(18, Math.round(bgH * 0.04));
   const paddingX = Math.max(18, Math.round(bgW * 0.06));
   const maxW = Math.max(120, bgW - paddingX * 2);
   const weight = 900;

@@ -533,6 +533,19 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
 
       {/* Controls */}
       <div className="space-y-8">
+        {!isMug ? (
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950/30 p-4">
+            <label className="text-sm font-medium text-zinc-300 mb-2 block">Back Text (optional)</label>
+            <input
+              value={customerBackText}
+              onChange={(e) => setCustomerBackText(e.target.value.slice(0, 48))}
+              placeholder="Type the text you want at the top of the back"
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none focus:ring-2 focus:ring-white/15"
+            />
+            <div className="mt-2 text-xs text-zinc-500">{customerBackText.length}/48</div>
+          </div>
+        ) : null}
+
         <div>
             <h1 className="text-3xl font-bold mb-2">Customize Your Gear</h1>
             <p className="text-zinc-400">Apply your generated artwork to premium products.</p>
@@ -602,19 +615,6 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
                 </div>
             </div>
         )}
-
-        {!isMug ? (
-          <div className="pt-6 border-t border-zinc-800">
-            <label className="text-sm font-medium text-zinc-300 mb-2 block">Back Text (optional)</label>
-            <input
-              value={customerBackText}
-              onChange={(e) => setCustomerBackText(e.target.value.slice(0, 48))}
-              placeholder="Add your own text for the back of the shirt"
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none focus:ring-2 focus:ring-white/15"
-            />
-            <div className="mt-2 text-xs text-zinc-500">{customerBackText.length}/48</div>
-          </div>
-        ) : null}
 
         <div className="pt-6 border-t border-zinc-800">
             <div className="flex items-center justify-between mb-6">

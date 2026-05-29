@@ -263,10 +263,11 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
   return canvas.toBuffer("image/png");
 }
 
-async function buildHeaderOverlayPng(params: { panelW: number; panelH: number; text: string }) {
+async function buildTopTextOverlayPng(params: { panelW: number; panelH: number; text: string }) {
   const panelW = Math.max(360, Math.trunc(params.panelW));
   const panelH = Math.max(600, Math.trunc(params.panelH));
-  const text = (params.text || "Pixel Crypted").trim() || "Pixel Crypted";
+  const text = sanitizeCustomerBackText(params.text || "", 48);
+  if (!text) return null;
   const weight = 900;
 
   const canvas = createCanvas(panelW, panelH);
@@ -298,48 +299,6 @@ async function buildHeaderOverlayPng(params: { panelW: number; panelH: number; t
     ctx.strokeText(text, panelW / 2, y);
   }
   ctx.fillText(text, panelW / 2, y);
-  ctx.restore();
-
-  return canvas.toBuffer("image/png");
-}
-
-async function buildCustomerBackTextOverlayPng(params: { panelW: number; panelH: number; text: string }) {
-  const panelW = Math.max(360, Math.trunc(params.panelW));
-  const panelH = Math.max(600, Math.trunc(params.panelH));
-  const text = sanitizeCustomerBackText(params.text || "", 48);
-  if (!text) return null;
-
-  const canvas = createCanvas(panelW, panelH);
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, panelW, panelH);
-
-  const x = panelW / 2;
-  const y = Math.round(panelH * 0.18);
-  const paddingX = Math.max(18, Math.round(panelW * 0.06));
-  const maxW = Math.max(120, panelW - paddingX * 2);
-  const weight = 900;
-
-  let fontSize = Math.max(28, Math.min(92, Math.round(panelW * 0.08)));
-  for (let i = 0; i < 14; i++) {
-    ctx.font = `${weight} ${fontSize}px sans-serif`;
-    const w = typeof ctx.measureText === "function" ? ctx.measureText(text).width : fontSize * (text.length * 0.52);
-    if (w <= maxW || fontSize <= 18) break;
-    fontSize = Math.max(18, Math.floor(fontSize * 0.92));
-  }
-
-  ctx.save();
-  ctx.globalAlpha = 0.92;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  ctx.fillStyle = "rgba(255,255,255,0.96)";
-  ctx.strokeStyle = "rgba(0,0,0,0.65)";
-  ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.10));
-  ctx.miterLimit = 2;
-  ctx.font = `${weight} ${fontSize}px sans-serif`;
-  if (typeof (ctx as unknown as { strokeText?: unknown }).strokeText === "function") {
-    ctx.strokeText(text, x, y);
-  }
-  ctx.fillText(text, x, y);
   ctx.restore();
 
   return canvas.toBuffer("image/png");
@@ -392,13 +351,11 @@ export async function GET(req: NextRequest) {
     const stamp = await buildQrStampPng({ url: targetUrl, stampSide, backgroundColor: cfg.render.backgroundColor });
     const baseFull = style === "abstract" ? await renderBackAbstractPngBuffer(backText, salted) : await renderBackTextPngBuffer(backText, salted);
     const basePanel = await sharp(baseFull).extract({ left: bgX, top: bgY, width: bgW, height: bgH }).png().toBuffer();
-    const headerOverlay = await buildHeaderOverlayPng({ panelW, panelH, text: "Pixel Crypted" });
-    const customerOverlay = customerText ? await buildCustomerBackTextOverlayPng({ panelW, panelH, text: customerText }) : null;
+    const customerHeaderOverlay = customerText ? await buildTopTextOverlayPng({ panelW, panelH, text: customerText }) : null;
 
     const out = await sharp(basePanel)
       .composite([
-        { input: headerOverlay, left: 0, top: 0 },
-        ...(customerOverlay ? [{ input: customerOverlay, left: 0, top: 0 }] : []),
+        ...(customerHeaderOverlay ? [{ input: customerHeaderOverlay, left: 0, top: 0 }] : []),
         { input: stamp, left, top },
       ])
       .png({ compressionLevel: 9, adaptiveFiltering: true })

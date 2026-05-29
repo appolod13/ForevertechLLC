@@ -751,51 +751,6 @@ function drawFuturisticLines(params: {
   ctx.restore();
 }
 
-function drawExpressYourselfHeader(params: {
-  ctx: CanvasRenderingContext2DLike;
-  bgX: number;
-  bgY: number;
-  bgW: number;
-  bgH: number;
-  fontFamily: string;
-  fontWeight: number;
-}) {
-  const { ctx, bgX, bgY, bgW, bgH, fontFamily, fontWeight } = params;
-  const text = "Pixel Crypted";
-  const paddingX = Math.max(12, Math.round(bgW * 0.02));
-  const centerX = bgX + bgW / 2;
-  const weight = Math.max(700, Math.min(1000, Math.round(fontWeight || 900)));
-  const family = (fontFamily || "sans-serif").includes("sans-serif") ? (fontFamily || "sans-serif") : `${fontFamily || ""}, sans-serif`;
-
-  ctx.save();
-  ctx.globalAlpha = 0.96;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-
-  let fontSize = Math.max(58, Math.min(260, Math.round(bgW * 0.12)));
-
-  ctx.fillStyle = "#ffffff";
-  ctx.strokeStyle = "rgba(0,0,0,0.55)";
-  ctx.miterLimit = 2;
-
-  let measuredTextW = 0;
-  for (let i = 0; i < 12; i++) {
-    ctx.font = `${weight} ${fontSize}px ${family}`;
-    measuredTextW = typeof ctx.measureText === "function" ? ctx.measureText(text).width : fontSize * (text.length * 0.52);
-    if (measuredTextW <= bgW - paddingX * 2 || fontSize <= 42) break;
-    fontSize = Math.max(42, Math.floor(fontSize * 0.93));
-  }
-
-  const y = bgY + Math.max(18, Math.round(bgH * 0.04));
-  const strokeW = Math.max(3, Math.round(fontSize * 0.08));
-  ctx.lineWidth = strokeW;
-  if (typeof (ctx as unknown as { strokeText?: unknown }).strokeText === "function") {
-    ctx.strokeText(text, centerX, y);
-  }
-  ctx.fillText(text, centerX, y);
-  ctx.restore();
-}
-
 export async function renderBackTextPngBuffer(text: string, cfg: PrintifyBackTextConfig): Promise<Buffer> {
   const { createCanvas } = await getCanvasApi();
   const r = cfg.render;
@@ -824,7 +779,6 @@ export async function renderBackTextPngBuffer(text: string, cfg: PrintifyBackTex
 
   if (bgRgb) drawRedPattern({ ctx, seed, bgX, bgY, bgW, bgH, base: bgRgb, createCanvas });
   if (bgRgb) drawFuturisticLines({ ctx, seed, bgX, bgY, bgW, bgH, base: bgRgb, variant: "words" });
-  drawExpressYourselfHeader({ ctx, bgX, bgY, bgW, bgH, fontFamily: r.fontFamily, fontWeight: r.fontWeight });
 
   return canvas.toBuffer("image/png");
 }
@@ -853,7 +807,6 @@ export async function renderBackAbstractPngBuffer(seedText: string, cfg: Printif
 
   drawRedPattern({ ctx, seed, bgX, bgY, bgW, bgH, base: baseRgb, createCanvas });
   drawFuturisticLines({ ctx, seed, bgX, bgY, bgW, bgH, base: baseRgb, variant: "abstract" });
-  drawExpressYourselfHeader({ ctx, bgX, bgY, bgW, bgH, fontFamily: r.fontFamily, fontWeight: r.fontWeight });
 
   return canvas.toBuffer("image/png");
 }
