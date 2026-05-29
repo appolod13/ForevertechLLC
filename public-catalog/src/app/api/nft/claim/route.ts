@@ -58,6 +58,9 @@ const ABI = [
 
 export async function POST(req: Request) {
   try {
+    if (process.env.ENABLE_NFT_CLAIM !== "1") {
+      return NextResponse.json({ success: false, error: "disabled" }, { status: 404 });
+    }
     const body: unknown = await req.json().catch(() => ({} as unknown));
     const b = isRecord(body) ? body : {};
     const sessionId = typeof b.sessionId === "string" ? b.sessionId.trim() : "";

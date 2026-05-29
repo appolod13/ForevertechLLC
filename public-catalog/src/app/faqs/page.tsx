@@ -5,7 +5,7 @@ import { Header } from "@/components/Header";
 export const metadata: Metadata = {
   title: "FAQs | ForeverTech",
   description:
-    "Frequently asked questions about ForeverTech Catalog, the Studio, checkout, Printify fulfillment, crypto payments, NFT claims, and Quantum Verified Premium.",
+    "Frequently asked questions about ForeverTech Catalog, the Studio, checkout, Printify fulfillment, and Quantum Verified Premium.",
 };
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -25,8 +25,8 @@ export default function FaqsPage() {
         <div className="rounded-2xl border border-gray-700 bg-gradient-to-b from-gray-800 to-gray-900 p-8">
           <h1 className="text-4xl font-bold">FAQs</h1>
           <p className="mt-4 text-gray-300 leading-relaxed max-w-3xl">
-            This page explains how ForeverTech Catalog works end-to-end: Studio → Customize → Cart → Checkout → Printify fulfillment, plus how crypto
-            payments, NFT claiming, and optional Quantum Verified Premium link real systems (blockchains + IBM quantum jobs) to your purchase.
+            This page explains how ForeverTech Catalog works end-to-end: Studio → Customize → Cart → Checkout → Printify fulfillment, plus how optional
+            Quantum Verified Premium links a real IBM quantum job to your purchase.
           </p>
           <div className="mt-6 flex flex-wrap gap-3 text-sm">
             <Link href="/studio" className="rounded-lg border border-gray-700 bg-black/20 px-4 py-2 hover:bg-black/30">
@@ -117,13 +117,6 @@ export default function FaqsPage() {
             </ul>
           </Card>
 
-          <Card title="How is Quantum Verified Premium different from the NFT?">
-            <p>
-              Quantum Verified Premium affects how your front artwork is generated for the physical order. The NFT is an optional digital collectible you can
-              claim after purchase.
-            </p>
-          </Card>
-
           <Card title="Julia sets and Mandelbrot (the fractal basics)">
             <p className="font-semibold text-white">Commercial version (for quick reading)</p>
             <p>
@@ -181,29 +174,9 @@ export default function FaqsPage() {
               Card payments are processed securely via Stripe. You receive a physical product printed and shipped through Printify.
             </p>
             <p>
-              Crypto payments are also supported when enabled. In crypto checkout, the site generates a payment request (amount + receive address) and you
-              submit a transaction hash for confirmation. Once the payment is confirmed on-chain, the order is created and sent to Printify for fulfillment.
-            </p>
-            <p>
               If the Quantum Verified step is temporarily unavailable, the system is designed to fall back safely (and may refund the premium portion where
               applicable).
             </p>
-          </Card>
-
-          <Card title="What is the NFT claim?">
-            <p>
-              After purchase, you may be able to claim a commemorative NFT on supported chains. On the success page you can enter a wallet address, pick a
-              chain, and claim.
-            </p>
-          </Card>
-
-          <Card title="Benefits of the NFT claim">
-            <ul className="list-disc pl-6 space-y-2">
-              <li>Gives you a digital collectible that references your purchase and can include “Quantum Verified” attributes when applicable.</li>
-              <li>Metadata is uploaded to IPFS so the NFT points to a resilient metadata URL.</li>
-              <li>On chains that support gasless claim, the site can mint on your behalf (no gas needed from your wallet).</li>
-              <li>NFT claiming is optional and does not affect printing/shipping of your physical order.</li>
-            </ul>
           </Card>
 
           <Card title="Where can customers get help?">

@@ -134,6 +134,9 @@ function buildPaymentUri(token: CryptoPaymentToken, chainId: number, to: string,
 
 export async function POST(request: Request) {
   try {
+    if (process.env.ENABLE_CRYPTO_PAYMENTS !== "1") {
+      return NextResponse.json({ success: false, error: "disabled" }, { status: 404 });
+    }
     const body: unknown = await request.json().catch(() => ({} as unknown));
     const b = isRecord(body) ? body : {};
 

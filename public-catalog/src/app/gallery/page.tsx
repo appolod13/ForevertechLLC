@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
-import { Heart, RefreshCw, User, BookOpen, Eye, ShoppingCart, Zap, Nfc, Sparkles, Key } from 'lucide-react';
+import { Heart, RefreshCw, User, BookOpen, Eye, ShoppingCart, Zap, Key } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import PixelQryptModal from '@/components/PixelQryptModal';
 
@@ -18,15 +18,13 @@ interface GalleryItem {
   isFavorite: boolean;
   createdAt: string;
   isQuantumVerified?: boolean;
-  isNft?: boolean;
-  nftId?: string;
 }
 
 export default function GalleryPage() {
   const router = useRouter();
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'favorites' | 'all' | 'nfts' | 'quantum'>('all');
+  const [filter, setFilter] = useState<'favorites' | 'all' | 'quantum'>('all');
   const { user } = useAuth();
   const [deviceId, setDeviceId] = useState<string>('');
   const [pixelQryptModalOpen, setPixelQryptModalOpen] = useState(false);
@@ -99,7 +97,6 @@ export default function GalleryPage() {
     if (!isMine) return false;
     
     if (filter === 'favorites') return i.isFavorite;
-    if (filter === 'nfts') return !!i.isNft;
     if (filter === 'quantum') return !!i.isQuantumVerified;
     return true;
   });
@@ -111,7 +108,7 @@ export default function GalleryPage() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
             <h1 className="text-4xl font-bold mb-2">My Gallery</h1>
-            <p className="text-zinc-400">View the images you have generated, your favorites, NFTs, and Quantum Verified items.</p>
+            <p className="text-zinc-400">View the images you have generated, your favorites, and PixelQrypt™ Verified items.</p>
           </div>
           
           <div className="flex items-center gap-4">
@@ -127,12 +124,6 @@ export default function GalleryPage() {
                 className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors ${filter === 'favorites' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-300'}`}
               >
                 <Heart className="w-4 h-4" /> My Favorites
-              </button>
-              <button 
-                onClick={() => setFilter('nfts')}
-                className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors ${filter === 'nfts' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-300'}`}
-              >
-                <Nfc className="w-4 h-4" /> My NFTs
               </button>
               <button 
                 onClick={() => setFilter('quantum')}
@@ -159,7 +150,6 @@ export default function GalleryPage() {
             <p className="text-zinc-500">
               {filter === 'all' ? 'Generate some images in the Studio to see them here.' :
                filter === 'favorites' ? 'Mark some images as favorites to see them here.' :
-               filter === 'nfts' ? 'Create some NFTs to see them here.' :
                'Generate some Quantum Verified images to see them here.'}
             </p>
           </div>
@@ -171,11 +161,6 @@ export default function GalleryPage() {
                   {item.isQuantumVerified && (
                     <div className="absolute top-4 left-4 z-10 bg-gradient-to-r from-purple-600 to-indigo-600/90 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">
                       <Zap className="w-3 h-3" /> PixelQrypt™ Verified
-                    </div>
-                  )}
-                  {item.isNft && (
-                    <div className="absolute top-4 left-4 z-10 bg-green-500/80 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ml-32">
-                      <Nfc className="w-3 h-3" /> NFT
                     </div>
                   )}
                   {item.imageUrl.startsWith('<svg') ? (
@@ -236,7 +221,6 @@ export default function GalleryPage() {
                     <div className="flex items-center gap-2">
                       {item.isFavorite && <span className="text-red-400 font-medium">Favorite</span>}
                       {item.isQuantumVerified && <span className="text-purple-400 font-medium">Quantum</span>}
-                      {item.isNft && <span className="text-green-400 font-medium">NFT</span>}
                     </div>
                   </div>
                 </div>

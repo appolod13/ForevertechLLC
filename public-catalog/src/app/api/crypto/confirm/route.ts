@@ -254,6 +254,9 @@ const transferIface = new Interface(TRANSFER_ABI);
 
 export async function POST(req: Request) {
   try {
+    if (process.env.ENABLE_CRYPTO_PAYMENTS !== "1") {
+      return NextResponse.json({ success: false, error: "disabled" }, { status: 404 });
+    }
     const body: unknown = await req.json().catch(() => ({} as unknown));
     const b = isRecord(body) ? body : {};
 
