@@ -4,7 +4,6 @@
 import React, { useEffect, useState } from 'react';
 import { CatalogItem } from './CatalogItem';
 import { Filter, Search, Loader2 } from 'lucide-react';
-import { useLiveStatus } from '@/context/LiveStatusContext';
 import { LiveBadge } from './LiveBadge';
 
 interface Post {
@@ -24,8 +23,7 @@ interface CatalogGridProps {
 }
 
 export function CatalogGrid({ initialPosts }: CatalogGridProps) {
-  const [posts, setPosts] = useState<Post[]>(initialPosts);
-  const { latestPost } = useLiveStatus();
+  const [posts] = useState<Post[]>(initialPosts);
   
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -36,11 +34,7 @@ export function CatalogGrid({ initialPosts }: CatalogGridProps) {
   });
   const filterRef = React.useRef<HTMLDivElement>(null);
 
-  const displayPosts = React.useMemo(() => {
-    if (!latestPost) return posts;
-    if (posts.find(p => p.id === latestPost.id)) return posts;
-    return [latestPost, ...posts];
-  }, [posts, latestPost]);
+  const displayPosts = posts;
 
   // Handle click outside to close dropdown
   useEffect(() => {
@@ -80,7 +74,7 @@ export function CatalogGrid({ initialPosts }: CatalogGridProps) {
       return s;
     }
     let arr = displayPosts.map(p => ({ post: p, score: score(p) }))
-      .filter(({ post, score }) => {
+      .filter(({ post }) => {
         const t = textFor(post);
         const matches = q ? (t.includes(q) || tokens.some(tok => t.includes(tok))) : true;
         if (!matches) return false;

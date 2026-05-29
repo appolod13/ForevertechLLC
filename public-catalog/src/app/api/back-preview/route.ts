@@ -232,6 +232,30 @@ function getBackStyle(raw: string | null): "words" | "abstract" {
   return "abstract";
 }
 
+function buildHeaderSvg(params: { panelW: number; text: string }) {
+  const panelW = Math.max(360, Math.trunc(params.panelW));
+  const text = params.text || "Pixel Crypted";
+  const len = Math.max(1, text.length);
+  const fontSize = Math.max(72, Math.min(320, Math.floor((panelW * 1.08) / (len * 0.5))));
+  const badgeGap = Math.max(10, Math.round(fontSize * 0.2));
+  const badgeSize = Math.max(54, Math.min(180, Math.round(fontSize * 0.9)));
+  const approxTextW = Math.round(fontSize * (len * 0.5));
+  const totalW = approxTextW + badgeGap + badgeSize;
+  const targetW = panelW * 0.995;
+  const scaleX = totalW > 0 ? Math.min(1.25, Math.max(0.7, targetW / totalW)) : 1;
+  const scaleY = 1.08;
+  const strokeW = Math.max(4, Math.round(fontSize * 0.1));
+  const y = Math.round(fontSize * (0.52 + (scaleY - 1) * 0.12)) + strokeW + 8;
+  const centerX = panelW / 2;
+  const left = -totalW / 2;
+  const badgeX = left + approxTextW + badgeGap;
+  const badgeY = -badgeSize / 2;
+  const r = Math.max(10, Math.round(badgeSize * 0.18));
+  const qvSize = Math.max(10, Math.round(badgeSize * 0.62));
+
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${panelW}" height="${Math.max(260, Math.round(fontSize * 1.7))}">\n  <g transform="translate(${centerX} ${y}) scale(${scaleX} ${scaleY})" opacity="0.96">\n    <text x="${left}" y="0" text-anchor="start" dominant-baseline="middle" font-family="Impact, Arial Black, Arial, sans-serif" font-weight="900" font-size="${fontSize}" fill="#ffffff" stroke="rgba(0,0,0,0.55)" stroke-width="${strokeW}" paint-order="stroke">${text}</text>\n    <path d="M ${badgeX + r} ${badgeY} L ${badgeX + badgeSize - r} ${badgeY} A ${r} ${r} 0 0 1 ${badgeX + badgeSize} ${badgeY + r} L ${badgeX + badgeSize} ${badgeY + badgeSize - r} A ${r} ${r} 0 0 1 ${badgeX + badgeSize - r} ${badgeY + badgeSize} L ${badgeX + r} ${badgeY + badgeSize} A ${r} ${r} 0 0 1 ${badgeX} ${badgeY + badgeSize - r} L ${badgeX} ${badgeY + r} A ${r} ${r} 0 0 1 ${badgeX + r} ${badgeY} Z" fill="rgba(255,255,255,0.92)" stroke="rgba(0,0,0,0.78)" stroke-width="${Math.max(6, Math.round(badgeSize * 0.1))}"/>\n    <text x="${badgeX + badgeSize / 2}" y="${badgeY + badgeSize / 2}" text-anchor="middle" dominant-baseline="middle" font-family="Impact, Arial Black, Arial, sans-serif" font-weight="900" font-size="${qvSize}" fill="rgba(0,0,0,0.92)">QV</text>\n  </g>\n</svg>`;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const cfg = getPrintifyBackTextConfig();
@@ -255,10 +279,13 @@ export async function GET(req: NextRequest) {
     const bgX = Math.floor((width - bgW) / 2);
     const bgY = Math.floor((height - bgH) / 2);
 
-    const stampSide = Math.max(420, Math.min(680, Math.round(bgW * 0.34)));
-    const margin = Math.max(36, Math.round(bgW * 0.04));
-    const left = Math.max(0, bgX + bgW - stampSide - margin);
-    const top = Math.max(0, bgY + bgH - stampSide - margin);
+    const panelW = bgW;
+    const panelH = bgH;
+
+    const stampSide = Math.max(420, Math.min(680, Math.round(panelW * 0.34)));
+    const margin = Math.max(36, Math.round(panelW * 0.04));
+    const left = Math.max(0, panelW - stampSide - margin);
+    const top = Math.max(0, panelH - stampSide - margin);
 
     const targetUrl = qrUrl || (() => {
       const u = new URL("/pixelqrypt", origin);
@@ -267,11 +294,12 @@ export async function GET(req: NextRequest) {
     })();
 
     const stamp = await buildQrStampPng({ url: targetUrl, stampSide, backgroundColor: cfg.render.backgroundColor });
-    const basePng = style === "abstract" ? await renderBackAbstractPngBuffer(backText, salted) : await renderBackTextPngBuffer(backText, salted);
+    const baseFull = style === "abstract" ? await renderBackAbstractPngBuffer(backText, salted) : await renderBackTextPngBuffer(backText, salted);
+    const basePanel = await sharp(baseFull).extract({ left: bgX, top: bgY, width: bgW, height: bgH }).png().toBuffer();
+    const headerSvg = buildHeaderSvg({ panelW, text: "Pixel Crypted" });
 
-    const out = await sharp(basePng)
-      .composite([{ input: stamp, left, top }])
-      .extract({ left: bgX, top: bgY, width: bgW, height: bgH })
+    const out = await sharp(basePanel)
+      .composite([{ input: Buffer.from(headerSvg), left: 0, top: 0 }, { input: stamp, left, top }])
       .png({ compressionLevel: 9, adaptiveFiltering: true, palette: true })
       .toBuffer();
 
