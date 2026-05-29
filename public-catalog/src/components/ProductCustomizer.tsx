@@ -325,9 +325,16 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
   const [customerBackTextDraft, setCustomerBackTextDraft] = useState('');
   const [customerBackText, setCustomerBackText] = useState('');
 
+  const previewBackText = useMemo(() => {
+    const draft = (customerBackTextDraft || '').trim();
+    if (draft) return draft.slice(0, 64);
+    const applied = (customerBackText || '').trim();
+    return applied ? applied.slice(0, 64) : '';
+  }, [customerBackText, customerBackTextDraft]);
+
   useEffect(() => {
     setBackPreviewNonce(Math.random().toString(36).slice(2, 10));
-  }, [customerBackText, backPreviewSeed]);
+  }, [previewBackText, backPreviewSeed]);
 
   const backPreviewUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
@@ -337,11 +344,10 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
     u.searchParams.set('style', 'abstract');
     if (backPreviewSeed) u.searchParams.set('seed', backPreviewSeed);
     if (backPreviewNonce) u.searchParams.set('v', backPreviewNonce);
-    const cleanedCustomerBack = (customerBackText || '').trim();
-    if (cleanedCustomerBack) u.searchParams.set('customerText', cleanedCustomerBack);
+    if (previewBackText) u.searchParams.set('customerText', previewBackText);
     if (qrTargetUrl) u.searchParams.set('qrUrl', qrTargetUrl);
     return `${u.pathname}?${u.searchParams.toString()}`;
-  }, [bannerText, backPreviewNonce, backPreviewSeed, customerBackText, qrTargetUrl]);
+  }, [bannerText, backPreviewNonce, backPreviewSeed, previewBackText, qrTargetUrl]);
 
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
@@ -402,7 +408,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
                 color: selectedColor,
                 variant: selectedVariant,
                 printifySku,
-                backCustomerText: (customerBackText || '').trim(),
+                backCustomerText: (previewBackText || '').trim(),
                 originalPrompt: resolvedPrompt,
                 ipfs_url,
                 ipfs_gateway,
@@ -540,12 +546,13 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
             <div className="flex gap-2">
               <input
                 value={customerBackTextDraft}
-                onChange={(e) => setCustomerBackTextDraft(e.target.value.slice(0, 48))}
+                    onChange={(e) => setCustomerBackTextDraft(e.target.value.slice(0, 64))}
                 onKeyDown={(e) => {
                   if (e.key !== 'Enter') return;
                   e.preventDefault();
-                  const finalText = customerBackTextDraft.trim().slice(0, 48);
-                  setCustomerBackText(finalText);
+                      const finalText = customerBackTextDraft.trim().slice(0, 64);
+                      setCustomerBackText(finalText);
+                      setCustomerBackTextDraft(finalText);
                   setView('back');
                 }}
                 placeholder="Type the text you want at the top of the back"
@@ -554,8 +561,9 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
               <button
                 type="button"
                 onClick={() => {
-                  const finalText = customerBackTextDraft.trim().slice(0, 48);
-                  setCustomerBackText(finalText);
+                      const finalText = customerBackTextDraft.trim().slice(0, 64);
+                      setCustomerBackText(finalText);
+                      setCustomerBackTextDraft(finalText);
                   setView('back');
                 }}
                 className="shrink-0 rounded-xl border border-zinc-800 bg-white px-4 py-3 text-sm font-bold text-black hover:bg-zinc-200"
@@ -563,7 +571,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
                 Done
               </button>
             </div>
-            <div className="mt-2 text-xs text-zinc-500">{customerBackTextDraft.length}/48</div>
+                <div className="mt-2 text-xs text-zinc-500">{customerBackTextDraft.length}/64</div>
           </div>
         ) : null}
 

@@ -137,7 +137,7 @@ function sanitizeCustomerBackText(text: string): string {
     .replace(/\s+/g, ' ')
     .replace(/[^A-Za-z0-9 .,'"!?:;@#&()/-]/g, '')
     .trim();
-  return t.slice(0, 48);
+  return t.slice(0, 64);
 }
 
 function normalizeCustomerQrUrl(input: unknown): string {
@@ -352,7 +352,7 @@ async function buildCustomerBackTextOverlayPng(params: { width: number; height: 
   }
 
   const safeW = Math.max(1, measuredTextW || 1);
-  const scaleX = Math.max(0.7, Math.min(2.8, maxW / safeW));
+  const scaleX = Math.max(0.7, Math.min(3.4, maxW / safeW));
 
   ctx.save();
   ctx.globalAlpha = 0.92;

@@ -20,7 +20,7 @@ function sanitizeBannerText(text: string, maxChars = 96): string {
   return t.slice(0, Math.max(1, maxChars));
 }
 
-function sanitizeCustomerBackText(text: string, maxChars = 48): string {
+function sanitizeCustomerBackText(text: string, maxChars = 64): string {
   const t = (text || "")
     .trim()
     .replace(/\s+/g, " ")
@@ -266,7 +266,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
 async function buildTopTextOverlayPng(params: { panelW: number; panelH: number; text: string }) {
   const panelW = Math.max(360, Math.trunc(params.panelW));
   const panelH = Math.max(600, Math.trunc(params.panelH));
-  const text = sanitizeCustomerBackText(params.text || "", 48);
+  const text = sanitizeCustomerBackText(params.text || "", 64);
   if (!text) return null;
   const weight = 900;
 
@@ -288,7 +288,7 @@ async function buildTopTextOverlayPng(params: { panelW: number; panelH: number; 
   }
 
   const safeW = Math.max(1, measuredTextW || 1);
-  const scaleX = Math.max(0.7, Math.min(2.8, maxW / safeW));
+  const scaleX = Math.max(0.7, Math.min(3.4, maxW / safeW));
 
   ctx.save();
   ctx.globalAlpha = 0.96;
@@ -327,7 +327,7 @@ export async function GET(req: NextRequest) {
     const style = getBackStyle(q.get("style"));
     const seedSaltRaw = (q.get("seed") || "").trim().replace(/[^a-z0-9-]/gi, "").slice(0, 128);
     const qrUrl = normalizeCustomerQrUrl(q.get("qrUrl"));
-    const customerText = sanitizeCustomerBackText(q.get("customerText") || "", 48);
+    const customerText = sanitizeCustomerBackText(q.get("customerText") || "", 64);
 
     const backText = sanitizeBannerText(textRaw, cfg.render.maxChars) || "CUSTOM";
     const salted = seedSaltRaw ? { ...cfg, version: `${cfg.version}|${seedSaltRaw}` } : cfg;
