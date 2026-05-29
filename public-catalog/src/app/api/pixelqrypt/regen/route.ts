@@ -96,7 +96,7 @@ export async function POST(request: Request) {
           price_data: {
             currency: "usd",
             product_data: {
-              name: "PixelQrypt™ Regeneration Code",
+              name: "PixelQrypt™ Download Access Code",
               images: item.data.image_url ? [toDownloadUrl(item.data.image_url)] : [],
               description: item.data.prompt ? getString(item.data.prompt, 400) : undefined,
             },

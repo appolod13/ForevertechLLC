@@ -50,7 +50,7 @@ export default function PixelQryptModal({ isOpen, onClose, galleryItemId }: Pixe
             </div>
             <div>
               <h2 className="text-2xl font-bold text-white">PixelQrypt™</h2>
-              <p className="text-zinc-400 text-sm">Retrieve Hidden Quantum Message</p>
+              <p className="text-zinc-400 text-sm">Retrieve Hidden Message</p>
             </div>
           </div>
           <button 
@@ -84,7 +84,7 @@ export default function PixelQryptModal({ isOpen, onClose, galleryItemId }: Pixe
           <div className="space-y-4">
             <div>
               <label className="block text-zinc-300 text-sm font-medium mb-2">
-                Quantum Verification Code
+                Verification Code
               </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
@@ -121,7 +121,7 @@ export default function PixelQryptModal({ isOpen, onClose, galleryItemId }: Pixe
             </button>
 
             <p className="text-zinc-500 text-xs text-center mt-4">
-              PixelQrypt™ uses real quantum computer verification codes for secure message retrieval
+              PixelQrypt™ uses verification codes for secure message retrieval
             </p>
           </div>
         )}

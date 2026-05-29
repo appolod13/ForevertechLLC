@@ -260,7 +260,7 @@ function PixelQryptContent() {
                         className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-4 py-3 text-sm font-semibold text-zinc-950 disabled:opacity-50"
                       >
                         <Download className="h-4 w-4" />
-                        {downloadStatus === 'downloading' ? 'Downloading…' : 'Download Asset'}
+                        {downloadStatus === 'downloading' ? 'Downloading…' : 'Download File'}
                       </button>
                     ) : (
                       <button
@@ -297,7 +297,7 @@ function PixelQryptContent() {
                         className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 transition-colors"
                       >
                         <Download className="h-4 w-4" />
-                        {buyStatus === 'starting' ? 'Starting checkout…' : 'Buy Download'}
+                        {buyStatus === 'starting' ? 'Starting checkout…' : 'Purchase Download Access'}
                       </button>
                     )}
 

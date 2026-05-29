@@ -71,7 +71,7 @@ function receiveAddressError(chainId: number, address: string): string | null {
   const addr = String(address || "").trim();
   if (!addr) return "Missing address";
   if (cid === 100000) {
-    return isBitcoinAddress(addr) ? null : "Invalid BTC address (use bc1… / 1… / 3…)";
+    return isBitcoinAddress(addr) ? null : "Invalid address (use bc1… / 1… / 3…)";
   }
   return isEvmAddress(addr) ? null : "Invalid EVM address (must be 0x… 40 hex chars)";
 }
@@ -92,7 +92,7 @@ export default function AdminCryptoPage() {
         credentials: "include",
       }).catch(() => null);
       if (!res) {
-        setMsg("Failed to load crypto config (server unreachable).");
+        setMsg("Failed to load advanced config (server unreachable).");
         return;
       }
       if (res.status === 401) {
@@ -159,8 +159,8 @@ export default function AdminCryptoPage() {
       <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-5">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-xl font-semibold">Crypto Setup</div>
-            <div className="mt-1 text-sm text-white/60">Configure multi-chain editions and gasless claim settings.</div>
+            <div className="text-xl font-semibold">Advanced Settings</div>
+            <div className="mt-1 text-sm text-white/60">Disabled for Stripe compliance unless explicitly enabled on the server.</div>
           </div>
           <button onClick={() => router.push("/admin")} className="rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm">
             Back
@@ -171,9 +171,9 @@ export default function AdminCryptoPage() {
 
       <div className="grid gap-4">
         <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-5">
-          <div className="font-semibold">Primary Chain</div>
+          <div className="font-semibold">Primary Network</div>
           <div className="mt-2 grid gap-1">
-            <div className="text-sm text-white/70">Primary Chain ID</div>
+            <div className="text-sm text-white/70">Primary Network ID</div>
             <input
               className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 outline-none"
               inputMode="numeric"
@@ -185,7 +185,7 @@ export default function AdminCryptoPage() {
 
         <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-5">
           <div className="flex items-center justify-between">
-            <div className="font-semibold">Chains</div>
+            <div className="font-semibold">Networks</div>
             <button
               className="rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm"
               onClick={() =>
@@ -198,7 +198,7 @@ export default function AdminCryptoPage() {
                 })
               }
             >
-              Add chain
+              Add network
             </button>
           </div>
 
@@ -227,7 +227,7 @@ export default function AdminCryptoPage() {
                   </div>
 
                   <div className="grid gap-1">
-                    <div className="text-sm text-white/70">Chain ID</div>
+                    <div className="text-sm text-white/70">Network ID</div>
                     <input
                       className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 outline-none"
                       inputMode="numeric"
@@ -255,7 +255,7 @@ export default function AdminCryptoPage() {
                   </div>
 
                   <div className="grid gap-1">
-                    <div className="text-sm text-white/70">Mint Function</div>
+                    <div className="text-sm text-white/70">Contract Function</div>
                     <input
                       className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 outline-none"
                       value={c.mintFunction}
@@ -264,7 +264,7 @@ export default function AdminCryptoPage() {
                         next[idx] = { ...c, mintFunction: e.target.value };
                         setCfg({ ...cfg, chains: next });
                       }}
-                      placeholder="safeMint"
+                      placeholder="functionName"
                     />
                   </div>
 
@@ -284,7 +284,7 @@ export default function AdminCryptoPage() {
                     </label>
 
                     <label className="flex items-center justify-between gap-3 text-sm">
-                      <span className="text-white/70">Gasless Claim</span>
+                      <span className="text-white/70">Sponsored Claim</span>
                       <input
                         type="checkbox"
                         checked={c.gaslessClaim}
@@ -314,8 +314,8 @@ export default function AdminCryptoPage() {
         <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="font-semibold">Crypto Payments</div>
-              <div className="mt-1 text-sm text-white/60">Configure “Buy with crypto” tokens and receiving addresses.</div>
+              <div className="font-semibold">Alternative Payments</div>
+              <div className="mt-1 text-sm text-white/60">Configure alternative payment instruments and receiving addresses (disabled by default).</div>
             </div>
           </div>
 
@@ -377,7 +377,7 @@ export default function AdminCryptoPage() {
                     </div>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <div className="grid gap-1">
-                        <div className="text-sm text-white/70">Chain ID</div>
+                        <div className="text-sm text-white/70">Network ID</div>
                         <input
                           className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 outline-none"
                           inputMode="numeric"
@@ -405,7 +405,7 @@ export default function AdminCryptoPage() {
                           <div className="text-xs text-red-300">{receiveAddressError(Number(ra.chainId), String(ra.address || ""))}</div>
                         ) : (
                           <div className="text-xs text-white/40">
-                            {Number(ra.chainId) === 100000 ? "Bitcoin (BTC) address" : "EVM address (0x…)"}
+                            {Number(ra.chainId) === 100000 ? "Chain 100000 address" : "EVM address (0x…)"}
                           </div>
                         )}
                       </div>
@@ -417,7 +417,7 @@ export default function AdminCryptoPage() {
 
             <div className="grid gap-2">
               <div className="flex items-center justify-between">
-                <div className="text-sm font-medium text-white/90">Tokens</div>
+                <div className="text-sm font-medium text-white/90">Instruments</div>
                 <button
                   className="rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm"
                   onClick={() =>
@@ -433,7 +433,7 @@ export default function AdminCryptoPage() {
                     })
                   }
                 >
-                  Add token
+                  Add instrument
                 </button>
               </div>
 
@@ -441,7 +441,7 @@ export default function AdminCryptoPage() {
                 {(cfg.payments?.tokens || []).map((t, idx) => (
                   <div key={t.id || idx} className="rounded-lg border border-white/10 bg-black/30 p-4">
                     <div className="flex items-center justify-between gap-3">
-                      <div className="font-medium text-white/90">{t.symbol || "TOKEN"} (chainId {t.chainId})</div>
+                      <div className="font-medium text-white/90">{t.symbol || "TOKEN"} (networkId {t.chainId})</div>
                       <button
                         className="text-sm text-red-300"
                         onClick={() =>
@@ -481,7 +481,7 @@ export default function AdminCryptoPage() {
                         />
                       </div>
                       <div className="grid gap-1">
-                        <div className="text-sm text-white/70">Chain ID</div>
+                        <div className="text-sm text-white/70">Network ID</div>
                         <input
                           className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 outline-none"
                           inputMode="numeric"
@@ -512,7 +512,7 @@ export default function AdminCryptoPage() {
                       </div>
                       {t.kind === "erc20" ? (
                         <div className="grid gap-1 sm:col-span-2">
-                          <div className="text-sm text-white/70">Token Contract Address (erc20 only)</div>
+                          <div className="text-sm text-white/70">Instrument Contract Address (erc20 only)</div>
                           <input
                             className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 outline-none font-mono text-sm"
                             value={t.address}

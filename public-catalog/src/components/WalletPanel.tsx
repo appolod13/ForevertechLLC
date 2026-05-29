@@ -85,7 +85,7 @@ export function WalletPanel() {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-bold flex items-center gap-2">
           <DollarSign className="text-green-400" />
-          AI Wallet
+          Payments
         </h2>
         <div className="text-right">
           <p className="text-sm text-gray-400">Current Balance</p>

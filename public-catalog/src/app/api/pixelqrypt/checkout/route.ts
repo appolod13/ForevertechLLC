@@ -62,7 +62,7 @@ export async function POST(request: Request) {
         {
           price_data: {
             currency: 'usd',
-            product_data: { name: 'PixelQrypt™ Asset Download' },
+            product_data: { name: 'PixelQrypt™ Download Access' },
             unit_amount: unitAmount,
           },
           quantity: 1,
@@ -90,4 +90,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
-

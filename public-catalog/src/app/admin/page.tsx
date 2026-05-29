@@ -87,13 +87,13 @@ export default function AdminDashboardPage() {
     <div className="grid gap-4">
       <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-5">
         <div className="text-xl font-semibold">Master Control Center</div>
-        <div className="mt-1 text-sm text-white/60">Manage generators, Printify text, crypto mint settings, and shipping.</div>
+        <div className="mt-1 text-sm text-white/60">Manage generators, Printify text, advanced settings, and shipping.</div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Card href="/admin/ai-generators" title="AI Generators" desc="Enable/disable providers, set URLs and timeouts." />
         <Card href="/admin/printify-back-text" title="Printify Back Text" desc="Control back-of-shirt word collage text and styling." />
-        <Card href="/admin/crypto" title="Crypto Setup" desc="Configure chains, contract addresses, and gasless claim settings." />
+        <Card href="/admin/crypto" title="Advanced (disabled)" desc="Disabled for Stripe compliance unless explicitly enabled by server env." />
         <Card href="/admin/shipping" title="Shipping" desc="Configure shipping quote rules used at checkout." />
       </div>
 

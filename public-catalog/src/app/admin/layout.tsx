@@ -65,7 +65,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <NavLink href="/admin" label="Dashboard" />
             <NavLink href="/admin/ai-generators" label="AI Generators" />
             <NavLink href="/admin/printify-back-text" label="Printify Back Text" />
-            <NavLink href="/admin/crypto" label="Crypto Setup" />
+            <NavLink href="/admin/crypto" label="Advanced" />
             <NavLink href="/admin/shipping" label="Shipping" />
           </div>
         </aside>
