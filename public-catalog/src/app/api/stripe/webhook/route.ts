@@ -472,7 +472,7 @@ async function buildCustomerBackTextOverlayPng(params: { width: number; height: 
     y: 0,
     size,
     tracking,
-    lineWidth: Math.max(2, Math.round(size * 0.24)) / Math.max(scaleX, scaleY),
+    lineWidth: Math.max(2, Math.round(size * 0.28)) / Math.max(scaleX, scaleY),
     strokeStyle: 'rgba(0,0,0,0.70)',
   });
   strokeVectorText({
@@ -482,7 +482,7 @@ async function buildCustomerBackTextOverlayPng(params: { width: number; height: 
     y: 0,
     size,
     tracking,
-    lineWidth: Math.max(1, Math.round(size * 0.16)) / Math.max(scaleX, scaleY),
+    lineWidth: Math.max(1, Math.round(size * 0.19)) / Math.max(scaleX, scaleY),
     strokeStyle: 'rgba(255,255,255,0.96)',
   });
   ctx.restore();
@@ -635,7 +635,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
       width: stampSide,
       height: stampSide,
       channels: 4,
-      background: { r: bgRgb.r, g: bgRgb.g, b: bgRgb.b, alpha: 0.98 },
+      background: { r: bgRgb.r, g: bgRgb.g, b: bgRgb.b, alpha: 1 },
     },
   })
     .png()
@@ -729,7 +729,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
     y: 0,
     size: quantumFontSize,
     tracking: track1,
-    lineWidth: Math.max(2, Math.round(quantumFontSize * 0.22)) / s1,
+    lineWidth: Math.max(2, Math.round(quantumFontSize * 0.28)) / s1,
     strokeStyle: 'rgba(0,0,0,0.55)',
   });
   strokeVectorText({
@@ -739,7 +739,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
     y: 0,
     size: quantumFontSize,
     tracking: track1,
-    lineWidth: Math.max(1, Math.round(quantumFontSize * 0.14)) / s1,
+    lineWidth: Math.max(1, Math.round(quantumFontSize * 0.18)) / s1,
     strokeStyle: 'rgba(255,255,255,0.92)',
   });
   ctx.restore();
@@ -756,7 +756,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
     y: 0,
     size: urlFontSize,
     tracking: track2,
-    lineWidth: Math.max(1, Math.round(urlFontSize * 0.16)) / s2,
+    lineWidth: Math.max(1, Math.round(urlFontSize * 0.20)) / s2,
     strokeStyle: 'rgba(0,0,0,0.35)',
   });
   strokeVectorText({
@@ -766,7 +766,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
     y: 0,
     size: urlFontSize,
     tracking: track2,
-    lineWidth: Math.max(1, Math.round(urlFontSize * 0.10)) / s2,
+    lineWidth: Math.max(1, Math.round(urlFontSize * 0.13)) / s2,
     strokeStyle: 'rgba(255,255,255,0.86)',
   });
   ctx.restore();
@@ -802,6 +802,9 @@ async function renderBackQrStampBase64(params: {
 
   const targetUrl = buildBackQrTargetUrl(params.origin, clean, params.qrUrl);
   const stamp = await buildQrStampPng({ url: targetUrl, stampSide, backgroundColor: cfg.render.backgroundColor });
+  const wipeSvg = Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${stampSide + 24}" height="${stampSide + 24}"><rect x="0" y="0" width="${stampSide + 24}" height="${stampSide + 24}" rx="${Math.round(stampSide * 0.16)}" ry="${Math.round(stampSide * 0.16)}" fill="${cfg.render.backgroundColor}"/></svg>`,
+  );
 
   const basePng = params.backStyle === 'abstract' ? await renderBackAbstractPngBuffer(clean, salted) : await renderBackTextPngBuffer(clean, salted);
   const customerOverlay = params.customerText
@@ -809,7 +812,11 @@ async function renderBackQrStampBase64(params: {
     : null;
 
   const out = await sharp(basePng)
-    .composite([...(customerOverlay ? [{ input: customerOverlay, left: 0, top: 0 }] : []), { input: stamp, left, top }])
+    .composite([
+      ...(customerOverlay ? [{ input: customerOverlay, left: 0, top: 0 }] : []),
+      { input: wipeSvg, left, top },
+      { input: stamp, left, top },
+    ])
     .png({ compressionLevel: 9, adaptiveFiltering: true, palette: true })
     .toBuffer();
 

@@ -294,7 +294,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
       width: stampSide,
       height: stampSide,
       channels: 4,
-      background: { r: bgRgb.r, g: bgRgb.g, b: bgRgb.b, alpha: 0.98 },
+      background: { r: bgRgb.r, g: bgRgb.g, b: bgRgb.b, alpha: 1 },
     },
   })
     .png()
@@ -388,7 +388,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
     y: 0,
     size: quantumFontSize,
     tracking: track1,
-    lineWidth: Math.max(2, Math.round(quantumFontSize * 0.22)) / s1,
+    lineWidth: Math.max(2, Math.round(quantumFontSize * 0.28)) / s1,
     strokeStyle: "rgba(0,0,0,0.55)",
   });
   strokeVectorText({
@@ -398,7 +398,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
     y: 0,
     size: quantumFontSize,
     tracking: track1,
-    lineWidth: Math.max(1, Math.round(quantumFontSize * 0.14)) / s1,
+    lineWidth: Math.max(1, Math.round(quantumFontSize * 0.18)) / s1,
     strokeStyle: "rgba(255,255,255,0.92)",
   });
   ctx.restore();
@@ -415,7 +415,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
     y: 0,
     size: urlFontSize,
     tracking: track2,
-    lineWidth: Math.max(1, Math.round(urlFontSize * 0.16)) / s2,
+    lineWidth: Math.max(1, Math.round(urlFontSize * 0.20)) / s2,
     strokeStyle: "rgba(0,0,0,0.35)",
   });
   strokeVectorText({
@@ -425,7 +425,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
     y: 0,
     size: urlFontSize,
     tracking: track2,
-    lineWidth: Math.max(1, Math.round(urlFontSize * 0.10)) / s2,
+    lineWidth: Math.max(1, Math.round(urlFontSize * 0.13)) / s2,
     strokeStyle: "rgba(255,255,255,0.86)",
   });
   ctx.restore();
@@ -454,11 +454,17 @@ async function renderBackQrStampBase64(params: { origin: string; text: string; b
 
   const targetUrl = buildBackQrTargetUrl(params.origin, clean, params.qrUrl);
   const stamp = await buildQrStampPng({ url: targetUrl, stampSide, backgroundColor: cfg.render.backgroundColor });
+  const wipeSvg = Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${stampSide + 24}" height="${stampSide + 24}"><rect x="0" y="0" width="${stampSide + 24}" height="${stampSide + 24}" rx="${Math.round(stampSide * 0.16)}" ry="${Math.round(stampSide * 0.16)}" fill="${cfg.render.backgroundColor}"/></svg>`,
+  );
 
   const basePng = params.backStyle === "abstract" ? await renderBackAbstractPngBuffer(clean, salted) : await renderBackTextPngBuffer(clean, salted);
 
   const out = await sharp(basePng)
-    .composite([{ input: stamp, left, top }])
+    .composite([
+      { input: wipeSvg, left, top },
+      { input: stamp, left, top },
+    ])
     .png({ compressionLevel: 9, adaptiveFiltering: true, palette: true })
     .toBuffer();
 

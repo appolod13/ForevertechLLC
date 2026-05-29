@@ -451,8 +451,8 @@ function drawFuturisticLines(params: {
 
   const pad =
     variant === "abstract"
-      ? Math.max(16, Math.round(Math.min(bgW, bgH) * 0.018))
-      : Math.max(50, Math.round(Math.min(bgW, bgH) * 0.06));
+      ? Math.max(70, Math.round(Math.min(bgW, bgH) * 0.085))
+      : Math.max(28, Math.round(Math.min(bgW, bgH) * 0.035));
   const x0 = bgX + pad;
   const y0 = bgY + pad;
   const w = Math.max(1, bgW - pad * 2);
@@ -479,7 +479,7 @@ function drawFuturisticLines(params: {
 
   const cx = x0 + w * (0.48 + (rng() - 0.5) * 0.08);
   const cy = y0 + h * ((variant === "abstract" ? 0.50 : 0.44) + (rng() - 0.5) * 0.08);
-  const baseR = Math.min(w, h) * (variant === "abstract" ? 0.50 + rng() * 0.08 : 0.28 + rng() * 0.06);
+  const baseR = Math.min(w, h) * (variant === "abstract" ? 0.42 + rng() * 0.08 : 0.28 + rng() * 0.06);
   const spokes = variant === "abstract" ? 30 : 20;
   const radii: number[] = [];
   for (let i = 0; i < spokes; i++) radii.push(baseR * (0.75 + rng() * 0.55));
