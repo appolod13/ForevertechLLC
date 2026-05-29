@@ -1,7 +1,6 @@
 import { Header } from '@/components/Header';
 import { CatalogGrid } from '@/components/CatalogGrid';
 import { TwitterFeed } from '@/components/TwitterFeed';
-import { LatestAIImage } from '@/components/LatestAIImage';
 import Link from 'next/link';
 import fs from 'fs';
 import path from 'path';
@@ -88,7 +87,6 @@ export default async function Home() {
   const initialPosts = await getInitialPosts();
   const heroPost = initialPosts[0];
   const heroImageUrl = resolvePostMediaUrl(heroPost);
-  const heroText = (heroPost?.content || '').trim();
 
   return (
     <div className="min-h-screen bg-black text-white selection:bg-primary/30">
@@ -136,11 +134,6 @@ export default async function Home() {
                       View Your Gallery
                     </Link>
                   </div>
-                  {heroText && (
-                    <div className="mt-4 text-xs text-zinc-400 line-clamp-2">
-                      {heroText}
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -156,7 +149,7 @@ export default async function Home() {
                   Latest Generation
                 </span>
               </div>
-              <LatestAIImage />
+              <div className="h-full w-full bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.18),transparent_55%),radial-gradient(ellipse_at_bottom,rgba(16,185,129,0.10),transparent_55%)]" />
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 to-transparent p-4">
                  <p className="text-sm font-medium text-white">AI Generated Art</p>
                  <p className="text-xs text-zinc-400">Fresh from the neural network</p>

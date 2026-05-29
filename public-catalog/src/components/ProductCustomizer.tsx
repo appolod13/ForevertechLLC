@@ -311,6 +311,27 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
     return u.toString();
   }, []);
 
+  const backPreviewSeed = useMemo(() => {
+    const raw = (backPatternSalt || bannerText || '').slice(0, 220);
+    let h = 2166136261;
+    for (let i = 0; i < raw.length; i++) {
+      h ^= raw.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(36);
+  }, [backPatternSalt, bannerText]);
+
+  const backPreviewUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const origin = window.location.origin;
+    const u = new URL('/api/back-preview', origin);
+    u.searchParams.set('text', bannerText || 'CUSTOM');
+    u.searchParams.set('style', 'abstract');
+    if (backPreviewSeed) u.searchParams.set('seed', backPreviewSeed);
+    if (qrTargetUrl) u.searchParams.set('qrUrl', qrTargetUrl);
+    return `${u.pathname}?${u.searchParams.toString()}`;
+  }, [bannerText, backPreviewSeed, qrTargetUrl]);
+
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -473,25 +494,37 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
                 isMug ? "h-[70%] w-[70%]" : "h-[58%] w-[42%] -mt-[6%] shadow-xl border border-white/10 bg-black/10 backdrop-blur-sm"
               )}
             >
-              <img
-                src={backAbstractSvgDataUrl}
-                alt="Back abstract"
-                className="absolute inset-0 h-full w-full object-contain"
-                loading="eager"
-                decoding="async"
-              />
-              <img
-                src={backWordSvgDataUrl}
-                alt={`Back banner: ${bannerText}`}
-                className="absolute inset-0 h-full w-full object-contain"
-                loading="eager"
-                decoding="async"
-              />
-              {qrDataUrl ? (
-                <div className="absolute bottom-[14%] right-[14%] w-[28%] max-w-[170px] aspect-square rounded-2xl bg-[#ff1f5d]/95 border border-white/20 shadow-2xl overflow-hidden">
-                  <img src={qrDataUrl} alt="QR code" className="h-full w-full object-contain p-2" loading="eager" decoding="async" />
-                </div>
-              ) : null}
+              {isMug ? (
+                <>
+                  <img
+                    src={backAbstractSvgDataUrl}
+                    alt="Back abstract"
+                    className="absolute inset-0 h-full w-full object-contain"
+                    loading="eager"
+                    decoding="async"
+                  />
+                  <img
+                    src={backWordSvgDataUrl}
+                    alt={`Back banner: ${bannerText}`}
+                    className="absolute inset-0 h-full w-full object-contain"
+                    loading="eager"
+                    decoding="async"
+                  />
+                  {qrDataUrl ? (
+                    <div className="absolute bottom-[14%] right-[14%] w-[28%] max-w-[170px] aspect-square rounded-2xl bg-[#ff1f5d]/95 border border-white/20 shadow-2xl overflow-hidden">
+                      <img src={qrDataUrl} alt="QR code" className="h-full w-full object-contain p-2" loading="eager" decoding="async" />
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <img
+                  src={backPreviewUrl}
+                  alt="Back design"
+                  className="absolute inset-0 h-full w-full object-contain"
+                  loading="eager"
+                  decoding="async"
+                />
+              )}
             </div>
          )}
          
