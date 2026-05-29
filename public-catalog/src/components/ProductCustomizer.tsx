@@ -30,6 +30,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
   const [view, setView] = useState<'front' | 'back'>('front');
   const { addToCart } = useCart();
   const teeBackMockupUrl = 'https://pfy-prod-image-storage.s3.us-east-2.amazonaws.com/27072493/16a5087a-ce02-45dd-b86a-a148cd91a36d';
+  const teeBackDesignPreviewUrl = 'https://pfy-prod-image-storage.s3.us-east-2.amazonaws.com/27072493/6411df42-993e-4b8b-b7b1-42e651c33ad5';
 
   useEffect(() => {
     fetch('/api/products')
@@ -448,25 +449,37 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
                 isMug ? "h-[70%] w-[70%]" : "h-[58%] w-[42%] -mt-[6%] shadow-xl border border-white/10 bg-black/10 backdrop-blur-sm"
               )}
             >
-              <img
-                src={backAbstractSvgDataUrl}
-                alt="Back abstract"
-                className="absolute inset-0 h-full w-full object-contain"
-                loading="eager"
-                decoding="async"
-              />
-              <img
-                src={backWordSvgDataUrl}
-                alt={`Back banner: ${bannerText}`}
-                className="absolute inset-0 h-full w-full object-contain"
-                loading="eager"
-                decoding="async"
-              />
-              {qrDataUrl ? (
-                <div className="absolute bottom-[14%] right-[14%] w-[28%] max-w-[170px] aspect-square rounded-2xl bg-[#ff1f5d]/95 border border-white/20 shadow-2xl overflow-hidden">
-                  <img src={qrDataUrl} alt="QR code" className="h-full w-full object-contain p-2" loading="eager" decoding="async" />
-                </div>
-              ) : null}
+              {isMug ? (
+                <>
+                  <img
+                    src={backAbstractSvgDataUrl}
+                    alt="Back abstract"
+                    className="absolute inset-0 h-full w-full object-contain"
+                    loading="eager"
+                    decoding="async"
+                  />
+                  <img
+                    src={backWordSvgDataUrl}
+                    alt={`Back banner: ${bannerText}`}
+                    className="absolute inset-0 h-full w-full object-contain"
+                    loading="eager"
+                    decoding="async"
+                  />
+                  {qrDataUrl ? (
+                    <div className="absolute bottom-[14%] right-[14%] w-[28%] max-w-[170px] aspect-square rounded-2xl bg-[#ff1f5d]/95 border border-white/20 shadow-2xl overflow-hidden">
+                      <img src={qrDataUrl} alt="QR code" className="h-full w-full object-contain p-2" loading="eager" decoding="async" />
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <img
+                  src={teeBackDesignPreviewUrl}
+                  alt="Back design"
+                  className="absolute inset-0 h-full w-full object-contain"
+                  loading="eager"
+                  decoding="async"
+                />
+              )}
             </div>
          )}
          
