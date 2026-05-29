@@ -7,6 +7,9 @@ import path from "path";
 import { readFile } from "fs/promises";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 function sanitizeBannerText(text: string, maxChars = 96): string {
   const t = (text || "")
@@ -251,6 +254,82 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
   return canvas.toBuffer("image/png");
 }
 
+async function buildHeaderOverlayPng(params: { panelW: number; panelH: number; text: string }) {
+  const panelW = Math.max(360, Math.trunc(params.panelW));
+  const panelH = Math.max(600, Math.trunc(params.panelH));
+  const text = (params.text || "Pixel Crypted").trim() || "Pixel Crypted";
+  const weight = 900;
+
+  const canvas = createCanvas(panelW, panelH);
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, panelW, panelH);
+
+  const paddingX = Math.max(12, Math.round(panelW * 0.02));
+  const y = Math.max(18, Math.round(panelH * 0.04));
+
+  let fontSize = Math.max(58, Math.min(260, Math.round(panelW * 0.12)));
+  let badgeGap = Math.max(10, Math.round(fontSize * 0.2));
+  let badgeSize = Math.max(54, Math.min(180, Math.round(fontSize * 0.9)));
+
+  let measuredTextW = 0;
+  for (let i = 0; i < 12; i++) {
+    ctx.font = `${weight} ${fontSize}px sans-serif`;
+    measuredTextW = ctx.measureText(text).width;
+    const totalW = measuredTextW + badgeGap + badgeSize;
+    if (totalW <= panelW - paddingX * 2 || fontSize <= 42) break;
+    fontSize = Math.max(42, Math.floor(fontSize * 0.93));
+    badgeGap = Math.max(10, Math.round(fontSize * 0.2));
+    badgeSize = Math.max(50, Math.min(170, Math.round(fontSize * 0.9)));
+  }
+
+  const totalW = measuredTextW + badgeGap + badgeSize;
+  const startX = panelW / 2 - totalW / 2;
+  const textCenterX = startX + measuredTextW / 2;
+  const badgeX = startX + measuredTextW + badgeGap;
+  const badgeY = y + Math.round(fontSize * 0.06);
+  const r = Math.max(10, Math.round(badgeSize * 0.18));
+
+  ctx.save();
+  ctx.globalAlpha = 0.96;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "rgba(0,0,0,0.55)";
+  ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.08));
+  ctx.miterLimit = 2;
+  ctx.font = `${weight} ${fontSize}px sans-serif`;
+  if (typeof (ctx as unknown as { strokeText?: unknown }).strokeText === "function") {
+    ctx.strokeText(text, textCenterX, y);
+  }
+  ctx.fillText(text, textCenterX, y);
+
+  ctx.fillStyle = "rgba(255,255,255,0.92)";
+  ctx.strokeStyle = "rgba(0,0,0,0.78)";
+  ctx.lineWidth = Math.max(6, Math.round(badgeSize * 0.1));
+  ctx.beginPath();
+  ctx.moveTo(badgeX + r, badgeY);
+  ctx.lineTo(badgeX + badgeSize - r, badgeY);
+  ctx.arc(badgeX + badgeSize - r, badgeY + r, r, -Math.PI / 2, 0);
+  ctx.lineTo(badgeX + badgeSize, badgeY + badgeSize - r);
+  ctx.arc(badgeX + badgeSize - r, badgeY + badgeSize - r, r, 0, Math.PI / 2);
+  ctx.lineTo(badgeX + r, badgeY + badgeSize);
+  ctx.arc(badgeX + r, badgeY + badgeSize - r, r, Math.PI / 2, Math.PI);
+  ctx.lineTo(badgeX, badgeY + r);
+  ctx.arc(badgeX + r, badgeY + r, r, Math.PI, (Math.PI * 3) / 2);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(0,0,0,0.92)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `${weight} ${Math.max(10, Math.round(badgeSize * 0.62))}px sans-serif`;
+  ctx.fillText("QV", badgeX + badgeSize / 2, badgeY + badgeSize / 2);
+  ctx.restore();
+
+  return canvas.toBuffer("image/png");
+}
+
 function getBackStyle(raw: string | null): "words" | "abstract" {
   const v = (raw || "").trim().toLowerCase();
   if (v === "words") return "words";
@@ -297,9 +376,10 @@ export async function GET(req: NextRequest) {
     const stamp = await buildQrStampPng({ url: targetUrl, stampSide, backgroundColor: cfg.render.backgroundColor });
     const baseFull = style === "abstract" ? await renderBackAbstractPngBuffer(backText, salted) : await renderBackTextPngBuffer(backText, salted);
     const basePanel = await sharp(baseFull).extract({ left: bgX, top: bgY, width: bgW, height: bgH }).png().toBuffer();
+    const headerOverlay = await buildHeaderOverlayPng({ panelW, panelH, text: "Pixel Crypted" });
 
     const out = await sharp(basePanel)
-      .composite([{ input: stamp, left, top }])
+      .composite([{ input: headerOverlay, left: 0, top: 0 }, { input: stamp, left, top }])
       .png({ compressionLevel: 9, adaptiveFiltering: true, palette: true })
       .toBuffer();
 
@@ -307,7 +387,11 @@ export async function GET(req: NextRequest) {
       status: 200,
       headers: {
         "content-type": "image/png",
-        "cache-control": "no-store",
+        "cache-control": "private, no-store, no-cache, max-age=0, must-revalidate, proxy-revalidate",
+        "cdn-cache-control": "no-store",
+        "surrogate-control": "no-store",
+        pragma: "no-cache",
+        expires: "0",
       },
     });
   } catch (e: unknown) {

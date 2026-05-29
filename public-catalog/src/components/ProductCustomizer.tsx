@@ -320,6 +320,12 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
     return (h >>> 0).toString(36);
   }, [backPatternSalt, bannerText]);
 
+  const [backPreviewNonce, setBackPreviewNonce] = useState(() => Math.random().toString(36).slice(2, 10));
+
+  useEffect(() => {
+    setBackPreviewNonce(Math.random().toString(36).slice(2, 10));
+  }, [backPreviewSeed]);
+
   const backPreviewUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
     const origin = window.location.origin;
@@ -327,9 +333,10 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
     u.searchParams.set('text', bannerText || 'CUSTOM');
     u.searchParams.set('style', 'abstract');
     if (backPreviewSeed) u.searchParams.set('seed', backPreviewSeed);
+    if (backPreviewNonce) u.searchParams.set('v', backPreviewNonce);
     if (qrTargetUrl) u.searchParams.set('qrUrl', qrTargetUrl);
     return `${u.pathname}?${u.searchParams.toString()}`;
-  }, [bannerText, backPreviewSeed, qrTargetUrl]);
+  }, [bannerText, backPreviewNonce, backPreviewSeed, qrTargetUrl]);
 
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
