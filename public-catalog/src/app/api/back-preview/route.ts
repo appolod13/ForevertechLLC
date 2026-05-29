@@ -29,6 +29,113 @@ function sanitizeCustomerBackText(text: string, maxChars = 64): string {
   return t.slice(0, Math.max(0, maxChars));
 }
 
+type VectorGlyph = { adv: number; strokes: Array<Array<[number, number]>> };
+
+const VECTOR_GLYPHS: Record<string, VectorGlyph> = {
+  " ": { adv: 0.55, strokes: [] },
+  ".": { adv: 0.4, strokes: [[[0.2, 0.92], [0.2, 0.96]]] },
+  "-": { adv: 0.6, strokes: [[[0.05, 0.55], [0.95, 0.55]]] },
+  "/": { adv: 0.7, strokes: [[[0.05, 0.98], [0.95, 0.02]]] },
+  ":": { adv: 0.4, strokes: [[[0.2, 0.35], [0.2, 0.39]], [[0.2, 0.75], [0.2, 0.79]]] },
+  "'": { adv: 0.35, strokes: [[[0.2, 0.05], [0.2, 0.25]]] },
+  "0": { adv: 1.0, strokes: [[[0.2, 0.1], [0.8, 0.1], [1, 0.3], [1, 0.7], [0.8, 0.9], [0.2, 0.9], [0, 0.7], [0, 0.3], [0.2, 0.1]]] },
+  "1": { adv: 0.75, strokes: [[[0.4, 0.2], [0.6, 0.1], [0.6, 0.9]], [[0.35, 0.9], [0.85, 0.9]]] },
+  "2": { adv: 1.0, strokes: [[[0.1, 0.25], [0.2, 0.1], [0.8, 0.1], [1, 0.25], [0.1, 0.9], [1, 0.9]]] },
+  "3": { adv: 1.0, strokes: [[[0.15, 0.15], [0.85, 0.15], [0.6, 0.5], [0.85, 0.85], [0.15, 0.85]]] },
+  "4": { adv: 1.0, strokes: [[[0.85, 0.1], [0.85, 0.9]], [[0.1, 0.55], [0.95, 0.55]], [[0.1, 0.55], [0.7, 0.1]]] },
+  "5": { adv: 1.0, strokes: [[[0.95, 0.1], [0.15, 0.1], [0.15, 0.5], [0.8, 0.5], [1, 0.7], [0.8, 0.9], [0.15, 0.9]]] },
+  "6": { adv: 1.0, strokes: [[[0.9, 0.15], [0.25, 0.15], [0.05, 0.35], [0.05, 0.75], [0.25, 0.9], [0.8, 0.9], [1, 0.75], [0.8, 0.6], [0.2, 0.6]]] },
+  "7": { adv: 1.0, strokes: [[[0.05, 0.1], [0.95, 0.1], [0.3, 0.9]]] },
+  "8": { adv: 1.0, strokes: [[[0.25, 0.1], [0.75, 0.1], [0.95, 0.3], [0.75, 0.5], [0.25, 0.5], [0.05, 0.3], [0.25, 0.1]], [[0.25, 0.5], [0.75, 0.5], [0.95, 0.7], [0.75, 0.9], [0.25, 0.9], [0.05, 0.7], [0.25, 0.5]]] },
+  "9": { adv: 1.0, strokes: [[[0.8, 0.4], [0.2, 0.4], [0, 0.25], [0.2, 0.1], [0.8, 0.1], [1, 0.25], [1, 0.65], [0.8, 0.9], [0.2, 0.9]]] },
+  A: { adv: 1.0, strokes: [[[0, 1], [0.5, 0], [1, 1]], [[0.2, 0.6], [0.8, 0.6]]] },
+  B: { adv: 1.0, strokes: [[[0, 0], [0, 1]], [[0, 0], [0.75, 0.1], [0.75, 0.45], [0, 0.5]], [[0, 0.5], [0.75, 0.55], [0.75, 0.9], [0, 1]]] },
+  C: { adv: 1.0, strokes: [[[0.9, 0.1], [0.2, 0.1], [0, 0.3], [0, 0.7], [0.2, 0.9], [0.9, 0.9]]] },
+  D: { adv: 1.0, strokes: [[[0, 0], [0, 1], [0.7, 0.85], [0.95, 0.5], [0.7, 0.15], [0, 0]]] },
+  E: { adv: 1.0, strokes: [[[0.9, 0.1], [0, 0.1], [0, 0.9], [0.9, 0.9]], [[0, 0.5], [0.7, 0.5]]] },
+  F: { adv: 1.0, strokes: [[[0.9, 0.1], [0, 0.1], [0, 0.9]], [[0, 0.5], [0.7, 0.5]]] },
+  G: { adv: 1.0, strokes: [[[0.9, 0.1], [0.2, 0.1], [0, 0.3], [0, 0.7], [0.2, 0.9], [0.9, 0.9], [0.9, 0.6], [0.55, 0.6]]] },
+  H: { adv: 1.0, strokes: [[[0, 0], [0, 1]], [[1, 0], [1, 1]], [[0, 0.5], [1, 0.5]]] },
+  I: { adv: 0.9, strokes: [[[0, 0.1], [1, 0.1]], [[0.5, 0.1], [0.5, 0.9]], [[0, 0.9], [1, 0.9]]] },
+  J: { adv: 1.0, strokes: [[[0, 0.1], [1, 0.1]], [[1, 0.1], [1, 0.75], [0.8, 0.95], [0.2, 0.95], [0, 0.75]]] },
+  K: { adv: 1.0, strokes: [[[0, 0], [0, 1]], [[1, 0], [0, 0.55], [1, 1]]] },
+  L: { adv: 1.0, strokes: [[[0, 0.1], [0, 0.9], [1, 0.9]]] },
+  M: { adv: 1.15, strokes: [[[0, 1], [0, 0], [0.5, 0.6], [1, 0], [1, 1]]] },
+  N: { adv: 1.05, strokes: [[[0, 1], [0, 0], [1, 1], [1, 0]]] },
+  O: { adv: 1.0, strokes: [[[0.2, 0.1], [0.8, 0.1], [1, 0.3], [1, 0.7], [0.8, 0.9], [0.2, 0.9], [0, 0.7], [0, 0.3], [0.2, 0.1]]] },
+  P: { adv: 1.0, strokes: [[[0, 1], [0, 0], [0.8, 0.05], [1, 0.25], [0.8, 0.45], [0, 0.45]]] },
+  Q: { adv: 1.0, strokes: [[[0.2, 0.1], [0.8, 0.1], [1, 0.3], [1, 0.7], [0.8, 0.9], [0.2, 0.9], [0, 0.7], [0, 0.3], [0.2, 0.1]], [[0.6, 0.6], [1, 1]]] },
+  R: { adv: 1.0, strokes: [[[0, 1], [0, 0], [0.8, 0.05], [1, 0.25], [0.8, 0.45], [0, 0.45]], [[0, 0.45], [1, 1]]] },
+  S: { adv: 1.0, strokes: [[[1, 0.2], [0.8, 0.05], [0.2, 0.05], [0, 0.25], [0.2, 0.45], [0.8, 0.55], [1, 0.75], [0.8, 0.95], [0.2, 0.95], [0, 0.8]]] },
+  T: { adv: 1.0, strokes: [[[0, 0.1], [1, 0.1]], [[0.5, 0.1], [0.5, 1]]] },
+  U: { adv: 1.0, strokes: [[[0, 0.1], [0, 0.75], [0.2, 0.95], [0.8, 0.95], [1, 0.75], [1, 0.1]]] },
+  V: { adv: 1.0, strokes: [[[0, 0.1], [0.5, 1], [1, 0.1]]] },
+  W: { adv: 1.25, strokes: [[[0, 0.1], [0.25, 1], [0.5, 0.6], [0.75, 1], [1, 0.1]]] },
+  X: { adv: 1.0, strokes: [[[0, 0.1], [1, 0.95]], [[1, 0.1], [0, 0.95]]] },
+  Y: { adv: 1.0, strokes: [[[0, 0.1], [0.5, 0.55], [1, 0.1]], [[0.5, 0.55], [0.5, 1]]] },
+  Z: { adv: 1.0, strokes: [[[0, 0.1], [1, 0.1], [0, 0.95], [1, 0.95]]] },
+};
+
+function normalizeVectorText(input: string) {
+  return (input || "")
+    .toUpperCase()
+    .split("")
+    .map((c) => (VECTOR_GLYPHS[c] ? c : " "))
+    .join("");
+}
+
+function measureVectorTextWidth(text: string, size: number, tracking: number) {
+  const t = normalizeVectorText(text);
+  let w = 0;
+  for (let i = 0; i < t.length; i++) {
+    const g = VECTOR_GLYPHS[t[i]!] || VECTOR_GLYPHS[" "]!;
+    w += g.adv * size;
+    if (i !== t.length - 1) w += tracking * size;
+  }
+  return w;
+}
+
+function strokeVectorText(params: {
+  ctx: any;
+  text: string;
+  x: number;
+  y: number;
+  size: number;
+  tracking: number;
+  lineWidth: number;
+  strokeStyle: string;
+}) {
+  const { ctx } = params;
+  const t = normalizeVectorText(params.text);
+  let penX = params.x;
+
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.miterLimit = 2;
+  ctx.strokeStyle = params.strokeStyle;
+  ctx.lineWidth = Math.max(1, params.lineWidth);
+
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i]!;
+    const g = VECTOR_GLYPHS[ch] || VECTOR_GLYPHS[" "]!;
+    for (const stroke of g.strokes) {
+      if (!stroke.length) continue;
+      ctx.beginPath();
+      const [x0, y0] = stroke[0]!;
+      ctx.moveTo(penX + x0 * params.size, params.y + y0 * params.size);
+      for (let j = 1; j < stroke.length; j++) {
+        const [px, py] = stroke[j]!;
+        ctx.lineTo(penX + px * params.size, params.y + py * params.size);
+      }
+      ctx.stroke();
+    }
+    penX += g.adv * params.size + params.tracking * params.size;
+  }
+
+  ctx.restore();
+}
+
 function normalizeCustomerQrUrl(input: unknown): string {
   const raw = typeof input === "string" ? input.trim() : "";
   if (!raw) return "";
@@ -237,27 +344,58 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
   const urlY = 8 + stampSide - Math.max(14, Math.round(border * 0.65));
   const quantumY = urlY - Math.round(quantumFontSize * 0.95);
 
-  ctx.save();
-  ctx.textAlign = "center";
-  ctx.textBaseline = "alphabetic";
-  ctx.fillStyle = "rgba(255,255,255,0.92)";
-  ctx.strokeStyle = "rgba(0,0,0,0.45)";
-  ctx.lineWidth = Math.max(2, Math.round(quantumFontSize * 0.06));
-  ctx.miterLimit = 2;
-  ctx.font = `900 ${quantumFontSize}px sans-serif`;
-  if (typeof (ctx as unknown as { strokeText?: unknown }).strokeText === "function") {
-    ctx.strokeText("Quantum Verified", centerX, quantumY);
-  }
-  ctx.fillText("Quantum Verified", centerX, quantumY);
+  const label1 = "Quantum Verified";
+  const label2 = verificationUrl;
+  const track1 = 0.06;
+  const track2 = 0.04;
+  const yQuantumTop = quantumY - quantumFontSize;
+  const yUrlTop = urlY - urlFontSize;
 
-  ctx.fillStyle = "rgba(255,255,255,0.88)";
-  ctx.strokeStyle = "rgba(0,0,0,0.25)";
-  ctx.lineWidth = Math.max(1, Math.round(urlFontSize * 0.06));
-  ctx.font = `700 ${urlFontSize}px sans-serif`;
-  if (typeof (ctx as unknown as { strokeText?: unknown }).strokeText === "function") {
-    ctx.strokeText(verificationUrl, centerX, urlY);
-  }
-  ctx.fillText(verificationUrl, centerX, urlY);
+  ctx.save();
+  ctx.globalAlpha = 0.96;
+  const w1 = measureVectorTextWidth(label1, quantumFontSize, track1);
+  strokeVectorText({
+    ctx,
+    text: label1,
+    x: centerX - w1 / 2,
+    y: yQuantumTop,
+    size: quantumFontSize,
+    tracking: track1,
+    lineWidth: Math.max(2, Math.round(quantumFontSize * 0.22)),
+    strokeStyle: "rgba(0,0,0,0.55)",
+  });
+  strokeVectorText({
+    ctx,
+    text: label1,
+    x: centerX - w1 / 2,
+    y: yQuantumTop,
+    size: quantumFontSize,
+    tracking: track1,
+    lineWidth: Math.max(1, Math.round(quantumFontSize * 0.14)),
+    strokeStyle: "rgba(255,255,255,0.92)",
+  });
+
+  const w2 = measureVectorTextWidth(label2, urlFontSize, track2);
+  strokeVectorText({
+    ctx,
+    text: label2,
+    x: centerX - w2 / 2,
+    y: yUrlTop,
+    size: urlFontSize,
+    tracking: track2,
+    lineWidth: Math.max(1, Math.round(urlFontSize * 0.18)),
+    strokeStyle: "rgba(0,0,0,0.35)",
+  });
+  strokeVectorText({
+    ctx,
+    text: label2,
+    x: centerX - w2 / 2,
+    y: yUrlTop,
+    size: urlFontSize,
+    tracking: track2,
+    lineWidth: Math.max(1, Math.round(urlFontSize * 0.12)),
+    strokeStyle: "rgba(255,255,255,0.86)",
+  });
   ctx.restore();
 
   return canvas.toBuffer("image/png");
@@ -268,7 +406,6 @@ async function buildTopTextOverlayPng(params: { panelW: number; panelH: number; 
   const panelH = Math.max(600, Math.trunc(params.panelH));
   const text = sanitizeCustomerBackText(params.text || "", 64);
   if (!text) return null;
-  const weight = 900;
 
   const canvas = createCanvas(panelW, panelH);
   const ctx = canvas.getContext("2d");
@@ -278,34 +415,44 @@ async function buildTopTextOverlayPng(params: { panelW: number; panelH: number; 
   const y = Math.max(18, Math.round(panelH * 0.04));
   const maxW = Math.max(120, panelW - paddingX * 2);
 
-  let fontSize = Math.max(58, Math.min(260, Math.round(panelW * 0.12)));
-  let measuredTextW = 0;
+  const tracking = 0.08;
+  let size = Math.max(58, Math.min(220, Math.round(panelW * 0.12)));
+  let w = measureVectorTextWidth(text, size, tracking);
+  let fit = maxW / Math.max(1, w);
   for (let i = 0; i < 12; i++) {
-    ctx.font = `${weight} ${fontSize}px sans-serif`;
-    measuredTextW = typeof ctx.measureText === "function" ? ctx.measureText(text).width : fontSize * (text.length * 0.52);
-    if (measuredTextW <= maxW || fontSize <= 42) break;
-    fontSize = Math.max(42, Math.floor(fontSize * 0.93));
+    if (fit >= 0.9 || size <= 36) break;
+    size = Math.max(36, Math.floor(size * 0.93));
+    w = measureVectorTextWidth(text, size, tracking);
+    fit = maxW / Math.max(1, w);
   }
 
-  const safeW = Math.max(1, measuredTextW || 1);
-  const scaleX = Math.max(0.7, Math.min(3.4, maxW / safeW));
+  const scaleX = Math.max(0.7, Math.min(3.6, fit));
   const scaleY = 1.18;
 
   ctx.save();
   ctx.globalAlpha = 0.96;
-  ctx.fillStyle = "#ffffff";
-  ctx.strokeStyle = "rgba(0,0,0,0.55)";
-  ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.08)) / Math.max(scaleX, scaleY);
-  ctx.miterLimit = 2;
-  ctx.font = `${weight} ${fontSize}px sans-serif`;
   ctx.translate(panelW / 2, y);
   ctx.scale(scaleX, scaleY);
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  if (typeof (ctx as unknown as { strokeText?: unknown }).strokeText === "function") {
-    ctx.strokeText(text, 0, 0);
-  }
-  ctx.fillText(text, 0, 0);
+  strokeVectorText({
+    ctx,
+    text,
+    x: -w / 2,
+    y: 0,
+    size,
+    tracking,
+    lineWidth: Math.max(2, Math.round(size * 0.22)) / Math.max(scaleX, scaleY),
+    strokeStyle: "rgba(0,0,0,0.62)",
+  });
+  strokeVectorText({
+    ctx,
+    text,
+    x: -w / 2,
+    y: 0,
+    size,
+    tracking,
+    lineWidth: Math.max(1, Math.round(size * 0.14)) / Math.max(scaleX, scaleY),
+    strokeStyle: "rgba(255,255,255,0.96)",
+  });
   ctx.restore();
 
   return canvas.toBuffer("image/png");
