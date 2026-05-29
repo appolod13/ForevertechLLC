@@ -288,6 +288,7 @@ type CanvasRenderingContext2DLike = {
   fillRect: (x: number, y: number, w: number, h: number) => void;
   moveTo: (x: number, y: number) => void;
   lineTo: (x: number, y: number) => void;
+  bezierCurveTo: (cp1x: number, cp1y: number, cp2x: number, cp2y: number, x: number, y: number) => void;
   arc: (x: number, y: number, r: number, s: number, e: number) => void;
   translate: (x: number, y: number) => void;
   scale: (x: number, y: number) => void;
@@ -458,24 +459,55 @@ function drawFuturisticLines(params: {
   const w = Math.max(1, bgW - pad * 2);
   const h = Math.max(1, bgH - pad * 2);
 
-  const gridStep = Math.max(90, Math.round(Math.min(bgW, bgH) * 0.11));
-  ctx.save();
-  ctx.globalAlpha = variant === "abstract" ? 0.26 : 0.06;
-  ctx.strokeStyle = variant === "abstract" ? rgba(black, 0.85) : rgba(light, 0.20);
-  ctx.lineWidth = variant === "abstract" ? 5 : 1 * thick;
-  for (let x = x0; x <= x0 + w; x += gridStep) {
-    ctx.beginPath();
-    ctx.moveTo(x, y0);
-    ctx.lineTo(x, y0 + h);
-    ctx.stroke();
+  if (variant === "words") {
+    const gridStep = Math.max(90, Math.round(Math.min(bgW, bgH) * 0.11));
+    ctx.save();
+    ctx.globalAlpha = 0.06;
+    ctx.strokeStyle = rgba(light, 0.20);
+    ctx.lineWidth = 1 * thick;
+    for (let x = x0; x <= x0 + w; x += gridStep) {
+      ctx.beginPath();
+      ctx.moveTo(x, y0);
+      ctx.lineTo(x, y0 + h);
+      ctx.stroke();
+    }
+    for (let y = y0; y <= y0 + h; y += gridStep) {
+      ctx.beginPath();
+      ctx.moveTo(x0, y);
+      ctx.lineTo(x0 + w, y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  } else {
+    const flowCount = 22;
+    ctx.save();
+    ctx.globalAlpha = 0.82;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    for (let i = 0; i < flowCount; i++) {
+      const t = i / Math.max(1, flowCount - 1);
+      const y = y0 + h * (0.10 + t * 0.80) + (rng() - 0.5) * (h * 0.06);
+      const amp = Math.max(22, h * (0.03 + rng() * 0.07));
+      const freq = 0.9 + rng() * 2.2;
+      const phase = rng() * Math.PI * 2;
+      const sw = Math.max(2.4, 3.2 + rng() * 4.6);
+      const white = i % 5 === 0;
+      ctx.strokeStyle = white ? rgba({ r: 255, g: 255, b: 255 }, 0.14) : rgba(black, 0.55);
+      ctx.lineWidth = sw;
+      ctx.beginPath();
+      const xStart = x0 - w * 0.04;
+      const xEnd = x0 + w + w * 0.04;
+      const x1 = x0 + w * (0.30 + rng() * 0.10);
+      const x2 = x0 + w * (0.62 + rng() * 0.10);
+      const y1 = y + Math.sin(phase) * amp;
+      const y2 = y + Math.sin(phase + freq) * amp;
+      const y3 = y + Math.sin(phase + freq * 2) * amp * 0.55;
+      ctx.moveTo(xStart, y);
+      ctx.bezierCurveTo(x1, y1, x2, y2, xEnd, y3);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
-  for (let y = y0; y <= y0 + h; y += gridStep) {
-    ctx.beginPath();
-    ctx.moveTo(x0, y);
-    ctx.lineTo(x0 + w, y);
-    ctx.stroke();
-  }
-  ctx.restore();
 
   const cx = x0 + w * (0.48 + (rng() - 0.5) * 0.08);
   const cy = y0 + h * ((variant === "abstract" ? 0.50 : 0.44) + (rng() - 0.5) * 0.08);
@@ -550,9 +582,9 @@ function drawFuturisticLines(params: {
   }
 
   ctx.save();
-  ctx.globalAlpha = variant === "abstract" ? 1 : 0.92;
+  ctx.globalAlpha = variant === "abstract" ? 0.72 : 0.92;
   ctx.strokeStyle = strokeMain;
-  ctx.lineWidth = variant === "abstract" ? 8 : 1.25 * thick;
+  ctx.lineWidth = variant === "abstract" ? 4.2 : 1.25 * thick;
   ctx.beginPath();
   for (const e of edges) {
     const [as, bs] = e.split(":");
@@ -569,9 +601,9 @@ function drawFuturisticLines(params: {
 
   const triCount = Math.min(240, Math.max(80, Math.round(edges.size * 0.30)));
   ctx.save();
-  ctx.globalAlpha = variant === "abstract" ? 0.95 : 0.62;
-  ctx.strokeStyle = variant === "abstract" ? strokeSecondary : rgba(light, 0.16);
-  ctx.lineWidth = variant === "abstract" ? 8 : 0.9 * thick;
+  ctx.globalAlpha = variant === "abstract" ? 0.62 : 0.62;
+  ctx.strokeStyle = variant === "abstract" ? rgba(black, 0.38) : rgba(light, 0.16);
+  ctx.lineWidth = variant === "abstract" ? 3.8 : 0.9 * thick;
   for (let i = 0; i < triCount; i++) {
     const a = nodes[Math.floor(rng() * nodes.length)];
     if (!a) continue;
@@ -637,9 +669,9 @@ function drawFuturisticLines(params: {
   ctx.restore();
 
   ctx.save();
-  ctx.globalAlpha = variant === "abstract" ? 0.85 : 0.34;
+  ctx.globalAlpha = variant === "abstract" ? 0.40 : 0.34;
   ctx.strokeStyle = strokeAccent;
-  ctx.lineWidth = variant === "abstract" ? 8 : 0.7 * thick;
+  ctx.lineWidth = variant === "abstract" ? 3.2 : 0.7 * thick;
   const accentCount = Math.min(220, Math.max(70, Math.round(edges.size * 0.22)));
   let drawn = 0;
   for (const e of edges) {
@@ -658,95 +690,6 @@ function drawFuturisticLines(params: {
     drawn++;
   }
   ctx.restore();
-
-  if (variant === "abstract") {
-    const orng = makeRng(seed ^ 0x2b13a41f);
-    const pad = Math.max(18, Math.round(thick * 8));
-    const x0 = bgX + pad;
-    const y0 = bgY + pad;
-    const w = bgW - pad * 2;
-    const h = bgH - pad * 2;
-    const centerX = x0 + w * (0.46 + (orng() - 0.5) * 0.04);
-    const centerY = y0 + h * (0.54 + (orng() - 0.5) * 0.05);
-    const size = Math.min(w, h) * (0.54 + orng() * 0.07);
-    const depth = size * (0.22 + orng() * 0.04);
-    const rot = (orng() - 0.5) * 0.14;
-
-    const mkDiamond = (cx: number, cy: number, s: number, r: number) => {
-      const pts = [
-        { x: 0, y: -s },
-        { x: s, y: 0 },
-        { x: 0, y: s },
-        { x: -s, y: 0 },
-      ];
-      const cr = Math.cos(r);
-      const sr = Math.sin(r);
-      return pts.map((p) => ({
-        x: cx + p.x * cr - p.y * sr,
-        y: cy + p.x * sr + p.y * cr,
-      }));
-    };
-
-    const front = mkDiamond(centerX, centerY, size, rot);
-    const back = mkDiamond(centerX + depth * 0.44, centerY - depth * 0.36, size * 0.92, rot);
-    const innerFront = mkDiamond(centerX, centerY, size * 0.62, rot);
-    const innerBack = mkDiamond(centerX + depth * 0.44, centerY - depth * 0.36, size * 0.57, rot);
-
-    ctx.save();
-    ctx.globalAlpha = 0.98;
-    ctx.strokeStyle = strokeMain;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-
-    const strokePoly = (poly: Array<{ x: number; y: number }>) => {
-      ctx.beginPath();
-      ctx.moveTo(poly[0]!.x, poly[0]!.y);
-      for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i]!.x, poly[i]!.y);
-      ctx.closePath();
-      ctx.stroke();
-    };
-
-    ctx.lineWidth = 14;
-    strokePoly(front);
-    strokePoly(back);
-
-    ctx.lineWidth = 10;
-    for (let i = 0; i < 4; i++) {
-      ctx.beginPath();
-      ctx.moveTo(front[i]!.x, front[i]!.y);
-      ctx.lineTo(back[i]!.x, back[i]!.y);
-      ctx.stroke();
-    }
-
-    ctx.strokeStyle = strokeSecondary;
-    ctx.globalAlpha = 0.92;
-    ctx.lineWidth = 10;
-    strokePoly(innerFront);
-    strokePoly(innerBack);
-    ctx.lineWidth = 8;
-    for (let i = 0; i < 4; i++) {
-      ctx.beginPath();
-      ctx.moveTo(innerFront[i]!.x, innerFront[i]!.y);
-      ctx.lineTo(innerBack[i]!.x, innerBack[i]!.y);
-      ctx.stroke();
-    }
-
-    ctx.strokeStyle = strokeAccent;
-    ctx.globalAlpha = 0.82;
-    ctx.lineWidth = 7;
-    for (let i = 0; i < 4; i++) {
-      const a = front[i]!;
-      const b = front[(i + 1) % 4]!;
-      const c = back[(i + 1) % 4]!;
-      const d = back[i]!;
-      ctx.beginPath();
-      ctx.moveTo((a.x + b.x) * 0.5, (a.y + b.y) * 0.5);
-      ctx.lineTo((c.x + d.x) * 0.5, (c.y + d.y) * 0.5);
-      ctx.stroke();
-    }
-
-    ctx.restore();
-  }
 
   ctx.restore();
 }
