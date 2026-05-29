@@ -254,6 +254,46 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
   return canvas.toBuffer("image/png");
 }
 
+async function buildHeaderOverlayPng(params: { panelW: number; panelH: number; text: string }) {
+  const panelW = Math.max(360, Math.trunc(params.panelW));
+  const panelH = Math.max(600, Math.trunc(params.panelH));
+  const text = (params.text || "Pixel Crypted").trim() || "Pixel Crypted";
+  const weight = 900;
+
+  const canvas = createCanvas(panelW, panelH);
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, panelW, panelH);
+
+  const paddingX = Math.max(12, Math.round(panelW * 0.02));
+  const y = Math.max(18, Math.round(panelH * 0.04));
+
+  let fontSize = Math.max(58, Math.min(260, Math.round(panelW * 0.12)));
+  let measuredTextW = 0;
+  for (let i = 0; i < 12; i++) {
+    ctx.font = `${weight} ${fontSize}px sans-serif`;
+    measuredTextW = typeof ctx.measureText === "function" ? ctx.measureText(text).width : fontSize * (text.length * 0.52);
+    if (measuredTextW <= panelW - paddingX * 2 || fontSize <= 42) break;
+    fontSize = Math.max(42, Math.floor(fontSize * 0.93));
+  }
+
+  ctx.save();
+  ctx.globalAlpha = 0.96;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "rgba(0,0,0,0.55)";
+  ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.08));
+  ctx.miterLimit = 2;
+  ctx.font = `${weight} ${fontSize}px sans-serif`;
+  if (typeof (ctx as unknown as { strokeText?: unknown }).strokeText === "function") {
+    ctx.strokeText(text, panelW / 2, y);
+  }
+  ctx.fillText(text, panelW / 2, y);
+  ctx.restore();
+
+  return canvas.toBuffer("image/png");
+}
+
 function getBackStyle(raw: string | null): "words" | "abstract" {
   const v = (raw || "").trim().toLowerCase();
   if (v === "words") return "words";
@@ -300,14 +340,12 @@ export async function GET(req: NextRequest) {
     const stamp = await buildQrStampPng({ url: targetUrl, stampSide, backgroundColor: cfg.render.backgroundColor });
     const baseFull = style === "abstract" ? await renderBackAbstractPngBuffer(backText, salted) : await renderBackTextPngBuffer(backText, salted);
     const basePanel = await sharp(baseFull).extract({ left: bgX, top: bgY, width: bgW, height: bgH }).png().toBuffer();
+    const headerOverlay = await buildHeaderOverlayPng({ panelW, panelH, text: "Pixel Crypted" });
 
     const out = await sharp(basePanel)
-      .composite([{ input: stamp, left, top }])
-      .png({ compressionLevel: 9, adaptiveFiltering: true, palette: true })
+      .composite([{ input: headerOverlay, left: 0, top: 0 }, { input: stamp, left, top }])
+      .png({ compressionLevel: 9, adaptiveFiltering: true })
       .toBuffer();
-
-    const vercelSha = (process.env.VERCEL_GIT_COMMIT_SHA || "").trim();
-    const vercelRef = (process.env.VERCEL_GIT_COMMIT_REF || "").trim();
 
     return new NextResponse(new Uint8Array(out), {
       status: 200,
@@ -318,11 +356,6 @@ export async function GET(req: NextRequest) {
         "surrogate-control": "no-store",
         pragma: "no-cache",
         expires: "0",
-        "x-ft-commit": vercelSha || "unknown",
-        "x-ft-ref": vercelRef || "unknown",
-        "x-ft-back-style": style,
-        "x-ft-back-seed": seedSaltRaw || "none",
-        "x-ft-back-cfg": salted.version || "unknown",
       },
     });
   } catch (e: unknown) {
