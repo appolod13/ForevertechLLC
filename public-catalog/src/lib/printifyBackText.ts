@@ -451,7 +451,7 @@ function drawFuturisticLines(params: {
 
   const pad =
     variant === "abstract"
-      ? Math.max(70, Math.round(Math.min(bgW, bgH) * 0.085))
+      ? Math.max(110, Math.round(Math.min(bgW, bgH) * 0.12))
       : Math.max(28, Math.round(Math.min(bgW, bgH) * 0.035));
   const x0 = bgX + pad;
   const y0 = bgY + pad;
@@ -479,7 +479,7 @@ function drawFuturisticLines(params: {
 
   const cx = x0 + w * (0.48 + (rng() - 0.5) * 0.08);
   const cy = y0 + h * ((variant === "abstract" ? 0.50 : 0.44) + (rng() - 0.5) * 0.08);
-  const baseR = Math.min(w, h) * (variant === "abstract" ? 0.42 + rng() * 0.08 : 0.28 + rng() * 0.06);
+  const baseR = Math.min(w, h) * (variant === "abstract" ? 0.34 + rng() * 0.06 : 0.28 + rng() * 0.06);
   const spokes = variant === "abstract" ? 30 : 20;
   const radii: number[] = [];
   for (let i = 0; i < spokes; i++) radii.push(baseR * (0.75 + rng() * 0.55));
@@ -510,7 +510,7 @@ function drawFuturisticLines(params: {
     const a = rng() * Math.PI * 2;
     const maxR = radiusAt(a);
     const rr = Math.sqrt(rng()) * maxR;
-    const squish = variant === "abstract" ? 1.45 + rng() * 0.35 : 0.88 + rng() * 0.28;
+    const squish = variant === "abstract" ? 1.15 + rng() * 0.20 : 0.88 + rng() * 0.28;
     nodes.push({ x: cx + Math.cos(a) * rr, y: cy + Math.sin(a) * rr * squish });
   }
   const outerCount = 10 + Math.floor(rng() * 10);
@@ -518,7 +518,7 @@ function drawFuturisticLines(params: {
     const a = rng() * Math.PI * 2;
     const maxR = radiusAt(a);
     const rr = maxR * (0.92 + rng() * 0.18);
-    const squish = variant === "abstract" ? 1.45 + rng() * 0.35 : 0.88 + rng() * 0.28;
+    const squish = variant === "abstract" ? 1.15 + rng() * 0.20 : 0.88 + rng() * 0.28;
     nodes.push({ x: cx + Math.cos(a) * rr, y: cy + Math.sin(a) * rr * squish });
   }
 
@@ -661,15 +661,15 @@ function drawFuturisticLines(params: {
 
   if (variant === "abstract") {
     const orng = makeRng(seed ^ 0x2b13a41f);
-    const pad = Math.max(18, Math.round(thick * 8));
+    const pad = Math.max(130, Math.round(Math.min(bgW, bgH) * 0.125));
     const x0 = bgX + pad;
     const y0 = bgY + pad;
     const w = bgW - pad * 2;
     const h = bgH - pad * 2;
     const centerX = x0 + w * (0.46 + (orng() - 0.5) * 0.04);
     const centerY = y0 + h * (0.54 + (orng() - 0.5) * 0.05);
-    const size = Math.min(w, h) * (0.54 + orng() * 0.07);
-    const depth = size * (0.22 + orng() * 0.04);
+    const size = Math.min(w, h) * (0.42 + orng() * 0.06);
+    const depth = size * (0.18 + orng() * 0.04);
     const rot = (orng() - 0.5) * 0.14;
 
     const mkDiamond = (cx: number, cy: number, s: number, r: number) => {
