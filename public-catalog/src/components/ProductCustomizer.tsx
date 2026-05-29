@@ -30,7 +30,6 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
   const [view, setView] = useState<'front' | 'back'>('front');
   const { addToCart } = useCart();
   const teeBackMockupUrl = 'https://pfy-prod-image-storage.s3.us-east-2.amazonaws.com/27072493/16a5087a-ce02-45dd-b86a-a148cd91a36d';
-  const teeBackDesignPreviewUrl = 'https://pfy-prod-image-storage.s3.us-east-2.amazonaws.com/27072493/6411df42-993e-4b8b-b7b1-42e651c33ad5';
 
   useEffect(() => {
     fetch('/api/products')
@@ -141,6 +140,26 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
     return (phrase || 'CUSTOM').toUpperCase().slice(0, 96);
   }, [PROMPT_STOPWORDS, PROMPT_STYLEWORDS, keyword, resolvedPrompt]);
 
+  const backPatternSalt = useMemo(() => {
+    const localKey = (() => {
+      try {
+        const raw = localStorage.getItem('foreverteck.studio.lastImage');
+        if (!raw) return '';
+        const parsed = JSON.parse(raw) as unknown;
+        if (!parsed || typeof parsed !== 'object') return '';
+        const rec = parsed as { imageUrl?: unknown; meta?: unknown };
+        if (typeof rec.imageUrl === 'string' && rec.imageUrl.trim()) return rec.imageUrl.trim();
+        const meta = rec.meta && typeof rec.meta === 'object' ? (rec.meta as Record<string, unknown>) : null;
+        const rid = meta && typeof meta.request_id === 'string' ? meta.request_id : '';
+        return rid || '';
+      } catch {
+        return '';
+      }
+    })();
+    const img = typeof initialImageUrl === 'string' ? initialImageUrl.trim() : '';
+    return (img || localKey || '').slice(0, 160);
+  }, [initialImageUrl]);
+
   const backWordSvgDataUrl = useMemo(() => {
     const clean = (bannerText || 'CUSTOM')
       .trim()
@@ -226,6 +245,10 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
         h ^= clean.charCodeAt(i);
         h = Math.imul(h, 16777619);
       }
+      for (let i = 0; i < backPatternSalt.length; i++) {
+        h ^= backPatternSalt.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
       return h >>> 0;
     })();
 
@@ -240,18 +263,19 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
       };
     })();
 
-    const gradA = `hsl(${Math.floor(rng() * 30) + 280} 85% 55%)`;
-    const gradB = `hsl(${Math.floor(rng() * 30) + 190} 80% 45%)`;
-    const gradC = `hsl(${Math.floor(rng() * 20) + 320} 90% 50%)`;
+    const bgW = 520;
+    const bgH = 980;
+    const bgX = Math.floor((width - bgW) / 2);
+    const bgY = Math.floor((height - bgH) / 2);
 
     const lines = Array.from({ length: 38 })
       .map((_, i) => {
-        const y = Math.floor((height * (0.12 + rng() * 0.76)) | 0);
-        const amp = 40 + rng() * 140;
-        const freq = 1.4 + rng() * 2.8;
+        const y = bgY + Math.floor(bgH * (0.10 + rng() * 0.80));
+        const amp = 26 + rng() * 130;
+        const freq = 1.1 + rng() * 2.6;
         const phase = rng() * Math.PI * 2;
-        const stroke = i % 3 === 0 ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.18)';
-        const sw = 2 + Math.floor(rng() * 3);
+        const stroke = i % 4 === 0 ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.35)';
+        const sw = 2 + Math.floor(rng() * 4);
         const p0 = `M 0 ${y}`;
         const c1y = y + Math.sin(phase) * amp;
         const c2y = y + Math.sin(phase + freq) * amp;
@@ -264,20 +288,20 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
     const shards = Array.from({ length: 24 })
       .map(() => {
         const cx = Math.floor(rng() * width);
-        const cy = Math.floor(height * (0.08 + rng() * 0.84));
+        const cy = bgY + Math.floor(bgH * (0.06 + rng() * 0.88));
         const r = 40 + rng() * 140;
         const rot = -35 + rng() * 70;
-        const opacity = 0.08 + rng() * 0.18;
-        const fill = rng() > 0.5 ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.18)';
+        const opacity = 0.06 + rng() * 0.18;
+        const fill = rng() > 0.5 ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.30)';
         const w = Math.max(60, Math.floor(r * (0.6 + rng() * 0.9)));
         const h = Math.max(60, Math.floor(r * (0.6 + rng() * 0.9)));
         return `<g transform="translate(${cx} ${cy}) rotate(${rot})"><rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="${Math.floor(12 + rng() * 24)}" ry="${Math.floor(12 + rng() * 24)}" fill="${fill}" opacity="${opacity}"/></g>`;
       })
       .join('');
 
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${gradA}"/><stop offset="55%" stop-color="${gradB}"/><stop offset="100%" stop-color="${gradC}"/></linearGradient></defs><rect width="${width}" height="${height}" fill="url(#bg)" opacity="0.28"/><rect width="${width}" height="${height}" fill="rgba(0,0,0,0.72)"/>${shards}${lines}</svg>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="${width}" height="${height}" fill="rgba(0,0,0,0)"/><rect x="${bgX}" y="${bgY}" width="${bgW}" height="${bgH}" fill="#ff1f5d"/><g clip-path="url(#clip)"><rect x="${bgX}" y="${bgY}" width="${bgW}" height="${bgH}" fill="rgba(0,0,0,0.10)"/>${shards}${lines}</g><defs><clipPath id="clip"><rect x="${bgX}" y="${bgY}" width="${bgW}" height="${bgH}" rx="0" ry="0"/></clipPath></defs></svg>`;
     return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-  }, [bannerText]);
+  }, [bannerText, backPatternSalt]);
 
   const qrTargetUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
@@ -449,37 +473,25 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
                 isMug ? "h-[70%] w-[70%]" : "h-[58%] w-[42%] -mt-[6%] shadow-xl border border-white/10 bg-black/10 backdrop-blur-sm"
               )}
             >
-              {isMug ? (
-                <>
-                  <img
-                    src={backAbstractSvgDataUrl}
-                    alt="Back abstract"
-                    className="absolute inset-0 h-full w-full object-contain"
-                    loading="eager"
-                    decoding="async"
-                  />
-                  <img
-                    src={backWordSvgDataUrl}
-                    alt={`Back banner: ${bannerText}`}
-                    className="absolute inset-0 h-full w-full object-contain"
-                    loading="eager"
-                    decoding="async"
-                  />
-                  {qrDataUrl ? (
-                    <div className="absolute bottom-[14%] right-[14%] w-[28%] max-w-[170px] aspect-square rounded-2xl bg-[#ff1f5d]/95 border border-white/20 shadow-2xl overflow-hidden">
-                      <img src={qrDataUrl} alt="QR code" className="h-full w-full object-contain p-2" loading="eager" decoding="async" />
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <img
-                  src={teeBackDesignPreviewUrl}
-                  alt="Back design"
-                  className="absolute inset-0 h-full w-full object-contain"
-                  loading="eager"
-                  decoding="async"
-                />
-              )}
+              <img
+                src={backAbstractSvgDataUrl}
+                alt="Back abstract"
+                className="absolute inset-0 h-full w-full object-contain"
+                loading="eager"
+                decoding="async"
+              />
+              <img
+                src={backWordSvgDataUrl}
+                alt={`Back banner: ${bannerText}`}
+                className="absolute inset-0 h-full w-full object-contain"
+                loading="eager"
+                decoding="async"
+              />
+              {qrDataUrl ? (
+                <div className="absolute bottom-[14%] right-[14%] w-[28%] max-w-[170px] aspect-square rounded-2xl bg-[#ff1f5d]/95 border border-white/20 shadow-2xl overflow-hidden">
+                  <img src={qrDataUrl} alt="QR code" className="h-full w-full object-contain p-2" loading="eager" decoding="async" />
+                </div>
+              ) : null}
             </div>
          )}
          
