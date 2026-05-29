@@ -491,7 +491,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
             <div
               className={cn(
                 "relative z-10 rounded-md bg-black/0 overflow-hidden",
-                isMug ? "h-[70%] w-[70%]" : "h-[58%] w-[42%] -mt-[6%] shadow-xl border border-white/10 bg-black/10 backdrop-blur-sm"
+                isMug ? "h-[70%] w-[70%]" : "h-[58%] w-[42%] -mt-[6%]"
               )}
             >
               {isMug ? (

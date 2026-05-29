@@ -271,6 +271,7 @@ export async function GET(req: NextRequest) {
 
     const out = await sharp(basePng)
       .composite([{ input: stamp, left, top }])
+      .extract({ left: bgX, top: bgY, width: bgW, height: bgH })
       .png({ compressionLevel: 9, adaptiveFiltering: true, palette: true })
       .toBuffer();
 
