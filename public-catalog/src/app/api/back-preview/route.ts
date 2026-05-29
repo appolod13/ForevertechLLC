@@ -276,29 +276,35 @@ async function buildTopTextOverlayPng(params: { panelW: number; panelH: number; 
 
   const paddingX = Math.max(12, Math.round(panelW * 0.02));
   const y = Math.max(18, Math.round(panelH * 0.04));
+  const maxW = Math.max(120, panelW - paddingX * 2);
 
   let fontSize = Math.max(58, Math.min(260, Math.round(panelW * 0.12)));
   let measuredTextW = 0;
   for (let i = 0; i < 12; i++) {
     ctx.font = `${weight} ${fontSize}px sans-serif`;
     measuredTextW = typeof ctx.measureText === "function" ? ctx.measureText(text).width : fontSize * (text.length * 0.52);
-    if (measuredTextW <= panelW - paddingX * 2 || fontSize <= 42) break;
+    if (measuredTextW <= maxW || fontSize <= 42) break;
     fontSize = Math.max(42, Math.floor(fontSize * 0.93));
   }
 
+  const safeW = Math.max(1, measuredTextW || 1);
+  const scaleX = Math.max(0.7, Math.min(2.8, maxW / safeW));
+
   ctx.save();
   ctx.globalAlpha = 0.96;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
   ctx.fillStyle = "#ffffff";
   ctx.strokeStyle = "rgba(0,0,0,0.55)";
   ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.08));
   ctx.miterLimit = 2;
   ctx.font = `${weight} ${fontSize}px sans-serif`;
+  ctx.translate(panelW / 2, y);
+  ctx.scale(scaleX, 1);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
   if (typeof (ctx as unknown as { strokeText?: unknown }).strokeText === "function") {
-    ctx.strokeText(text, panelW / 2, y);
+    ctx.strokeText(text, 0, 0);
   }
-  ctx.fillText(text, panelW / 2, y);
+  ctx.fillText(text, 0, 0);
   ctx.restore();
 
   return canvas.toBuffer("image/png");

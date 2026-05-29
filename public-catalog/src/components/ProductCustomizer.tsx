@@ -322,6 +322,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
 
   const [backPreviewNonce, setBackPreviewNonce] = useState(() => Math.random().toString(36).slice(2, 10));
 
+  const [customerBackTextDraft, setCustomerBackTextDraft] = useState('');
   const [customerBackText, setCustomerBackText] = useState('');
 
   useEffect(() => {
@@ -536,13 +537,33 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
         {!isMug ? (
           <div className="rounded-xl border border-zinc-800 bg-zinc-950/30 p-4">
             <label className="text-sm font-medium text-zinc-300 mb-2 block">Back Text (optional)</label>
-            <input
-              value={customerBackText}
-              onChange={(e) => setCustomerBackText(e.target.value.slice(0, 48))}
-              placeholder="Type the text you want at the top of the back"
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none focus:ring-2 focus:ring-white/15"
-            />
-            <div className="mt-2 text-xs text-zinc-500">{customerBackText.length}/48</div>
+            <div className="flex gap-2">
+              <input
+                value={customerBackTextDraft}
+                onChange={(e) => setCustomerBackTextDraft(e.target.value.slice(0, 48))}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  const finalText = customerBackTextDraft.trim().slice(0, 48);
+                  setCustomerBackText(finalText);
+                  setView('back');
+                }}
+                placeholder="Type the text you want at the top of the back"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none focus:ring-2 focus:ring-white/15"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const finalText = customerBackTextDraft.trim().slice(0, 48);
+                  setCustomerBackText(finalText);
+                  setView('back');
+                }}
+                className="shrink-0 rounded-xl border border-zinc-800 bg-white px-4 py-3 text-sm font-bold text-black hover:bg-zinc-200"
+              >
+                Done
+              </button>
+            </div>
+            <div className="mt-2 text-xs text-zinc-500">{customerBackTextDraft.length}/48</div>
           </div>
         ) : null}
 

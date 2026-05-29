@@ -343,26 +343,32 @@ async function buildCustomerBackTextOverlayPng(params: { width: number; height: 
   const weight = 900;
 
   let fontSize = Math.max(28, Math.min(92, Math.round(bgW * 0.08)));
+  let measuredTextW = 0;
   for (let i = 0; i < 14; i++) {
     ctx.font = `${weight} ${fontSize}px sans-serif`;
-    const w = typeof ctx.measureText === 'function' ? ctx.measureText(text).width : fontSize * (text.length * 0.52);
-    if (w <= maxW || fontSize <= 18) break;
+    measuredTextW = typeof ctx.measureText === 'function' ? ctx.measureText(text).width : fontSize * (text.length * 0.52);
+    if (measuredTextW <= maxW || fontSize <= 18) break;
     fontSize = Math.max(18, Math.floor(fontSize * 0.92));
   }
 
+  const safeW = Math.max(1, measuredTextW || 1);
+  const scaleX = Math.max(0.7, Math.min(2.8, maxW / safeW));
+
   ctx.save();
   ctx.globalAlpha = 0.92;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
   ctx.fillStyle = 'rgba(255,255,255,0.96)';
   ctx.strokeStyle = 'rgba(0,0,0,0.65)';
   ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.10));
   ctx.miterLimit = 2;
   ctx.font = `${weight} ${fontSize}px sans-serif`;
+  ctx.translate(x, y);
+  ctx.scale(scaleX, 1);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
   if (typeof (ctx as unknown as { strokeText?: unknown }).strokeText === 'function') {
-    ctx.strokeText(text, x, y);
+    ctx.strokeText(text, 0, 0);
   }
-  ctx.fillText(text, x, y);
+  ctx.fillText(text, 0, 0);
   ctx.restore();
 
   return canvas.toBuffer('image/png');
