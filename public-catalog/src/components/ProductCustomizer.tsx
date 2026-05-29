@@ -29,7 +29,6 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
   const [orderStatus, setOrderStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
   const [view, setView] = useState<'front' | 'back'>('front');
   const { addToCart } = useCart();
-  const teeBackMockupUrl = 'https://pfy-prod-image-storage.s3.us-east-2.amazonaws.com/27072493/16a5087a-ce02-45dd-b86a-a148cd91a36d';
 
   useEffect(() => {
     fetch('/api/products')
@@ -409,7 +408,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
   if (loading) return <div className="animate-pulse h-96 bg-zinc-900 rounded-xl"></div>;
 
   const isMug = Boolean(selectedProduct?.id.includes('mug'));
-  const isBackMockup = !isMug && view === 'back';
+  const isBackView = !isMug && view === 'back';
 
   return (
     <div>
@@ -451,21 +450,11 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
          </div>
 
          {/* Product Base Layer */}
-         <div className={cn("absolute inset-0 flex items-center justify-center", isBackMockup ? "opacity-100" : "opacity-50")}>
+         <div className={cn("absolute inset-0 flex items-center justify-center", isBackView ? "opacity-100" : "opacity-50")}>
              {isMug ? (
                  <Coffee className="w-[70%] h-[70%] text-zinc-700" />
              ) : (
-                 isBackMockup ? (
-                   <img
-                     src={teeBackMockupUrl}
-                     alt="T-shirt back mockup"
-                     className="h-full w-full object-contain"
-                     loading="eager"
-                     decoding="async"
-                   />
-                 ) : (
-                   <Shirt strokeWidth={1} className="w-[140%] h-[140%] min-w-[500px] min-h-[500px] text-zinc-700 -mt-[5%]" />
-                 )
+                 <Shirt strokeWidth={1} className="w-[140%] h-[140%] min-w-[500px] min-h-[500px] text-zinc-700 -mt-[5%]" />
              )}
          </div>
          
