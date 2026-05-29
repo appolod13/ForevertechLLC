@@ -9,7 +9,7 @@ import QRCode from 'qrcode';
 import path from 'path';
 import { readFile } from 'fs/promises';
 import { createHash } from 'crypto';
-import { createCanvas } from '@napi-rs/canvas';
+import { createCanvas, loadImage } from '@napi-rs/canvas';
 
 function getStripeClient() {
   const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -621,7 +621,6 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
   const qrModulesOnly = await removeExactColorToAlpha({ input: qrFull, rgb: bgRgb });
 
   const border = Math.max(12, Math.round(stampSide * 0.04));
-  const innerPad = Math.max(14, Math.round(stampSide * 0.06));
   const corner = Math.max(18, Math.round(stampSide * 0.14));
 
   const stampBg = await sharp({
@@ -681,17 +680,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
     .png()
     .toBuffer();
 
-  const labelText = 'Quantum Verified';
-  const labelFontSize = Math.max(18, Math.round(stampSide * 0.075));
-  const labelCenterX = 8 + stampSide / 2;
-  const labelY = 8 + stampSide - Math.max(14, Math.round(border * 0.60));
-  const approxHalfW = (labelFontSize * 0.62 * labelText.length) / 2;
-  const badgeR = Math.max(10, Math.round(labelFontSize * 0.42));
-  const badgeCx = Math.min(8 + stampSide - border - badgeR, labelCenterX + approxHalfW + badgeR + Math.round(labelFontSize * 0.18));
-  const badgeCy = labelY - Math.round(labelFontSize * 0.55);
-  const labelSvg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${stampSide + 24}" height="${stampSide + 24}">\n  <text x="${labelCenterX}" y="${labelY}" text-anchor="middle" font-family="Impact, Arial Black, Arial, sans-serif" font-weight="900" font-size="${labelFontSize}" fill="rgba(255,255,255,0.92)" stroke="rgba(0,0,0,0.45)" stroke-width="${Math.max(2, Math.round(labelFontSize * 0.06))}">Quantum Verified</text>\n  <circle cx="${badgeCx}" cy="${badgeCy}" r="${badgeR}" fill="rgba(255,255,255,0.92)" stroke="rgba(0,0,0,0.75)" stroke-width="${Math.max(2, Math.round(badgeR * 0.18))}" />\n  <text x="${badgeCx}" y="${badgeCy + Math.round(badgeR * 0.12)}" text-anchor="middle" font-family="Impact, Arial Black, Arial, sans-serif" font-weight="900" font-size="${Math.max(10, Math.round(badgeR * 0.92))}" fill="rgba(0,0,0,0.92)">QF</text>\n</svg>`;
-
-  const out = await sharp({
+  const base = await sharp({
     create: { width: stampSide + 24, height: stampSide + 24, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
   })
     .composite([
@@ -699,12 +688,76 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
       { input: frame, left: 8, top: 8 },
       ...(logoFull ? [{ input: logoFull, left: 8 + qrLeft, top: 8 + qrTop }] : []),
       { input: qrModulesOnly, left: 8 + qrLeft, top: 8 + qrTop },
-      { input: Buffer.from(labelSvg), left: 0, top: 0 },
     ])
     .png()
     .toBuffer();
 
-  return out;
+  const img = await loadImage(base);
+  const canvas = createCanvas(img.width, img.height);
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+
+  const verificationUrl = 'www.pixelqrypt.com';
+  const centerX = 8 + stampSide / 2;
+  const urlFontSize = Math.max(12, Math.min(26, Math.round(stampSide * 0.034)));
+  const quantumFontSize = Math.max(18, Math.min(46, Math.round(stampSide * 0.072)));
+  const bottomPad = Math.max(26, Math.round(border * 1.2));
+  const yUrlTop = 8 + stampSide - bottomPad - urlFontSize;
+  const yQuantumTop = yUrlTop - Math.round(quantumFontSize * 1.04);
+
+  const label1 = 'Quantum Verified';
+  const label2 = verificationUrl;
+  const track1 = 0.06;
+  const track2 = 0.04;
+
+  ctx.save();
+  ctx.globalAlpha = 0.96;
+  const w1 = measureVectorTextWidth(label1, quantumFontSize, track1);
+  strokeVectorText({
+    ctx,
+    text: label1,
+    x: centerX - w1 / 2,
+    y: yQuantumTop,
+    size: quantumFontSize,
+    tracking: track1,
+    lineWidth: Math.max(2, Math.round(quantumFontSize * 0.22)),
+    strokeStyle: 'rgba(0,0,0,0.55)',
+  });
+  strokeVectorText({
+    ctx,
+    text: label1,
+    x: centerX - w1 / 2,
+    y: yQuantumTop,
+    size: quantumFontSize,
+    tracking: track1,
+    lineWidth: Math.max(1, Math.round(quantumFontSize * 0.14)),
+    strokeStyle: 'rgba(255,255,255,0.92)',
+  });
+
+  const w2 = measureVectorTextWidth(label2, urlFontSize, track2);
+  strokeVectorText({
+    ctx,
+    text: label2,
+    x: centerX - w2 / 2,
+    y: yUrlTop,
+    size: urlFontSize,
+    tracking: track2,
+    lineWidth: Math.max(1, Math.round(urlFontSize * 0.16)),
+    strokeStyle: 'rgba(0,0,0,0.35)',
+  });
+  strokeVectorText({
+    ctx,
+    text: label2,
+    x: centerX - w2 / 2,
+    y: yUrlTop,
+    size: urlFontSize,
+    tracking: track2,
+    lineWidth: Math.max(1, Math.round(urlFontSize * 0.10)),
+    strokeStyle: 'rgba(255,255,255,0.86)',
+  });
+  ctx.restore();
+
+  return canvas.toBuffer('image/png');
 }
 
 async function renderBackQrStampBase64(params: {

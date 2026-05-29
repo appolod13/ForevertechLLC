@@ -320,7 +320,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
     .png()
     .toBuffer();
 
-  const verificationUrl = "https://www.pixelqrypt.com";
+  const verificationUrl = "www.pixelqrypt.com";
   const base = await sharp({
     create: { width: stampSide + 24, height: stampSide + 24, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
   })
@@ -341,15 +341,14 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
   const centerX = 8 + stampSide / 2;
   const urlFontSize = Math.max(12, Math.min(26, Math.round(stampSide * 0.034)));
   const quantumFontSize = Math.max(18, Math.min(46, Math.round(stampSide * 0.072)));
-  const urlY = 8 + stampSide - Math.max(14, Math.round(border * 0.65));
-  const quantumY = urlY - Math.round(quantumFontSize * 0.95);
+  const bottomPad = Math.max(26, Math.round(border * 1.2));
+  const yUrlTop = 8 + stampSide - bottomPad - urlFontSize;
+  const yQuantumTop = yUrlTop - Math.round(quantumFontSize * 1.04);
 
   const label1 = "Quantum Verified";
   const label2 = verificationUrl;
   const track1 = 0.06;
   const track2 = 0.04;
-  const yQuantumTop = quantumY - quantumFontSize;
-  const yUrlTop = urlY - urlFontSize;
 
   ctx.save();
   ctx.globalAlpha = 0.96;
@@ -383,7 +382,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
     y: yUrlTop,
     size: urlFontSize,
     tracking: track2,
-    lineWidth: Math.max(1, Math.round(urlFontSize * 0.18)),
+    lineWidth: Math.max(1, Math.round(urlFontSize * 0.16)),
     strokeStyle: "rgba(0,0,0,0.35)",
   });
   strokeVectorText({
@@ -393,7 +392,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
     y: yUrlTop,
     size: urlFontSize,
     tracking: track2,
-    lineWidth: Math.max(1, Math.round(urlFontSize * 0.12)),
+    lineWidth: Math.max(1, Math.round(urlFontSize * 0.10)),
     strokeStyle: "rgba(255,255,255,0.86)",
   });
   ctx.restore();
