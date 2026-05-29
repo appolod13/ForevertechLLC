@@ -266,7 +266,15 @@ function buildBackQrTargetUrl(origin: string, bannerText: string, qrUrl?: string
 
 async function buildQrStampPng(params: { url: string; stampSide: number; backgroundColor?: string }) {
   const stampSide = Math.max(220, Math.trunc(params.stampSide));
-  const qrSide = Math.max(160, stampSide - 72);
+  const border = Math.max(12, Math.round(stampSide * 0.04));
+  const topPad = Math.max(16, Math.round(border * 0.9));
+  const gap = Math.max(10, Math.round(border * 0.75));
+  const bottomPad = Math.max(18, Math.round(border * 0.9));
+  const urlFontSize = Math.max(11, Math.min(22, Math.round(stampSide * 0.03)));
+  const quantumFontSize = Math.max(16, Math.min(34, Math.round(stampSide * 0.06)));
+  const labelGap = Math.max(6, Math.round(gap * 0.7));
+  const labelAreaH = quantumFontSize + labelGap + urlFontSize;
+  const qrSide = Math.max(160, Math.round(stampSide - topPad - gap - labelAreaH - bottomPad));
   const logoJpg = await getForevertechLogoJpg();
   const bgRgb = parseColorToRgb(params.backgroundColor || "") || { r: 255, g: 31, b: 93 };
   const bgHex = rgbToHex(bgRgb);
@@ -279,7 +287,6 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
 
   const qrModulesOnly = await removeExactColorToAlpha({ input: qrFull, rgb: bgRgb });
 
-  const border = Math.max(12, Math.round(stampSide * 0.04));
   const corner = Math.max(18, Math.round(stampSide * 0.14));
 
   const stampBg = await sharp({
@@ -307,7 +314,7 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
     .toBuffer();
 
   const qrLeft = Math.floor((stampSide - qrSide) / 2);
-  const qrTop = Math.floor((stampSide - qrSide) / 2);
+  const qrTop = topPad;
 
   let logoFull: Buffer | null = null;
   if (logoJpg) {
@@ -358,11 +365,8 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
   ctx.drawImage(img, 0, 0);
 
   const centerX = 8 + stampSide / 2;
-  const urlFontSize = Math.max(12, Math.min(26, Math.round(stampSide * 0.034)));
-  const quantumFontSize = Math.max(18, Math.min(46, Math.round(stampSide * 0.072)));
-  const bottomPad = Math.max(26, Math.round(border * 1.2));
-  const yUrlTop = 8 + stampSide - bottomPad - urlFontSize;
-  const yQuantumTop = yUrlTop - Math.round(quantumFontSize * 1.04);
+  const label1Y = 8 + qrTop + qrSide + gap;
+  const label2Y = label1Y + quantumFontSize + labelGap;
 
   const label1 = "Quantum Verified";
   const label2 = verificationUrl;
@@ -371,49 +375,60 @@ async function buildQrStampPng(params: { url: string; stampSide: number; backgro
 
   ctx.save();
   ctx.globalAlpha = 0.96;
+  const maxW = Math.max(60, stampSide - border * 2);
   const w1 = measureVectorTextWidth(label1, quantumFontSize, track1);
+  const s1 = Math.max(0.75, Math.min(2.6, maxW / Math.max(1, w1)));
+  ctx.save();
+  ctx.translate(centerX, label1Y);
+  ctx.scale(s1, 1);
   strokeVectorText({
     ctx,
     text: label1,
-    x: centerX - w1 / 2,
-    y: yQuantumTop,
+    x: -w1 / 2,
+    y: 0,
     size: quantumFontSize,
     tracking: track1,
-    lineWidth: Math.max(2, Math.round(quantumFontSize * 0.22)),
+    lineWidth: Math.max(2, Math.round(quantumFontSize * 0.22)) / s1,
     strokeStyle: "rgba(0,0,0,0.55)",
   });
   strokeVectorText({
     ctx,
     text: label1,
-    x: centerX - w1 / 2,
-    y: yQuantumTop,
+    x: -w1 / 2,
+    y: 0,
     size: quantumFontSize,
     tracking: track1,
-    lineWidth: Math.max(1, Math.round(quantumFontSize * 0.14)),
+    lineWidth: Math.max(1, Math.round(quantumFontSize * 0.14)) / s1,
     strokeStyle: "rgba(255,255,255,0.92)",
   });
+  ctx.restore();
 
   const w2 = measureVectorTextWidth(label2, urlFontSize, track2);
+  const s2 = Math.max(0.75, Math.min(3.2, maxW / Math.max(1, w2)));
+  ctx.save();
+  ctx.translate(centerX, label2Y);
+  ctx.scale(s2, 1);
   strokeVectorText({
     ctx,
     text: label2,
-    x: centerX - w2 / 2,
-    y: yUrlTop,
+    x: -w2 / 2,
+    y: 0,
     size: urlFontSize,
     tracking: track2,
-    lineWidth: Math.max(1, Math.round(urlFontSize * 0.16)),
+    lineWidth: Math.max(1, Math.round(urlFontSize * 0.16)) / s2,
     strokeStyle: "rgba(0,0,0,0.35)",
   });
   strokeVectorText({
     ctx,
     text: label2,
-    x: centerX - w2 / 2,
-    y: yUrlTop,
+    x: -w2 / 2,
+    y: 0,
     size: urlFontSize,
     tracking: track2,
-    lineWidth: Math.max(1, Math.round(urlFontSize * 0.10)),
+    lineWidth: Math.max(1, Math.round(urlFontSize * 0.10)) / s2,
     strokeStyle: "rgba(255,255,255,0.86)",
   });
+  ctx.restore();
   ctx.restore();
 
   return canvas.toBuffer("image/png");
