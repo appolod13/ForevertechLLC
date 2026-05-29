@@ -458,7 +458,7 @@ function StudioPageInner() {
 
           successData = data;
           if (ipfsEnabled) {
-            setPipelineStage('IPFS upload');
+            setPipelineStage('Link upload');
             setProgress(92);
           }
           setEtaSeconds(0);
@@ -987,11 +987,11 @@ function StudioPageInner() {
                 </label>
                 <label className={`flex items-center gap-2 text-sm p-2 rounded-lg border transition-all cursor-pointer ${ipfsEnabled ? 'border-green-500 bg-green-500/10 shadow-[0_0_15px_rgba(34,197,94,0.3)]' : 'border-gray-700 hover:border-gray-600'}`}>
                   <input type="checkbox" className="w-4 h-4 accent-green-500" checked={ipfsEnabled} onChange={e => setIpfsEnabled(e.target.checked)} />
-                  <span className={ipfsEnabled ? 'text-green-300 font-semibold' : 'text-gray-300'}>IPFS Upload</span>
+                  <span className={ipfsEnabled ? 'text-green-300 font-semibold' : 'text-gray-300'}>Public Link Upload</span>
                 </label>
               </div>
               <div className="text-xs text-gray-400">
-                IPFS Upload saves your generated image to IPFS and provides a shareable, public link. Turn this on if you want a more reliable link for printing and sharing. Uploading can take longer. Avoid using private or sensitive images.
+                Public Link Upload saves your generated image and provides a shareable, public link. Turn this on if you want a more reliable link for printing and sharing. Uploading can take longer. Avoid using private or sensitive images.
               </div>
               <button 
                 onClick={generateImage}
@@ -1054,7 +1054,7 @@ function StudioPageInner() {
               {typeof generationMetadata?.params?.ipfs_url === 'string' && (
                 <div className="mt-4 p-3 rounded-lg bg-blue-900/30 border border-blue-500/30 flex items-center justify-between text-sm">
                   <span className="text-blue-300 font-mono truncate max-w-[80%]">
-                    IPFS: {String(generationMetadata.params.ipfs_url)}
+                    Link: {String(generationMetadata.params.ipfs_url)}
                   </span>
                   <a 
                     href={String(generationMetadata.params.ipfs_url).replace('ipfs://', 'https://ipfs.io/ipfs/')} 

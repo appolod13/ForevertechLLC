@@ -44,6 +44,9 @@ export function Header() {
     { href: '/gallery', label: 'Gallery', visible: true },
     { href: '/faqs', label: 'FAQs', visible: true },
     { href: '/support', label: 'Support', visible: true },
+    { href: '/shipping-policy', label: 'Shipping', visible: true },
+    { href: '/refund-policy', label: 'Refunds', visible: true },
+    { href: '/terms', label: 'Terms', visible: true },
     { href: '/privacy-policy', label: 'Privacy', visible: true },
     { href: '/admin', label: 'Admin', visible: showAdmin },
     { href: '/tools', label: 'Tools', visible: true },
@@ -238,6 +241,27 @@ export function Header() {
               onClick={() => setIsMobileMenuOpen(false)}
             >
               Support
+            </Link>
+            <Link
+              href="/shipping-policy"
+              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Shipping Policy
+            </Link>
+            <Link
+              href="/refund-policy"
+              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Refund & Return Policy
+            </Link>
+            <Link
+              href="/terms"
+              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Terms of Service
             </Link>
             <Link 
               href="/privacy-policy" 

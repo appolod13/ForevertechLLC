@@ -309,6 +309,17 @@ function PixelQryptContent() {
                       Put on T-Shirt
                     </Link>
                   </div>
+                  <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-xs text-zinc-300">
+                    Download access is delivered instantly after a successful payment. For help with access or refund questions, see{" "}
+                    <Link className="text-blue-300 hover:text-blue-200" href="/refund-policy">
+                      Refund & Return Policy
+                    </Link>{" "}
+                    or contact{" "}
+                    <a className="text-blue-300 hover:text-blue-200" href="mailto:support@forevertech.tech">
+                      support@forevertech.tech
+                    </a>
+                    .
+                  </div>
                 </div>
               </div>
             ) : null}

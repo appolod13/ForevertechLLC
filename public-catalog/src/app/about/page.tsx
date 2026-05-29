@@ -70,7 +70,7 @@ export default function AboutPage() {
             </div>
             <ul className="mt-4 space-y-2 text-gray-300">
               <li>Prompt-to-image generation with clear outputs you can preview before checkout.</li>
-              <li>Optional IPFS-style publishing paths for resilient hosting and sharing.</li>
+              <li>Optional publishing paths for resilient hosting and sharing.</li>
               <li>Safety-first prompting tools and controlled integrations for posting and fulfillment.</li>
             </ul>
           </div>

@@ -235,7 +235,7 @@ export function CatalogItem({
           <div className="absolute bottom-3 left-3">
             <span className="inline-flex items-center rounded-full bg-blue-500/20 px-2 py-1 text-xs font-medium text-blue-200 backdrop-blur-md border border-blue-500/30">
               <ShieldCheck className="mr-1 h-3 w-3" />
-              IPFS Verified
+              Published
             </span>
           </div>
         )}

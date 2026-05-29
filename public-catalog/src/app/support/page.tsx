@@ -19,6 +19,7 @@ export default function SupportPage() {
   const [call, setCall] = useState({ phoneNumber: '', reason: '' });
   const [callStatus, setCallStatus] = useState('');
   const [viewMode, setViewMode] = useState<'customer' | 'agent'>('customer');
+  const [showAdmin, setShowAdmin] = useState(false);
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -41,6 +42,24 @@ export default function SupportPage() {
     };
     fetchStatus();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      const res = await fetch('/api/admin/me', { cache: 'no-store' }).catch(() => null);
+      const json: unknown = res ? await res.json().catch(() => null) : null;
+      const ok = Boolean(res && res.ok && json && typeof json === 'object' && 'success' in json && (json as { success?: unknown }).success === true);
+      if (!cancelled) setShowAdmin(ok);
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!showAdmin && viewMode === 'agent') setViewMode('customer');
+  }, [showAdmin, viewMode]);
 
   const submitTicket = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,18 +118,34 @@ export default function SupportPage() {
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-4xl font-bold">Customer Support Center</h1>
           <div className="flex gap-3">
-            <button 
-              onClick={() => setViewMode(viewMode === 'customer' ? 'agent' : 'customer')}
-              className="text-xs bg-gray-800 border border-gray-600 px-3 py-1 rounded hover:bg-gray-700 transition-colors"
-            >
-              Switch to {viewMode === 'customer' ? 'Agent' : 'Customer'} View
-            </button>
+            {showAdmin ? (
+              <button
+                onClick={() => setViewMode(viewMode === 'customer' ? 'agent' : 'customer')}
+                className="text-xs bg-gray-800 border border-gray-600 px-3 py-1 rounded hover:bg-gray-700 transition-colors"
+              >
+                Switch to {viewMode === 'customer' ? 'Agent' : 'Customer'} View
+              </button>
+            ) : null}
             <button 
               onClick={() => router.push('/')}
               className="text-xs bg-white text-black font-bold px-4 py-1 rounded hover:bg-gray-200 transition-colors"
             >
               Done
             </button>
+          </div>
+        </div>
+
+        <div className="mb-10 rounded-2xl border border-gray-700 bg-gray-900 p-6">
+          <div className="text-lg font-semibold">ForeverTech Support</div>
+          <div className="mt-2 grid gap-1 text-sm text-gray-300">
+            <div>
+              Email:{" "}
+              <a className="text-blue-300 hover:text-blue-200" href="mailto:support@forevertech.tech">
+                support@forevertech.tech
+              </a>
+            </div>
+            <div>Address: 84 Luisa St, Brooklyn, NY 10223</div>
+            <div>Hours: 24/7</div>
           </div>
         </div>
         
@@ -120,9 +155,6 @@ export default function SupportPage() {
             <div className="grid grid-cols-1 gap-8 w-full max-w-5xl">
               <div className="flex flex-col items-center">
                 <CallAgent identity="support-agent-1" />
-                <div className="mt-8 w-full max-w-md text-sm text-gray-500 bg-black/20 p-4 rounded-lg">
-                  <p><strong>Note:</strong> System is using Test Credentials. Real payments are simulated.</p>
-                </div>
               </div>
             </div>
           </div>

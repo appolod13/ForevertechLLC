@@ -174,6 +174,17 @@ export default function FaqsPage() {
               Card payments are processed securely via Stripe. You receive a physical product printed and shipped through Printify.
             </p>
             <p>
+              See{" "}
+              <Link className="text-blue-300 hover:text-blue-200" href="/refund-policy">
+                Refund & Return Policy
+              </Link>{" "}
+              and{" "}
+              <Link className="text-blue-300 hover:text-blue-200" href="/shipping-policy">
+                Shipping Policy
+              </Link>
+              .
+            </p>
+            <p>
               If the Quantum Verified step is temporarily unavailable, the system is designed to fall back safely (and may refund the premium portion where
               applicable).
             </p>
