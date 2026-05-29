@@ -353,16 +353,17 @@ async function buildCustomerBackTextOverlayPng(params: { width: number; height: 
 
   const safeW = Math.max(1, measuredTextW || 1);
   const scaleX = Math.max(0.7, Math.min(3.4, maxW / safeW));
+  const scaleY = 1.18;
 
   ctx.save();
   ctx.globalAlpha = 0.92;
   ctx.fillStyle = 'rgba(255,255,255,0.96)';
   ctx.strokeStyle = 'rgba(0,0,0,0.65)';
-  ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.10));
+  ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.10)) / Math.max(scaleX, scaleY);
   ctx.miterLimit = 2;
   ctx.font = `${weight} ${fontSize}px sans-serif`;
   ctx.translate(x, y);
-  ctx.scale(scaleX, 1);
+  ctx.scale(scaleX, scaleY);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   if (typeof (ctx as unknown as { strokeText?: unknown }).strokeText === 'function') {
