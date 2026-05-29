@@ -77,9 +77,14 @@ export function Header() {
             Studio
           </Link>
           {showDevTools ? (
-            <Link href="/scanner" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-              Scanner
-            </Link>
+            <>
+              <Link href="/tools" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
+                Tools
+              </Link>
+              <Link href="/scanner" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
+                Scanner
+              </Link>
+            </>
           ) : null}
           <Link href="/gallery" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
             Gallery
@@ -198,13 +203,22 @@ export function Header() {
               PixelQrypt™
             </Link>
             {showDevTools ? (
-              <Link 
-                href="/scanner" 
-                className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Scanner
-              </Link>
+              <>
+                <Link
+                  href="/tools"
+                  className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Tools
+                </Link>
+                <Link 
+                  href="/scanner" 
+                  className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Scanner
+                </Link>
+              </>
             ) : null}
             <Link 
               href="/gallery" 

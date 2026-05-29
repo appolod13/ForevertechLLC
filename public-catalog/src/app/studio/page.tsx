@@ -5,7 +5,6 @@ import { useSearchParams } from 'next/navigation';
 import { Header } from '../../components/Header';
 import { DataDashboardButton } from '../../components/DataDashboardButton';
 import { FusionAI } from '../../components/FusionAI';
-import BrainRandomizer from '../../components/BrainRandomizer';
 import { LatestAIImage } from '../../components/LatestAIImage';
 import { Send, Sparkles } from 'lucide-react';
 import styles from './page.module.css';
@@ -1070,10 +1069,6 @@ function StudioPageInner() {
             <FusionAI 
               prompt={prompt} 
               baseImageUrl={generatedImage}
-              onImageGenerated={(url) => setGeneratedImage(url)} 
-            />
-
-            <BrainRandomizer 
               onImageGenerated={(url) => setGeneratedImage(url)} 
             />
 
