@@ -1,9 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { cn, MIRROR_API_URL } from '@/lib/utils';
-import { Loader2, ImageOff, ShoppingBag } from 'lucide-react';
+import { Loader2, ImageOff } from 'lucide-react';
 
 interface AIImageResponse {
   success: boolean;
@@ -11,7 +10,13 @@ interface AIImageResponse {
   filename: string;
 }
 
-export function LatestAIImage({ overrideUrl }: { overrideUrl?: string }) {
+export function LatestAIImage({
+  overrideUrl,
+  onResolvedUrl,
+}: {
+  overrideUrl?: string;
+  onResolvedUrl?: (url: string | null) => void;
+}) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -60,6 +65,10 @@ export function LatestAIImage({ overrideUrl }: { overrideUrl?: string }) {
     fetchImage();
   }, [overrideUrl]);
 
+  useEffect(() => {
+    onResolvedUrl?.(imageUrl);
+  }, [imageUrl, onResolvedUrl]);
+
   if (error) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center bg-zinc-900/50 p-6 text-zinc-500">
@@ -86,17 +95,6 @@ export function LatestAIImage({ overrideUrl }: { overrideUrl?: string }) {
             onError={() => setError(true)}
             loading="eager"
           />
-          {!loading && (
-            <div className="absolute bottom-0 left-0 right-0 translate-y-full transform bg-black/70 p-4 backdrop-blur-sm transition-transform duration-300 group-hover:translate-y-0">
-              <Link 
-                href={`/customize?imageUrl=${encodeURIComponent(imageUrl)}`}
-                className="flex w-full items-center justify-center gap-2 rounded-md bg-white px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-zinc-200"
-              >
-                <ShoppingBag className="h-4 w-4" />
-                Customize Product
-              </Link>
-            </div>
-          )}
         </>
       )}
     </div>

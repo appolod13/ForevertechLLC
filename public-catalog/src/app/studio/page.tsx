@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Header } from '../../components/Header';
 import { DataDashboardButton } from '../../components/DataDashboardButton';
@@ -33,6 +34,7 @@ function StudioPageInner() {
   const [crossOptimizeError, setCrossOptimizeError] = useState<string | null>(null);
   const [crossOptimizeReports, setCrossOptimizeReports] = useState<Array<{ model: string; role: string; output: string; error?: string }> | null>(null);
   const [generatedImage, setGeneratedImage] = useState('');
+  const [latestDropImageUrl, setLatestDropImageUrl] = useState<string | null>(null);
   const [generatedTextContent, setGeneratedTextContent] = useState('');
   const [draftImage, setDraftImage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -930,11 +932,11 @@ function StudioPageInner() {
   return (
     <div className="min-h-screen bg-gray-900 text-white" data-hydrated={hydrated ? '1' : '0'}>
       <Header />
-      <main className="max-w-6xl mx-auto p-8">
-        <h1 className="text-4xl font-bold mb-8">Creator Studio</h1>
+      <main className="max-w-6xl mx-auto p-4 sm:p-6 md:p-8">
+        <h1 className="text-3xl sm:text-4xl font-bold mb-6 sm:mb-8">Creator Studio</h1>
         
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-          <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-8 rounded-xl border border-gray-700">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-12">
+          <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-4 sm:p-6 lg:p-8 rounded-xl border border-gray-700">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <Sparkles className="text-purple-400" />
@@ -1075,8 +1077,24 @@ function StudioPageInner() {
             <div className="mt-8 border-t border-gray-700 pt-8">
               <h3 className="text-xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600">Latest Drops</h3>
               <div className="aspect-video relative rounded-xl overflow-hidden border border-gray-700 shadow-2xl">
-                <LatestAIImage key={lastGenTimestamp} overrideUrl={generatedImage} />
+                <LatestAIImage
+                  key={lastGenTimestamp}
+                  overrideUrl={generatedImage}
+                  onResolvedUrl={setLatestDropImageUrl}
+                />
               </div>
+              {latestDropImageUrl ? (
+                <Link
+                  href={`/customize?imageUrl=${encodeURIComponent(latestDropImageUrl)}${
+                    (prompt || generatedTextContent).trim()
+                      ? `&prompt=${encodeURIComponent((prompt || generatedTextContent).trim())}`
+                      : ''
+                  }`}
+                  className="mt-4 w-full py-3 rounded-lg font-bold bg-white hover:bg-zinc-200 text-black flex items-center justify-center"
+                >
+                  Customize Product
+                </Link>
+              ) : null}
               {generatedImage && generatedTextContent && (
                 <button
                   onClick={() => {
@@ -1093,7 +1111,10 @@ function StudioPageInner() {
             </div>
           </div>
 
-          <div id="multi-channel-poster" className="bg-gradient-to-b from-gray-800 to-gray-900 p-8 rounded-xl border border-gray-700">
+          <div
+            id="multi-channel-poster"
+            className="bg-gradient-to-b from-gray-800 to-gray-900 p-4 sm:p-6 lg:p-8 rounded-xl border border-gray-700"
+          >
             <div className="flex items-center gap-3 mb-6">
               <Send className="text-blue-400" />
               <h2 className="text-2xl font-bold">Multi-Channel Poster</h2>

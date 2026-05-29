@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { ShoppingBag, Menu, X, User } from 'lucide-react';
 import { LiveBadge } from './LiveBadge';
 import { useCart } from '@/context/CartContext';
@@ -17,6 +18,8 @@ export function Header() {
   const { user, logout } = useAuth();
   const [showAdmin, setShowAdmin] = useState(false);
   const showDevTools = process.env.NODE_ENV !== 'production' || showAdmin;
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     let cancelled = false;
@@ -31,6 +34,25 @@ export function Header() {
       cancelled = true;
     };
   }, []);
+
+  const navItems = [
+    { href: '/', label: 'Latest Drops', visible: true },
+    { href: '/about', label: 'About', visible: true },
+    { href: '/governance', label: 'Governance', visible: true },
+    { href: '/pixelqrypt', label: 'PixelQrypt™', visible: true },
+    { href: '/studio', label: 'Studio', visible: true },
+    { href: '/gallery', label: 'Gallery', visible: true },
+    { href: '/faqs', label: 'FAQs', visible: true },
+    { href: '/support', label: 'Support', visible: true },
+    { href: '/privacy-policy', label: 'Privacy', visible: true },
+    { href: '/admin', label: 'Admin', visible: showAdmin },
+    { href: '/tools', label: 'Tools', visible: true },
+    { href: '/scanner', label: 'Scanner', visible: showDevTools }
+  ].filter((item) => item.visible);
+
+  const selectedHref =
+    navItems.find((item) => pathname === item.href || (item.href !== '/' && pathname?.startsWith(`${item.href}/`)))
+      ?.href ?? '';
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-md">
@@ -55,49 +77,27 @@ export function Header() {
           </div>
         </div>
 
-        <nav className="hidden md:flex items-center gap-6">
-          <Link href="/" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-            Latest Drops
-          </Link>
-          {showAdmin ? (
-            <Link href="/admin" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-              Admin
-            </Link>
-          ) : null}
-          <Link href="/about" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-            About
-          </Link>
-          <Link href="/governance" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-            Governance
-          </Link>
-          <Link href="/pixelqrypt" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-            PixelQrypt™
-          </Link>
-          <Link href="/studio" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-            Studio
-          </Link>
-          {showDevTools ? (
-            <>
-              <Link href="/tools" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-                Tools
-              </Link>
-              <Link href="/scanner" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-                Scanner
-              </Link>
-            </>
-          ) : null}
-          <Link href="/gallery" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-            Gallery
-          </Link>
-          <Link href="/faqs" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-            FAQs
-          </Link>
-          <Link href="/support" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-            Support
-          </Link>
-          <Link href="/privacy-policy" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-            Privacy
-          </Link>
+        <nav className="hidden md:flex items-center gap-3">
+          <span className="text-xs font-medium text-zinc-500">Navigate</span>
+          <select
+            aria-label="Navigate"
+            value={selectedHref}
+            onChange={(e) => {
+              const href = e.target.value;
+              if (!href) return;
+              router.push(href);
+            }}
+            className="min-w-[220px] bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-200 focus:ring-2 focus:ring-primary outline-none transition-all"
+          >
+            <option value="" disabled>
+              Menu…
+            </option>
+            {navItems.map((item) => (
+              <option key={item.href} value={item.href}>
+                {item.label}
+              </option>
+            ))}
+          </select>
         </nav>
 
         <div className="flex items-center gap-4">
@@ -202,23 +202,21 @@ export function Header() {
             >
               PixelQrypt™
             </Link>
+            <Link
+              href="/tools"
+              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Tools
+            </Link>
             {showDevTools ? (
-              <>
-                <Link
-                  href="/tools"
-                  className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  Tools
-                </Link>
-                <Link 
-                  href="/scanner" 
-                  className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  Scanner
-                </Link>
-              </>
+              <Link
+                href="/scanner"
+                className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Scanner
+              </Link>
             ) : null}
             <Link 
               href="/gallery" 
