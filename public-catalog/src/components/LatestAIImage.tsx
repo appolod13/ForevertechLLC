@@ -22,20 +22,50 @@ export function LatestAIImage({
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    const resolveBase = () => {
+      const siteOrigin = window.location.origin;
+      const raw = String(MIRROR_API_URL || '').trim().replace(/\/$/, '');
+      if (!raw) return siteOrigin;
+      try {
+        const u = new URL(raw);
+        if (window.location.protocol === 'https:' && u.protocol === 'http:') return siteOrigin;
+        return u.toString().replace(/\/$/, '');
+      } catch {
+        return siteOrigin;
+      }
+    };
+
+    const resolveUrl = (input: string) => {
+      const s = String(input || '').trim();
+      if (!s) return '';
+      if (s.startsWith('data:') || s.startsWith('blob:') || s.startsWith('http://') || s.startsWith('https://')) return s;
+      const base = resolveBase();
+      try {
+        return new URL(s, base).toString();
+      } catch {
+        return '';
+      }
+    };
+
     if (overrideUrl) {
-      const normalized =
-        overrideUrl.startsWith("http") || overrideUrl.startsWith("data:")
-          ? overrideUrl
-          : `${MIRROR_API_URL}${overrideUrl.startsWith("/") ? overrideUrl : `/${overrideUrl}`}`;
-      setImageUrl(normalized);
-      setLoading(false);
-      setError(false);
+      const normalized = resolveUrl(overrideUrl);
+      if (normalized) {
+        setImageUrl(normalized);
+        setLoading(false);
+        setError(false);
+      } else {
+        setImageUrl(null);
+        setLoading(false);
+        setError(true);
+      }
       return;
     }
 
     async function fetchImage() {
       try {
-        const res = await fetch(`${MIRROR_API_URL}/api/latest-ai-image`).catch(() => {
+        const base = resolveBase();
+        const endpoint = base === window.location.origin ? '/api/latest-ai-image' : `${base}/api/latest-ai-image`;
+        const res = await fetch(endpoint).catch(() => {
           throw new Error('Network error: Failed to fetch');
         });
         if (!res.ok) throw new Error('Failed to fetch');
@@ -47,10 +77,8 @@ export function LatestAIImage({
 
         const data: AIImageResponse = await res.json();
         if (data.success && data.imageUrl) {
-          // Ensure the URL is absolute or properly proxied
-          const fullUrl = data.imageUrl.startsWith('http') 
-            ? data.imageUrl 
-            : `${MIRROR_API_URL}${data.imageUrl}`;
+          const fullUrl = resolveUrl(data.imageUrl);
+          if (!fullUrl) throw new Error('Invalid image url');
           setImageUrl(fullUrl);
         } else {
           setError(true);
