@@ -9,6 +9,8 @@ export const supabase = supabaseUrl && supabaseAnonKey
 
 export const getServiceSupabase = () => {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-  if (!supabaseUrl || !serviceKey) return null;
-  return createClient(supabaseUrl, serviceKey);
+  if (!supabaseUrl) return null;
+  if (serviceKey) return createClient(supabaseUrl, serviceKey);
+  if (supabaseAnonKey) return createClient(supabaseUrl, supabaseAnonKey);
+  return null;
 };
