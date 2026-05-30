@@ -514,10 +514,10 @@ export default function CheckoutPage() {
       
       <div className="mt-8 flex justify-center">
         <button 
-          onClick={() => router.push('/')}
+          onClick={() => router.push('/cart')}
           className="text-sm bg-white text-black font-bold px-8 py-3 rounded-full hover:bg-gray-200 transition-colors shadow-lg"
         >
-          Done
+          Back to Cart
         </button>
       </div>
     </div>
