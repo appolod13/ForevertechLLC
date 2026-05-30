@@ -151,6 +151,8 @@ export function CatalogItem({
         originalFilename: mediaUrl || 'Unknown File',
         metadata: {
           ...metadata,
+          productId: 'tee',
+          variant: selectedSize,
           imageError: hasError,
           originalPrompt: metadata?.prompt || metadata?.title || 'Unknown Prompt'
         }

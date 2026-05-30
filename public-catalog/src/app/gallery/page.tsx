@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
 import { Heart, RefreshCw, User, BookOpen, Eye, ShoppingCart, Zap, Key } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useCart } from '@/context/CartContext';
 import PixelQryptModal from '@/components/PixelQryptModal';
 
 interface GalleryItem {
@@ -26,6 +27,7 @@ export default function GalleryPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'favorites' | 'all' | 'quantum'>('all');
   const { user } = useAuth();
+  const { addToCart } = useCart();
   const [deviceId, setDeviceId] = useState<string>('');
   const [pixelQryptModalOpen, setPixelQryptModalOpen] = useState(false);
 
@@ -100,6 +102,29 @@ export default function GalleryPage() {
     if (filter === 'quantum') return !!i.isQuantumVerified;
     return true;
   });
+
+  const addGalleryItemToCart = async (item: GalleryItem) => {
+    const size = 'L' as const;
+    await addToCart({
+      id: `${item.id}-${size}`,
+      title: `Quantum Asset ${String(item.id || '').slice(0, 8)} (Size: ${size})`,
+      price: 49.99,
+      quantity: 1,
+      currency: 'usd',
+      size,
+      imageUrl: item.imageUrl,
+      description: item.prompt,
+      originalPrompt: item.prompt,
+      originalFilename: item.id,
+      metadata: {
+        productId: 'tee',
+        variant: size,
+        prompt: item.prompt,
+        title: `Quantum Asset ${String(item.id || '').slice(0, 8)}`,
+        source: 'gallery',
+      },
+    });
+  };
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
@@ -202,7 +227,13 @@ export default function GalleryPage() {
                       <Eye className="w-4 h-4" /> Preview
                     </button>
                     <button 
-                      onClick={() => router.push('/cart')}
+                      onClick={async () => {
+                        try {
+                          await addGalleryItemToCart(item);
+                        } finally {
+                          router.push('/cart');
+                        }
+                      }}
                       className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-lg text-sm transition-colors"
                     >
                       <ShoppingCart className="w-4 h-4" /> Purchase

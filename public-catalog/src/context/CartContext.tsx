@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { useAuth } from './AuthContext';
 import { fetchWithRetry } from '../lib/integrations/http';
 
@@ -11,7 +11,10 @@ function generateUUID() {
   });
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_CART_API_BASE || '';
+function normalizeBaseUrl(raw: string) {
+  const t = String(raw || '').trim().replace(/\/$/, '');
+  return t;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -80,6 +83,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [deviceId, setDeviceId] = useState<string>('');
 
+  const apiBase = useMemo(() => {
+    const envBase = normalizeBaseUrl(process.env.NEXT_PUBLIC_CART_API_BASE || '');
+    if (!envBase) return '';
+    if (typeof window === 'undefined') return envBase;
+    const origin = window.location.origin;
+    if (envBase === origin) return envBase;
+    return process.env.NODE_ENV === 'production' ? '' : envBase;
+  }, []);
+
+  const apiUrl = useCallback(
+    (path: string) => `${apiBase}${path.startsWith('/') ? '' : '/'}${path}`,
+    [apiBase],
+  );
+
   useEffect(() => {
     let id = localStorage.getItem('device_id');
     if (!id) {
@@ -104,18 +121,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     if (!deviceId) return;
     setIsLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (user?.id) params.append('userId', user.id);
-      params.append('deviceId', deviceId);
-      const res = await fetch(`${API_BASE}/api/cart?${params.toString()}`);
-      const data = await res.json();
-      if (data.success) {
-        const next = Array.isArray(data.items) ? (data.items as CartItem[]) : [];
-        const stored = readStoredCart(deviceId);
-        if (next.length > 0 || stored.length === 0) {
-          setItems(next);
-        }
-      }
+      const stored = readStoredCart(deviceId);
+      setItems(stored);
     } catch (error) {
       console.error('Failed to fetch cart:', error);
       const stored = readStoredCart(deviceId);
@@ -123,7 +130,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id, deviceId]);
+  }, [deviceId]);
 
   useEffect(() => {
     fetchCart();
@@ -142,56 +149,59 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [fetchCart]);
 
   const addToCart = async (item: CartItem) => {
+    setItems((prev) => {
+      const idx = prev.findIndex((x) => x.id === item.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        const existing = next[idx];
+        next[idx] = { ...existing, quantity: (existing.quantity || 1) + (item.quantity || 1) };
+        return next;
+      }
+      return [...prev, item];
+    });
+    try { localStorage.setItem('cart_sync', String(Date.now())); } catch {}
     try {
       const payload = { item, userId: user?.id, deviceId };
-      const res = await fetchWithRetry(`${API_BASE}/api/cart/add`, {
+      const res = await fetchWithRetry(apiUrl('/api/cart/add'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: payload
       });
-      if (isSuccessResponse(res) && res.success) {
-        fetchCart();
-        try { localStorage.setItem('cart_sync', String(Date.now())); } catch {}
-      } else {
-        fetchCart();
-        try { localStorage.setItem('cart_sync', String(Date.now())); } catch {}
-      }
+      if (!(isSuccessResponse(res) && res.success)) throw new Error('cart_add_failed');
     } catch (error) {
-      console.error('Add to cart failed:', error);
+      console.error('Add to cart server sync failed:', error);
     }
   };
 
   const removeFromCart = async (itemId: string) => {
+    setItems((prev) => prev.filter((x) => x.id !== itemId));
+    try { localStorage.setItem('cart_sync', String(Date.now())); } catch {}
     try {
       const payload = { itemId, userId: user?.id, deviceId };
-      const res = await fetchWithRetry(`${API_BASE}/api/cart/remove`, {
+      const res = await fetchWithRetry(apiUrl('/api/cart/remove'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: payload
       });
-      if (isSuccessResponse(res) && res.success) {
-        fetchCart();
-        try { localStorage.setItem('cart_sync', String(Date.now())); } catch {}
-      }
+      if (!(isSuccessResponse(res) && res.success)) throw new Error('cart_remove_failed');
     } catch (error) {
-      console.error('Remove from cart failed:', error);
+      console.error('Remove from cart server sync failed:', error);
     }
   };
 
   const clearCart = async () => {
+    setItems([]);
+    try { localStorage.setItem('cart_sync', String(Date.now())); } catch {}
     try {
       const payload = { userId: user?.id, deviceId };
-      const res = await fetchWithRetry(`${API_BASE}/api/cart/clear`, {
+      const res = await fetchWithRetry(apiUrl('/api/cart/clear'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: payload
       });
-      if (isSuccessResponse(res) && res.success) {
-        setItems([]);
-        try { localStorage.setItem('cart_sync', String(Date.now())); } catch {}
-      }
+      if (!(isSuccessResponse(res) && res.success)) throw new Error('cart_clear_failed');
     } catch (error) {
-      console.error('Clear cart failed:', error);
+      console.error('Clear cart server sync failed:', error);
     }
   };
 
@@ -200,18 +210,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const removePurchasedItems = async (itemIds: string[]) => {
     try {
-      for (const itemId of itemIds) {
-        const payload = { itemId, userId: user?.id, deviceId };
-        const res = await fetchWithRetry(`${API_BASE}/api/cart/remove`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: payload
-        });
-        if (!(isSuccessResponse(res) && res.success)) {
-          console.error('Remove purchased item failed:', itemId);
-        }
-      }
-      await fetchCart();
+      setItems((prev) => prev.filter((x) => !itemIds.includes(x.id)));
       try { localStorage.setItem('cart_sync', String(Date.now())); } catch {}
     } catch (error) {
       console.error('Remove purchased items failed:', error);

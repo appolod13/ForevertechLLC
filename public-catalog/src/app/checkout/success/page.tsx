@@ -4,13 +4,23 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
+import { useCart } from '@/context/CartContext';
 
 function CheckoutSuccessInner() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');
+  const { clearCart } = useCart();
   const [finalizeStatus, setFinalizeStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [printifyOrderId, setPrintifyOrderId] = useState<string>('');
   const didRun = useRef(false);
+  const didClearCart = useRef(false);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    if (didClearCart.current) return;
+    didClearCart.current = true;
+    clearCart().catch(() => {});
+  }, [sessionId, clearCart]);
 
   useEffect(() => {
     if (!sessionId) return;
