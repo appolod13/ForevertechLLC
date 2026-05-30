@@ -166,6 +166,9 @@ export default function CheckoutPage() {
     try {
       const deviceId = localStorage.getItem('device_id') || 'anonymous';
       const shippingId = shippingOptionId || (shippingOptions[0]?.id || '');
+      const qrUrlRaw = (formData.qrUrl || '').trim();
+      const qrUrl =
+        qrUrlRaw && !/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(qrUrlRaw) ? `https://${qrUrlRaw}` : qrUrlRaw;
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -178,7 +181,7 @@ export default function CheckoutPage() {
           customerEmail: formData.email,
           userId: user?.id || '',
           deviceId,
-          qrUrl: formData.qrUrl,
+          qrUrl,
           metadata: {
             phone: formData.phone,
             address: formData.address,
@@ -307,7 +310,7 @@ export default function CheckoutPage() {
               <div>
                 <label className="block text-xs font-medium text-zinc-500 mb-1">QR Link (optional)</label>
                 <input
-                  type="url"
+                  type="text"
                   name="qrUrl"
                   value={formData.qrUrl}
                   onChange={handleChange}
