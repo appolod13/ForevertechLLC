@@ -2,8 +2,6 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
-import { MIRROR_API_URL } from '@/lib/utils';
-
 // Define a type for the post structure (aligned with CatalogItem props)
 export interface LivePost {
   id: string;
@@ -48,7 +46,7 @@ export function LiveStatusProvider({ children }: LiveStatusProviderProps) {
     let eventSource: EventSource | null = null;
     let retryTimeout: ReturnType<typeof setTimeout> | null = null;
 
-    const baseUrl = process.env.NEXT_PUBLIC_EVENTS_URL || `${MIRROR_API_URL}/api/events`;
+    const baseUrl = process.env.NEXT_PUBLIC_EVENTS_URL || '/api/events';
 
     const connect = () => {
       // Connect to SSE (only in browser environment)

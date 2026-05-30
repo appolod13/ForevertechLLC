@@ -37,6 +37,7 @@ export default function CheckoutPage() {
   const grandTotal = total + quantumFee + shippingUsd;
 
   const [isProcessing, setIsProcessing] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [guestMode, setGuestMode] = useState(false);
   
   const [formData, setFormData] = useState({
@@ -161,6 +162,7 @@ export default function CheckoutPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsProcessing(true);
+    setCheckoutError(null);
     try {
       const deviceId = localStorage.getItem('device_id') || 'anonymous';
       const shippingId = shippingOptionId || (shippingOptions[0]?.id || '');
@@ -191,10 +193,15 @@ export default function CheckoutPage() {
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to create checkout session');
+      if (!data || typeof data.url !== 'string' || !data.url) {
+        throw new Error('Stripe checkout URL missing');
+      }
       window.location.href = data.url;
       return;
     } catch (error) {
       console.error('Checkout failed', error);
+      const msg = error instanceof Error ? error.message : 'Checkout failed';
+      setCheckoutError(msg);
       setIsProcessing(false);
     }
   };
@@ -442,6 +449,11 @@ export default function CheckoutPage() {
               `Proceed to Payment ($${grandTotal.toFixed(2)})`
             )}
           </button>
+          {checkoutError ? (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+              {checkoutError}
+            </div>
+          ) : null}
         </form>
 
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-6 h-fit">
