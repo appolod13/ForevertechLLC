@@ -159,11 +159,26 @@ async function tryAIGenerate(
     }
 
     const rawImageUrl = d.imageUrl.trim();
-    const imageUrl = rawImageUrl.startsWith("/images/")
-      ? `/api/images/${encodeURIComponent(rawImageUrl.slice("/images/".length))}`
-      : rawImageUrl.startsWith("/") && cfg.quantum.publicBaseUrl.trim()
-        ? `${cfg.quantum.publicBaseUrl.trim().replace(/\/$/, "")}${rawImageUrl}`
-        : rawImageUrl;
+    const imageUrl = (() => {
+      if (rawImageUrl.startsWith("/images/")) {
+        return `/api/images/${encodeURIComponent(rawImageUrl.slice("/images/".length))}`;
+      }
+      if (rawImageUrl.startsWith("http://") || rawImageUrl.startsWith("https://")) {
+        try {
+          const u = new URL(rawImageUrl);
+          if (u.pathname.startsWith("/images/")) {
+            const filename = u.pathname.slice("/images/".length);
+            if (filename) return `/api/images/${encodeURIComponent(filename)}`;
+          }
+        } catch {
+        }
+        return rawImageUrl;
+      }
+      if (rawImageUrl.startsWith("/") && cfg.quantum.publicBaseUrl.trim()) {
+        return `${cfg.quantum.publicBaseUrl.trim().replace(/\/$/, "")}${rawImageUrl}`;
+      }
+      return rawImageUrl;
+    })();
 
     return {
       success: true,
