@@ -28,6 +28,35 @@ function cartStorageKey(deviceId: string) {
   return `ft_cart_${deviceId || 'anonymous'}`;
 }
 
+function inferSize(value: unknown): 'S' | 'M' | 'L' | 'XL' | 'XXL' | undefined {
+  const raw = typeof value === 'string' ? value : '';
+  const m = raw.match(/\bSize:\s*(S|M|L|XL|XXL)\b/i);
+  if (!m) return undefined;
+  const s = m[1].toUpperCase();
+  if (s === 'S' || s === 'M' || s === 'L' || s === 'XL' || s === 'XXL') return s;
+  return undefined;
+}
+
+function normalizeCartItem(item: CartItem): CartItem {
+  const qty = typeof item.quantity === 'number' && Number.isFinite(item.quantity) ? Math.max(1, Math.trunc(item.quantity)) : 1;
+  const size =
+    item.size ||
+    inferSize(item.title) ||
+    inferSize(item.description) ||
+    (typeof item.metadata?.variant === 'string' ? (item.metadata.variant as CartItem['size']) : undefined) ||
+    undefined;
+
+  const metadata: Record<string, unknown> = item.metadata && isRecord(item.metadata) ? { ...item.metadata } : {};
+  if (typeof metadata.productId !== 'string' || !String(metadata.productId || '').trim()) {
+    metadata.productId = 'tee';
+  }
+  if (size && (typeof metadata.variant !== 'string' || !String(metadata.variant || '').trim())) {
+    metadata.variant = size;
+  }
+
+  return { ...item, quantity: qty, size, metadata };
+}
+
 function readStoredCart(deviceId: string): CartItem[] {
   try {
     const raw = localStorage.getItem(cartStorageKey(deviceId));
@@ -36,7 +65,8 @@ function readStoredCart(deviceId: string): CartItem[] {
     if (!Array.isArray(parsed)) return [];
     return parsed
       .map((x) => (isRecord(x) ? (x as CartItem) : null))
-      .filter((x): x is CartItem => Boolean(x && typeof x.id === 'string' && x.id));
+      .filter((x): x is CartItem => Boolean(x && typeof x.id === 'string' && x.id))
+      .map(normalizeCartItem);
   } catch {
     return [];
   }
