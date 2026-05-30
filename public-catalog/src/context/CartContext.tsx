@@ -21,6 +21,30 @@ function isSuccessResponse(value: unknown): value is { success: boolean } {
   return isRecord(value) && typeof value.success === 'boolean';
 }
 
+function cartStorageKey(deviceId: string) {
+  return `ft_cart_${deviceId || 'anonymous'}`;
+}
+
+function readStoredCart(deviceId: string): CartItem[] {
+  try {
+    const raw = localStorage.getItem(cartStorageKey(deviceId));
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((x) => (isRecord(x) ? (x as CartItem) : null))
+      .filter((x): x is CartItem => Boolean(x && typeof x.id === 'string' && x.id));
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredCart(deviceId: string, items: CartItem[]) {
+  try {
+    localStorage.setItem(cartStorageKey(deviceId), JSON.stringify(items));
+  } catch {}
+}
+
 export interface CartItem {
   id: string;
   title: string;
@@ -65,6 +89,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setDeviceId(id);
   }, []);
 
+  useEffect(() => {
+    if (!deviceId) return;
+    const stored = readStoredCart(deviceId);
+    if (stored.length) setItems(stored);
+  }, [deviceId]);
+
+  useEffect(() => {
+    if (!deviceId) return;
+    writeStoredCart(deviceId, items);
+  }, [deviceId, items]);
+
   const fetchCart = useCallback(async () => {
     if (!deviceId) return;
     setIsLoading(true);
@@ -75,10 +110,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const res = await fetch(`${API_BASE}/api/cart?${params.toString()}`);
       const data = await res.json();
       if (data.success) {
-        setItems(data.items || []);
+        const next = Array.isArray(data.items) ? (data.items as CartItem[]) : [];
+        const stored = readStoredCart(deviceId);
+        if (next.length > 0 || stored.length === 0) {
+          setItems(next);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch cart:', error);
+      const stored = readStoredCart(deviceId);
+      if (stored.length) setItems(stored);
     } finally {
       setIsLoading(false);
     }

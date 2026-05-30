@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { quoteShipping } from '@/lib/shippingConfig';
 import { getQuantumStatus } from '@/lib/quantumVerified';
 import { getCart } from '@/lib/cartStore';
+import { getServiceSupabase } from '@/lib/supabase';
 
 function getStripeClient() {
   const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -85,7 +86,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid QR link URL' }, { status: 400 });
     }
 
-    const cartItems = getCart(deviceId);
+    const rawItems = 'items' in b ? (b as Record<string, unknown>).items : null;
+    const cartItems = Array.isArray(rawItems) && rawItems.length > 0 ? rawItems : getCart(deviceId);
 
     if (!Array.isArray(cartItems) || cartItems.length === 0) {
       return NextResponse.json({ error: 'Cart is empty' }, { status: 400 });
@@ -168,6 +170,14 @@ export async function POST(request: Request) {
       });
     }
 
+    const totalAmountCents = lineItems.reduce((sum, li) => {
+      const unitAmount = li?.price_data?.unit_amount;
+      const qty = li?.quantity;
+      const cents = typeof unitAmount === 'number' && Number.isFinite(unitAmount) ? unitAmount : 0;
+      const q = typeof qty === 'number' && Number.isFinite(qty) ? Math.max(0, Math.trunc(qty)) : 0;
+      return sum + cents * q;
+    }, 0);
+
     const origin = getRequestOrigin(request);
     if (!origin) {
       return NextResponse.json({ error: 'Missing site origin. Set NEXT_PUBLIC_SITE_URL.' }, { status: 500 });
@@ -193,6 +203,66 @@ export async function POST(request: Request) {
         ...(metadata || {}),
       }
     });
+
+    const supabase = getServiceSupabase();
+    if (supabase) {
+      const { data: orderRow, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          stripe_checkout_session_id: session.id,
+          user_id: userId || null,
+          device_id: deviceId || null,
+          status: 'pending',
+          total_amount: Number.isFinite(totalAmountCents) ? totalAmountCents : null,
+          currency: 'usd',
+          customer_email: customerEmail || null,
+        })
+        .select('id')
+        .single();
+
+      if (orderError || !orderRow?.id) {
+        try {
+          await stripe.checkout.sessions.expire(session.id);
+        } catch {
+        }
+        return NextResponse.json({ error: orderError?.message || 'Failed to persist order snapshot' }, { status: 500 });
+      }
+
+      const orderItemRows = cartItems.map((item: unknown) => {
+        const rec = isRecord(item) ? (item as Record<string, unknown>) : {};
+        const meta = isRecord(rec.metadata) ? (rec.metadata as Record<string, unknown>) : {};
+        const productId = getString(meta.productId, 64) || getString(rec.productId, 64) || null;
+        const variantId =
+          getString(meta.variantId, 120) ||
+          getString(meta.printifySku, 120) ||
+          getString(meta.variant, 64) ||
+          getString(rec.variantId, 120) ||
+          null;
+        const quantity = Math.max(1, Math.trunc(getNumber(rec.quantity) || 1));
+        const price = resolveUnitAmountCents(item);
+        return {
+          order_id: orderRow.id,
+          product_id: productId,
+          variant_id: variantId,
+          quantity,
+          price: typeof price === 'number' && Number.isFinite(price) ? price : null,
+          metadata: { cart_item: rec },
+        };
+      });
+
+      const { error: itemsError } = await supabase.from('order_items').insert(orderItemRows);
+      if (itemsError) {
+        try {
+          await supabase.from('orders').delete().eq('id', orderRow.id);
+        } catch {
+        }
+        try {
+          await stripe.checkout.sessions.expire(session.id);
+        } catch {
+        }
+        return NextResponse.json({ error: itemsError.message || 'Failed to persist order items snapshot' }, { status: 500 });
+      }
+    }
 
     return NextResponse.json({ url: session.url, sessionId: session.id });
   } catch (error: unknown) {

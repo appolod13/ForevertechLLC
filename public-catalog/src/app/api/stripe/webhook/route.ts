@@ -4,6 +4,7 @@ import { addOrder, clearCart, getCart, type OrderLineItem, type OrderRecord } fr
 import { getPrintifyBackTextConfig, renderBackAbstractPngBuffer, renderBackTextPngBuffer } from '@/lib/printifyBackText';
 import { requestIbmQuantumProof, type QuantumProof } from '@/lib/quantumVerified';
 import { getAiGeneratorsConfig } from '@/lib/aiGeneratorsConfig';
+import { getServiceSupabase } from '@/lib/supabase';
 import sharp from 'sharp';
 import QRCode from 'qrcode';
 import path from 'path';
@@ -1120,6 +1121,46 @@ function isSameOrigin(req: Request): boolean {
   return origin === `https://${host}` || origin === `http://${host}`;
 }
 
+async function loadCheckoutFromSupabase(sessionId: string): Promise<{ orderId: string; items: CartItem[] } | null> {
+  const sid = String(sessionId || '').trim();
+  if (!sid) return null;
+  const supabase = getServiceSupabase();
+  if (!supabase) return null;
+
+  const { data: order, error: orderError } = await supabase
+    .from('orders')
+    .select('id')
+    .eq('stripe_checkout_session_id', sid)
+    .single();
+
+  if (orderError || !order?.id) return null;
+
+  const { data: rows, error: rowsError } = await supabase
+    .from('order_items')
+    .select('metadata,quantity')
+    .eq('order_id', order.id);
+
+  if (rowsError || !Array.isArray(rows) || rows.length === 0) {
+    return { orderId: order.id, items: [] };
+  }
+
+  const items: CartItem[] = rows
+    .map((r: any, idx: number) => {
+      const meta = r && typeof r.metadata === 'object' && r.metadata !== null ? (r.metadata as Record<string, unknown>) : {};
+      const cartItem = meta && typeof meta.cart_item === 'object' && meta.cart_item !== null ? (meta.cart_item as Record<string, unknown>) : null;
+      const quantity = Math.max(1, Number(r?.quantity || 1));
+      if (cartItem) {
+        const out: CartItem = { ...(cartItem as any) };
+        out.quantity = quantity;
+        return out;
+      }
+      return { id: `order-item-${idx}`, quantity, metadata: meta };
+    })
+    .filter((x: any) => x && typeof x === 'object');
+
+  return { orderId: order.id, items };
+}
+
 function getCartLineItems(cartItems: CartItem[]): OrderLineItem[] {
   const out: OrderLineItem[] = [];
   for (const item of cartItems) {
@@ -1231,7 +1272,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing PRINTIFY_SHOP_ID' }, { status: 500 });
   }
 
-  const cartItems = getCart(deviceId);
+  const stored = await loadCheckoutFromSupabase(session.id);
+  const cartItems = stored?.items && stored.items.length > 0 ? stored.items : getCart(deviceId);
   if (!Array.isArray(cartItems) || cartItems.length === 0) {
     return NextResponse.json({ received: true });
   }
@@ -1463,6 +1505,21 @@ export async function POST(request: Request) {
       address_to: addressTo,
     }),
   })) as unknown;
+
+  if (stored?.orderId) {
+    const supabase = getServiceSupabase();
+    if (supabase) {
+      const nextTotal = typeof session.amount_total === 'number' && Number.isFinite(session.amount_total) ? session.amount_total : null;
+      await supabase
+        .from('orders')
+        .update({
+          status: 'submitted',
+          total_amount: nextTotal,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', stored.orderId);
+    }
+  }
 
   const key = userId || deviceId || 'anonymous';
   const cartTotal = getCartLineItems(cartItems as CartItem[]).reduce((sum, li) => sum + (li.price || 0) * li.quantity, 0);
