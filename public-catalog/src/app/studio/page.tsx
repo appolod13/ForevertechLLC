@@ -671,12 +671,14 @@ function StudioPageInner() {
       setLastGenTimestamp(Date.now());
 
       // Trigger the automated build pipeline
-      try {
-        addLog('Triggering automated build pipeline...', 'info', 'I_BUILD_TRIGGER');
-        await fetch('/api/build', { method: 'POST' });
-        addLog('Build pipeline triggered successfully', 'success', 'I_BUILD_SUCCESS');
-      } catch (buildErr: unknown) {
-        addLog('Failed to trigger build pipeline: ' + ((buildErr as Error).message || String(buildErr)), 'warn', 'E_BUILD_FAILED');
+      if (process.env.NODE_ENV !== 'production') {
+        try {
+          addLog('Triggering automated build pipeline...', 'info', 'I_BUILD_TRIGGER');
+          await fetch('/api/build', { method: 'POST' });
+          addLog('Build pipeline triggered successfully', 'success', 'I_BUILD_SUCCESS');
+        } catch (buildErr: unknown) {
+          addLog('Failed to trigger build pipeline: ' + ((buildErr as Error).message || String(buildErr)), 'warn', 'E_BUILD_FAILED');
+        }
       }
 
     } catch (e: unknown) {
