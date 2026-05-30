@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { cn, MIRROR_API_URL } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { Loader2, ImageOff } from 'lucide-react';
 
 interface AIImageResponse {
@@ -22,26 +22,12 @@ export function LatestAIImage({
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    const resolveBase = () => {
-      const siteOrigin = window.location.origin;
-      const raw = String(MIRROR_API_URL || '').trim().replace(/\/$/, '');
-      if (!raw) return siteOrigin;
-      try {
-        const u = new URL(raw);
-        if (window.location.protocol === 'https:' && u.protocol === 'http:') return siteOrigin;
-        return u.toString().replace(/\/$/, '');
-      } catch {
-        return siteOrigin;
-      }
-    };
-
     const resolveUrl = (input: string) => {
       const s = String(input || '').trim();
       if (!s) return '';
       if (s.startsWith('data:') || s.startsWith('blob:') || s.startsWith('http://') || s.startsWith('https://')) return s;
-      const base = resolveBase();
       try {
-        return new URL(s, base).toString();
+        return new URL(s, window.location.origin).toString();
       } catch {
         return '';
       }
@@ -63,9 +49,7 @@ export function LatestAIImage({
 
     async function fetchImage() {
       try {
-        const base = resolveBase();
-        const endpoint = base === window.location.origin ? '/api/latest-ai-image' : `${base}/api/latest-ai-image`;
-        const res = await fetch(endpoint).catch(() => {
+        const res = await fetch('/api/latest-ai-image').catch(() => {
           throw new Error('Network error: Failed to fetch');
         });
         if (!res.ok) throw new Error('Failed to fetch');
