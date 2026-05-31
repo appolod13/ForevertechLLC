@@ -1077,7 +1077,10 @@ function StudioPageInner() {
             />
 
             <div className="mt-8 border-t border-gray-700 pt-8">
-              <h3 className="text-xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600">Latest Drops</h3>
+              <h3 className="text-xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600">Latest Build Preview</h3>
+              <div className="text-sm text-gray-400">
+                Your most recent generation. Customize it, choose sizing, add an optional QR link, and checkout with card payment.
+              </div>
               <div className="aspect-video relative rounded-xl overflow-hidden border border-gray-700 shadow-2xl">
                 <LatestAIImage
                   key={lastGenTimestamp}

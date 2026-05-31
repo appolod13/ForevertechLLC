@@ -40,14 +40,14 @@ export default function AboutPage() {
         <div className="rounded-2xl border border-gray-700 bg-gradient-to-b from-gray-800 to-gray-900 p-8">
           <div className="flex items-center gap-3 text-purple-300">
             <Sparkles className="w-6 h-6" />
-            <span className="text-sm font-semibold uppercase tracking-wider">About ForeverTech Catalog</span>
+            <span className="text-sm font-semibold uppercase tracking-wider">About PixelQrypt by ForeverTech</span>
           </div>
           <h1 className="mt-3 text-4xl font-bold">
-            A creator-first pipeline for generating art, blending styles, and turning it into merch.
+            A prompt-to-print pipeline for turning words into mathematical art and shipping it on apparel.
           </h1>
           <p className="mt-4 text-gray-300 leading-relaxed max-w-3xl">
-            ForeverTech Catalog is a studio + storefront that helps visitors generate original visual assets, fuse them with personal
-            images, preview them on products, and ship the final design through an automated fulfillment flow.
+            PixelQrypt is a studio + storefront for creating original designs from prompts (including Julia + Mandelbrot fractal art),
+            previewing them on products, and ordering printed apparel through an automated fulfillment flow.
           </p>
         </div>
 
@@ -58,8 +58,8 @@ export default function AboutPage() {
               <h2 className="text-xl font-bold">Mission</h2>
             </div>
             <p className="mt-4 text-gray-300 leading-relaxed">
-              Build a reliable, end-to-end creative engine where anyone can turn a prompt and a personal image into a wearable design
-              that looks intentional, prints clean, and ships fast—without needing a full production team.
+              Build a reliable, end-to-end creative engine where anyone can turn a prompt into a print-ready design that looks intentional,
+              previews clearly, and ships fast—without needing a production team.
             </p>
           </div>
 
@@ -70,8 +70,8 @@ export default function AboutPage() {
             </div>
             <ul className="mt-4 space-y-2 text-gray-300">
               <li>Prompt-to-image generation with clear outputs you can preview before checkout.</li>
-              <li>Optional publishing paths for resilient hosting and sharing.</li>
-              <li>Safety-first prompting tools and controlled integrations for posting and fulfillment.</li>
+              <li>Published tag indicates a design is saved and available for browsing and purchasing.</li>
+              <li>Controlled integrations for posting updates and fulfillment.</li>
             </ul>
           </div>
 
@@ -81,7 +81,9 @@ export default function AboutPage() {
               <h2 className="text-xl font-bold">What Makes It Different</h2>
             </div>
             <ul className="mt-4 space-y-2 text-gray-300">
-              <li>“Quantum” mode generation is preserved as a separate engine path.</li>
+              <li>BannerBuild-Julia turns your words into numbers and maps them into fractal parameters.</li>
+              <li>Julia + Mandelbrot fusion creates a mathematical, emotional abstract design style.</li>
+              <li>Optional Quantum Verified uses a recorded seed sourced from IBM Quantum services.</li>
               <li>Advanced Fusion blends uploaded images with generated assets for print-ready output.</li>
               <li>Product preview emphasizes a realistic “printed on fabric” feel.</li>
             </ul>
@@ -111,8 +113,8 @@ export default function AboutPage() {
                 <h3 className="font-bold">1) Generate</h3>
               </div>
               <p className="mt-3 text-gray-300 text-sm leading-relaxed">
-                In Studio, write a prompt and generate an original asset. The system routes generation through the configured engines,
-                including a Quantum path when enabled.
+                In Studio, write a prompt and generate an original asset. You can use the emotional mathematics generator (BannerBuild-Julia),
+                and other enabled engines.
               </p>
             </div>
 
@@ -143,7 +145,8 @@ export default function AboutPage() {
                 <h3 className="font-bold">4) Ship</h3>
               </div>
               <p className="mt-3 text-gray-300 text-sm leading-relaxed">
-                Checkout and send the design into the order flow. Fulfillment integrations can route products to printing partners.
+                Checkout securely with card payment. We send the exact art you approved to our print-on-demand partner for printing and shipping.
+                If you add a QR link, scanning the back QR opens the URL you chose.
               </p>
             </div>
           </div>
@@ -155,10 +158,10 @@ export default function AboutPage() {
             <ul className="mt-4 space-y-2 text-gray-300">
               <li>Creator Studio: prompt-to-image, metadata capture, and gallery storage.</li>
               <li>Advanced Fusion: combines your uploaded image(s) with generated assets for print-style output.</li>
-              <li>Quantum pipeline: preserved generation path to keep the “Quantum” experience intact.</li>
+              <li>Quantum seed verification: optional recorded quantum seed to tag select builds as Quantum Verified.</li>
               <li>Catalog + Drops: a browsable feed of generated work with commerce hooks.</li>
               <li>Customizer + Cart: product preview, sizing, and add-to-cart workflow.</li>
-              <li>Scanner + Gallery: discover and review latest images and saved creations.</li>
+              <li>Gallery + Published: long-term storage for your generated designs and downloads.</li>
             </ul>
           </div>
 

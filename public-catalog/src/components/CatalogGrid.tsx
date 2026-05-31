@@ -111,7 +111,7 @@ export function CatalogGrid({ initialPosts }: CatalogGridProps) {
       {/* Controls */}
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
-          <h1 className="text-3xl font-bold text-white">Latest Drops</h1>
+          <h1 className="text-3xl font-bold text-white">Latest Builds</h1>
           <div className="md:hidden">
             <LiveBadge />
           </div>

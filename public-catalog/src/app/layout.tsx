@@ -4,9 +4,9 @@ import { Footer } from "@/components/Footer";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ForeverTech | Julia + Mandelbrot Fractal Merch • Quantum Verified",
+  title: "PixelQrypt | Prompt-to-Print Apparel • Quantum Verified",
   description:
-    "Create wearable fractal art from prompts (Julia-set + Mandelbrot fusion). Optional Quantum Verified ties your final print to a real IBM quantum seed proof.",
+    "Create wearable fractal art from prompts (Julia-set + Mandelbrot fusion). Optional Quantum Verified ties your final print to a recorded quantum seed sourced from IBM Quantum services. Save designs to your gallery, publish them, and share with a scannable QR code.",
   icons: {
     icon: "/favicon.ico",
     shortcut: "/favicon.ico",

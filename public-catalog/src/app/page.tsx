@@ -100,7 +100,7 @@ export default async function Home() {
               {heroImageUrl ? (
                 <img
                   src={heroImageUrl}
-                  alt="Latest community drop"
+                  alt="Latest published design"
                   className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                   loading="eager"
                 />
@@ -109,16 +109,16 @@ export default async function Home() {
               )}
               <div className="absolute top-4 left-4 z-10">
                 <span className="inline-flex items-center rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white backdrop-blur-md border border-white/10">
-                  Latest Drop
+                  Latest Build
                 </span>
               </div>
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex items-end p-8">
                 <div className="max-w-xl">
                   <h1 className="text-3xl md:text-5xl font-bold text-white tracking-tight drop-shadow-lg mb-2">
-                    Turn Prompts into <span className="text-primary">Wearable</span> Art
+                    BannerBuild Julia: <span className="text-primary">Emotional</span> Math to Merch
                   </h1>
                   <p className="text-zinc-300 text-sm md:text-base line-clamp-2">
-                    Generate an original design, fuse it with your own image, preview it on merch, and check out in minutes.
+                    Your words become numbers, and your numbers become a Julia + Mandelbrot design you can preview on a T-shirt, publish to your gallery, and buy with card checkout.
                   </p>
                   <div className="mt-5 flex flex-wrap items-center gap-3">
                     <Link
@@ -146,13 +146,13 @@ export default async function Home() {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                   </span>
-                  Latest Generation
+                  Newest Generation
                 </span>
               </div>
               <div className="h-full w-full bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.18),transparent_55%),radial-gradient(ellipse_at_bottom,rgba(16,185,129,0.10),transparent_55%)]" />
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 to-transparent p-4">
-                 <p className="text-sm font-medium text-white">AI Generated Art</p>
-                 <p className="text-xs text-zinc-400">Fresh from the neural network</p>
+                 <p className="text-sm font-medium text-white">Prompt-to-Image Output</p>
+                 <p className="text-xs text-zinc-400">Ready to customize, print, and ship</p>
               </div>
             </div>
           </div>
