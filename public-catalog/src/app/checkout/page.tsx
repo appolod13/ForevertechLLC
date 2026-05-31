@@ -11,6 +11,16 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
 }
 
+function extractCartQrUrl(items: CartItem[]): string {
+  for (const it of items) {
+    const meta = isRecord(it.metadata) ? (it.metadata as Record<string, unknown>) : null;
+    const v = meta && typeof meta.qrUrl === 'string' ? meta.qrUrl : '';
+    const t = String(v || '').trim();
+    if (t) return t;
+  }
+  return '';
+}
+
 export default function CheckoutPage() {
   const { items, total } = useCart();
   const { user, isLoading } = useAuth();
@@ -51,6 +61,16 @@ export default function CheckoutPage() {
     zip: '',
     callOptIn: true
   });
+
+  useEffect(() => {
+    const suggested = extractCartQrUrl(items);
+    if (!suggested) return;
+    setFormData((prev) => {
+      const cur = String(prev.qrUrl || '').trim();
+      if (cur) return prev;
+      return { ...prev, qrUrl: suggested };
+    });
+  }, [items]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;

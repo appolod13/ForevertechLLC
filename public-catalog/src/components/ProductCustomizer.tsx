@@ -30,6 +30,8 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
   const [view, setView] = useState<'front' | 'back'>('front');
   const { addToCart } = useCart();
 
+  const [qrUrlInput, setQrUrlInput] = useState('');
+
   useEffect(() => {
     fetch('/api/products')
       .then(async res => {
@@ -303,12 +305,44 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
   }, [bannerText, backPatternSalt]);
 
   const qrTargetUrl = useMemo(() => {
+    const normalize = (input: string) => {
+      const raw = String(input || '').trim();
+      if (!raw) return '';
+      const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(raw) ? raw : `https://${raw}`;
+      try {
+        const u = new URL(withScheme);
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+        const href = u.toString();
+        return href.length > 350 ? href.slice(0, 350) : href;
+      } catch {
+        return '';
+      }
+    };
+
+    const custom = normalize(qrUrlInput);
+    if (custom) return custom;
+
     if (typeof window === 'undefined') return '';
     const origin = window.location.origin;
     const u = new URL('/pixelqrypt', origin);
     u.searchParams.set('src', 'shirt');
     return u.toString();
-  }, []);
+  }, [qrUrlInput]);
+
+  const qrUrlForOrder = useMemo(() => {
+    const raw = String(qrUrlInput || '').trim();
+    if (!raw) return '';
+    const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(raw) ? raw : `https://${raw}`;
+    try {
+      const u = new URL(withScheme);
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+      const href = u.toString();
+      return href.length > 350 ? href.slice(0, 350) : href;
+    } catch {
+      return '';
+    }
+  }, [qrUrlInput]);
+
 
   const backPreviewSeed = useMemo(() => {
     const raw = (backPatternSalt || bannerText || '').slice(0, 220);
@@ -409,6 +443,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
                 variant: selectedVariant,
                 printifySku,
                 backCustomerText: (previewBackText || '').trim(),
+                qrUrl: qrUrlForOrder || undefined,
                 originalPrompt: resolvedPrompt,
                 ipfs_url,
                 ipfs_gateway,
@@ -603,6 +638,20 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
         
         {selectedProduct && (
             <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-zinc-300">QR Link (optional)</label>
+                  <input
+                    type="text"
+                    value={qrUrlInput}
+                    onChange={(e) => setQrUrlInput(e.target.value)}
+                    placeholder="https://yourbusiness.com"
+                    className="w-full rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-white focus:border-primary focus:outline-none"
+                  />
+                  <div className="space-y-1 text-[11px] text-zinc-500">
+                    <div className="font-mono">https://yourbusiness.com</div>
+                    <div>This link will be encoded into the QR stamp on the back.</div>
+                  </div>
+                </div>
                 <div>
                     <label className="text-sm font-medium text-zinc-300 mb-3 block">Size / Variant</label>
                     <div className="flex flex-wrap gap-2">
