@@ -81,8 +81,15 @@ export async function POST(request: Request) {
     const shippingCountry = getString(b.shippingCountry, 4);
     const metadata = isRecord(b.metadata) ? (b.metadata as Record<string, unknown>) : {};
     const qrUrlRaw = 'qrUrl' in b ? (b as Record<string, unknown>).qrUrl : '';
-    const qrUrl = normalizeCustomerQrUrl(qrUrlRaw);
-    if (getString(qrUrlRaw) && !qrUrl) {
+    const qrDisabledRaw = 'qrDisabled' in b ? (b as Record<string, unknown>).qrDisabled : false;
+    const qrDisabled =
+      qrDisabledRaw === true ||
+      String(qrDisabledRaw || '')
+        .trim()
+        .toLowerCase() === 'true' ||
+      String(qrDisabledRaw || '').trim() === '1';
+    const qrUrl = qrDisabled ? '' : normalizeCustomerQrUrl(qrUrlRaw);
+    if (!qrDisabled && getString(qrUrlRaw) && !qrUrl) {
       return NextResponse.json({ error: 'Invalid QR link URL' }, { status: 400 });
     }
 
@@ -200,6 +207,7 @@ export async function POST(request: Request) {
         shippingOptionId: selectedShip?.id || '',
         shippingCents: selectedShip ? String(Math.round(Number(selectedShip.amountUsd) * 100)) : '0',
         qrUrl: qrUrl || '',
+        qrDisabled: qrDisabled ? '1' : '0',
         ...(metadata || {}),
       }
     });

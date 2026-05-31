@@ -489,6 +489,7 @@ export async function GET(req: NextRequest) {
     const style = getBackStyle(q.get("style"));
     const seedSaltRaw = (q.get("seed") || "").trim().replace(/[^a-z0-9-]/gi, "").slice(0, 128);
     const qrUrl = normalizeCustomerQrUrl(q.get("qrUrl"));
+    const qrDisabled = (q.get("qrDisabled") || "").trim() === "1";
     const customerText = sanitizeCustomerBackText(q.get("customerText") || "", 64);
 
     const backText = sanitizeBannerText(textRaw, cfg.render.maxChars) || "CUSTOM";
@@ -510,26 +511,28 @@ export async function GET(req: NextRequest) {
     const left = Math.max(0, panelW - stampSide - margin);
     const top = Math.max(0, panelH - stampSide - margin);
 
-    const targetUrl = qrUrl || (() => {
-      const u = new URL("/pixelqrypt", origin);
-      u.searchParams.set("src", "shirt");
-      return u.toString();
-    })();
-
-    const stamp = await buildQrStampPng({ url: targetUrl, stampSide, backgroundColor: cfg.render.backgroundColor });
     const baseFull = style === "abstract" ? await renderBackAbstractPngBuffer(backText, salted) : await renderBackTextPngBuffer(backText, salted);
     const basePanel = await sharp(baseFull).extract({ left: bgX, top: bgY, width: bgW, height: bgH }).png().toBuffer();
     const customerHeaderOverlay = customerText ? await buildTopTextOverlayPng({ panelW, panelH, text: customerText }) : null;
-    const wipeSvg = Buffer.from(
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${stampSide + 24}" height="${stampSide + 24}"><rect x="0" y="0" width="${stampSide + 24}" height="${stampSide + 24}" rx="${Math.round(stampSide * 0.16)}" ry="${Math.round(stampSide * 0.16)}" fill="${cfg.render.backgroundColor}"/></svg>`,
-    );
+
+    const overlays = [...(customerHeaderOverlay ? [{ input: customerHeaderOverlay, left: 0, top: 0 }] : [])];
+    if (!qrDisabled) {
+      const targetUrl =
+        qrUrl ||
+        (() => {
+          const u = new URL("/pixelqrypt", origin);
+          u.searchParams.set("src", "shirt");
+          return u.toString();
+        })();
+      const stamp = await buildQrStampPng({ url: targetUrl, stampSide, backgroundColor: cfg.render.backgroundColor });
+      const wipeSvg = Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${stampSide + 24}" height="${stampSide + 24}"><rect x="0" y="0" width="${stampSide + 24}" height="${stampSide + 24}" rx="${Math.round(stampSide * 0.16)}" ry="${Math.round(stampSide * 0.16)}" fill="${cfg.render.backgroundColor}"/></svg>`,
+      );
+      overlays.push({ input: wipeSvg, left, top }, { input: stamp, left, top });
+    }
 
     const out = await sharp(basePanel)
-      .composite([
-        ...(customerHeaderOverlay ? [{ input: customerHeaderOverlay, left: 0, top: 0 }] : []),
-        { input: wipeSvg, left, top },
-        { input: stamp, left, top },
-      ])
+      .composite(overlays)
       .png({ compressionLevel: 9, adaptiveFiltering: true })
       .toBuffer();
 

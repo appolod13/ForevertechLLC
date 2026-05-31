@@ -520,7 +520,8 @@ function getBackStyle(): 'words' | 'abstract' {
   return 'abstract';
 }
 
-function buildBackQrTargetUrl(origin: string, bannerText: string, qrUrl?: string) {
+function buildBackQrTargetUrl(origin: string, bannerText: string, qrUrl?: string, qrDisabled?: boolean) {
+  if (qrDisabled) return '';
   const custom = normalizeCustomerQrUrl(qrUrl);
   if (custom) return custom;
   const clean = (sanitizeBannerText(bannerText) || 'CUSTOM').toUpperCase();
@@ -782,6 +783,7 @@ async function renderBackQrStampBase64(params: {
   seedSalt?: string;
   backStyle: 'words' | 'abstract';
   qrUrl?: string;
+  qrDisabled?: boolean;
   customerText?: string;
 }) {
   const cfg = getPrintifyBackTextConfig();
@@ -801,37 +803,44 @@ async function renderBackQrStampBase64(params: {
   const left = Math.max(0, bgX + bgW - stampSide - margin);
   const top = Math.max(0, bgY + bgH - stampSide - margin);
 
-  const targetUrl = buildBackQrTargetUrl(params.origin, clean, params.qrUrl);
-  const stamp = await buildQrStampPng({ url: targetUrl, stampSide, backgroundColor: cfg.render.backgroundColor });
-  const wipeSvg = Buffer.from(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${stampSide + 24}" height="${stampSide + 24}"><rect x="0" y="0" width="${stampSide + 24}" height="${stampSide + 24}" rx="${Math.round(stampSide * 0.16)}" ry="${Math.round(stampSide * 0.16)}" fill="${cfg.render.backgroundColor}"/></svg>`,
-  );
-
   const basePng = params.backStyle === 'abstract' ? await renderBackAbstractPngBuffer(clean, salted) : await renderBackTextPngBuffer(clean, salted);
   const customerOverlay = params.customerText
     ? await buildCustomerBackTextOverlayPng({ width, height, bgX, bgY, bgW, bgH, text: params.customerText })
     : null;
 
+  const targetUrl = buildBackQrTargetUrl(params.origin, clean, params.qrUrl, params.qrDisabled);
+  const overlays = [...(customerOverlay ? [{ input: customerOverlay, left: 0, top: 0 }] : [])];
+  if (targetUrl) {
+    const stamp = await buildQrStampPng({ url: targetUrl, stampSide, backgroundColor: cfg.render.backgroundColor });
+    const wipeSvg = Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${stampSide + 24}" height="${stampSide + 24}"><rect x="0" y="0" width="${stampSide + 24}" height="${stampSide + 24}" rx="${Math.round(stampSide * 0.16)}" ry="${Math.round(stampSide * 0.16)}" fill="${cfg.render.backgroundColor}"/></svg>`,
+    );
+    overlays.push({ input: wipeSvg, left, top }, { input: stamp, left, top });
+  }
+
   const out = await sharp(basePng)
-    .composite([
-      ...(customerOverlay ? [{ input: customerOverlay, left: 0, top: 0 }] : []),
-      { input: wipeSvg, left, top },
-      { input: stamp, left, top },
-    ])
+    .composite(overlays)
     .png({ compressionLevel: 9, adaptiveFiltering: true, palette: true })
     .toBuffer();
 
   return out.toString('base64');
 }
 
-async function getBackWordPreviewUrl(keyword: string, origin: string | null, seedSalt?: string, qrUrl?: string, customerText?: string) {
+async function getBackWordPreviewUrl(
+  keyword: string,
+  origin: string | null,
+  seedSalt?: string,
+  qrUrl?: string,
+  customerText?: string,
+  qrDisabled?: boolean,
+) {
   const cfg = getPrintifyBackTextConfig();
   const ttlMs = 24 * 60 * 60 * 1000;
   const kw = sanitizeBannerText(keyword) || 'CUSTOM';
   const saltKey = seedSalt ? `|q|${seedSalt}` : '';
   const mode = getBackMode();
   const style = getBackStyle();
-  const qrKey = qrUrl ? `|u|${fnv1a32Hex(qrUrl).slice(0, 8)}` : '';
+  const qrKey = qrDisabled ? '|noqr' : qrUrl ? `|u|${fnv1a32Hex(qrUrl).slice(0, 8)}` : '';
   const ct = sanitizeCustomerBackText(customerText || '');
   const ctKey = ct ? `|t|${fnv1a32Hex(ct).slice(0, 8)}` : '';
   const originKey = origin ? (() => {
@@ -847,7 +856,15 @@ async function getBackWordPreviewUrl(keyword: string, origin: string | null, see
 
   const base64 =
     mode === 'qr_stamp' && origin
-      ? await renderBackQrStampBase64({ origin, text: kw, seedSalt, backStyle: style, qrUrl, customerText: ct || undefined })
+      ? await renderBackQrStampBase64({
+          origin,
+          text: kw,
+          seedSalt,
+          backStyle: style,
+          qrUrl,
+          qrDisabled,
+          customerText: ct || undefined,
+        })
       : style === 'abstract'
         ? await renderBackAbstractBase64(kw, seedSalt)
         : await renderBackBannerBase64(kw, seedSalt);
@@ -1463,8 +1480,16 @@ export async function POST(request: Request) {
           imageUrl: absoluteImageUrl,
           quantumSeed: quantumProof?.seed || null,
         });
-        const customerQrUrl = normalizeCustomerQrUrl(session.metadata?.qrUrl);
-        const backPreviewUrl = await getBackWordPreviewUrl(bannerText, origin || null, seedSalt, customerQrUrl || undefined, customerBackText || undefined);
+        const qrDisabled = (session.metadata?.qrDisabled || '').trim() === '1';
+        const customerQrUrl = qrDisabled ? '' : normalizeCustomerQrUrl(session.metadata?.qrUrl);
+        const backPreviewUrl = await getBackWordPreviewUrl(
+          bannerText,
+          origin || null,
+          seedSalt,
+          customerQrUrl || undefined,
+          customerBackText || undefined,
+          qrDisabled,
+        );
 
         printAreas[backKey] = [
           {

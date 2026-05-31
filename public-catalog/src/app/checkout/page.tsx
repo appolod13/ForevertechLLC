@@ -14,11 +14,22 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 function extractCartQrUrl(items: CartItem[]): string {
   for (const it of items) {
     const meta = isRecord(it.metadata) ? (it.metadata as Record<string, unknown>) : null;
+    const disabled = meta && meta.qrDisabled === true;
+    if (disabled) continue;
     const v = meta && typeof meta.qrUrl === 'string' ? meta.qrUrl : '';
     const t = String(v || '').trim();
     if (t) return t;
   }
   return '';
+}
+
+function extractCartQrDisabled(items: CartItem[]): boolean {
+  for (const it of items) {
+    const meta = isRecord(it.metadata) ? (it.metadata as Record<string, unknown>) : null;
+    const disabled = meta && meta.qrDisabled === true;
+    if (disabled) return true;
+  }
+  return false;
 }
 
 export default function CheckoutPage() {
@@ -53,6 +64,7 @@ export default function CheckoutPage() {
     email: user?.email || '',
     phone: '',
     qrUrl: '',
+    qrDisabled: false,
     address: '',
     address2: '',
     city: '',
@@ -63,12 +75,15 @@ export default function CheckoutPage() {
   });
 
   useEffect(() => {
+    const disabled = extractCartQrDisabled(items);
     const suggested = extractCartQrUrl(items);
-    if (!suggested) return;
     setFormData((prev) => {
       const cur = String(prev.qrUrl || '').trim();
-      if (cur) return prev;
-      return { ...prev, qrUrl: suggested };
+      const next: typeof prev = { ...prev };
+      next.qrDisabled = disabled;
+      if (disabled) next.qrUrl = '';
+      if (!disabled && suggested && !cur) next.qrUrl = suggested;
+      return next;
     });
   }, [items]);
 
@@ -185,8 +200,9 @@ export default function CheckoutPage() {
       const deviceId = localStorage.getItem('device_id') || 'anonymous';
       const shippingId = shippingOptionId || (shippingOptions[0]?.id || '');
       const qrUrlRaw = (formData.qrUrl || '').trim();
+      const qrDisabled = formData.qrDisabled === true;
       const qrUrl =
-        qrUrlRaw && !/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(qrUrlRaw) ? `https://${qrUrlRaw}` : qrUrlRaw;
+        !qrDisabled && qrUrlRaw && !/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(qrUrlRaw) ? `https://${qrUrlRaw}` : qrUrlRaw;
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -200,6 +216,7 @@ export default function CheckoutPage() {
           userId: user?.id || '',
           deviceId,
           qrUrl,
+          qrDisabled,
           metadata: {
             phone: formData.phone,
             address: formData.address,

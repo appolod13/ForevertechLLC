@@ -30,6 +30,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
   const [view, setView] = useState<'front' | 'back'>('front');
   const { addToCart } = useCart();
 
+  const [includeQrStamp, setIncludeQrStamp] = useState(true);
   const [qrUrlInput, setQrUrlInput] = useState('');
 
   useEffect(() => {
@@ -319,6 +320,8 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
       }
     };
 
+    if (!includeQrStamp) return '';
+
     const custom = normalize(qrUrlInput);
     if (custom) return custom;
 
@@ -327,9 +330,10 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
     const u = new URL('/pixelqrypt', origin);
     u.searchParams.set('src', 'shirt');
     return u.toString();
-  }, [qrUrlInput]);
+  }, [includeQrStamp, qrUrlInput]);
 
   const qrUrlForOrder = useMemo(() => {
+    if (!includeQrStamp) return '';
     const raw = String(qrUrlInput || '').trim();
     if (!raw) return '';
     const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(raw) ? raw : `https://${raw}`;
@@ -341,7 +345,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
     } catch {
       return '';
     }
-  }, [qrUrlInput]);
+  }, [includeQrStamp, qrUrlInput]);
 
 
   const backPreviewSeed = useMemo(() => {
@@ -379,14 +383,21 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
     if (backPreviewSeed) u.searchParams.set('seed', backPreviewSeed);
     if (backPreviewNonce) u.searchParams.set('v', backPreviewNonce);
     if (previewBackText) u.searchParams.set('customerText', previewBackText);
-    if (qrTargetUrl) u.searchParams.set('qrUrl', qrTargetUrl);
+    if (includeQrStamp) {
+      if (qrTargetUrl) u.searchParams.set('qrUrl', qrTargetUrl);
+    } else {
+      u.searchParams.set('qrDisabled', '1');
+    }
     return `${u.pathname}?${u.searchParams.toString()}`;
-  }, [bannerText, backPreviewNonce, backPreviewSeed, previewBackText, qrTargetUrl]);
+  }, [bannerText, backPreviewNonce, backPreviewSeed, includeQrStamp, previewBackText, qrTargetUrl]);
 
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!qrTargetUrl) return;
+    if (!qrTargetUrl) {
+      setQrDataUrl(null);
+      return;
+    }
     let cancelled = false;
     QRCode.toDataURL(qrTargetUrl, {
       errorCorrectionLevel: 'H',
@@ -444,6 +455,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
                 printifySku,
                 backCustomerText: (previewBackText || '').trim(),
                 qrUrl: qrUrlForOrder || undefined,
+                qrDisabled: includeQrStamp ? undefined : true,
                 originalPrompt: resolvedPrompt,
                 ipfs_url,
                 ipfs_gateway,
@@ -639,12 +651,24 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
         {selectedProduct && (
             <div className="space-y-6">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-300">QR Link (optional)</label>
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="text-sm font-medium text-zinc-300">QR Link (optional)</label>
+                    <label className="flex items-center gap-2 text-xs text-zinc-400">
+                      <input
+                        type="checkbox"
+                        checked={includeQrStamp}
+                        onChange={(e) => setIncludeQrStamp(e.target.checked)}
+                        className="h-4 w-4 rounded border-zinc-700 bg-zinc-900"
+                      />
+                      Include QR stamp
+                    </label>
+                  </div>
                   <input
                     type="text"
                     value={qrUrlInput}
                     onChange={(e) => setQrUrlInput(e.target.value)}
                     placeholder="https://yourbusiness.com"
+                    disabled={!includeQrStamp}
                     className="w-full rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-white focus:border-primary focus:outline-none"
                   />
                   <div className="space-y-1 text-[11px] text-zinc-500">
