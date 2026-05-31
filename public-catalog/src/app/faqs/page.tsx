@@ -3,9 +3,19 @@ import Link from "next/link";
 import { Header } from "@/components/Header";
 
 export const metadata: Metadata = {
-  title: "FAQs | ForeverTech",
+  title: "FAQs: AI Art T-Shirts, Studio, Checkout & Shipping",
   description:
-    "Frequently asked questions about ForeverTech Catalog, the Studio, checkout, Printify fulfillment, and Quantum Verified Premium.",
+    "FAQs for PixelQrypt by ForeverTech: how the prompt-to-print Studio works, how to customize products, Stripe card checkout, Printify print-on-demand fulfillment, shipping, and order support.",
+  keywords: [
+    "PixelQrypt FAQ",
+    "AI art t-shirt FAQ",
+    "prompt to print FAQ",
+    "Stripe checkout FAQ",
+    "Printify fulfillment FAQ",
+    "fractal art merch",
+    "Julia set art",
+    "Mandelbrot art",
+  ],
 };
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {

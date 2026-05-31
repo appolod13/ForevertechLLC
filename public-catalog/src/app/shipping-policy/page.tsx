@@ -3,8 +3,16 @@ import Link from "next/link";
 import { Header } from "@/components/Header";
 
 export const metadata: Metadata = {
-  title: "Shipping Policy | ForeverTech",
-  description: "Shipping policy for ForeverTech orders.",
+  title: "Shipping Policy",
+  description:
+    "Shipping policy for PixelQrypt by ForeverTech. Learn production times, delivery estimates, tracking, and support for print-on-demand apparel orders fulfilled via Printify.",
+  keywords: [
+    "PixelQrypt shipping",
+    "ForeverTech shipping policy",
+    "print on demand shipping",
+    "Printify fulfillment",
+    "custom t-shirt shipping",
+  ],
 };
 
 export default function ShippingPolicyPage() {
@@ -85,4 +93,3 @@ export default function ShippingPolicyPage() {
     </div>
   );
 }
-

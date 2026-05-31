@@ -3,8 +3,16 @@ import Link from "next/link";
 import { Header } from "@/components/Header";
 
 export const metadata: Metadata = {
-  title: "Terms of Service | ForeverTech",
-  description: "Terms of Service for ForeverTech.",
+  title: "Terms of Service",
+  description:
+    "Read the Terms of Service for PixelQrypt by ForeverTech. Covers studio use, custom apparel purchases, Stripe card payments, print-on-demand fulfillment, and customer responsibilities.",
+  keywords: [
+    "PixelQrypt terms",
+    "ForeverTech terms of service",
+    "custom merch terms",
+    "print on demand terms",
+    "Stripe checkout terms",
+  ],
 };
 
 export default function TermsPage() {
@@ -90,4 +98,3 @@ export default function TermsPage() {
     </div>
   );
 }
-

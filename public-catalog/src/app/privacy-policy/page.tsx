@@ -2,8 +2,16 @@ import type { Metadata } from "next";
 import { Header } from "@/components/Header";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy | ForeverTech",
-  description: "Privacy Policy for ForeverTech Catalog.",
+  title: "Privacy Policy",
+  description:
+    "Privacy Policy for PixelQrypt by ForeverTech. Learn what information we collect (account, prompts, generated designs, checkout details), how we use it, and how we share it with payment and fulfillment partners.",
+  keywords: [
+    "PixelQrypt privacy",
+    "ForeverTech privacy policy",
+    "AI art privacy",
+    "checkout privacy",
+    "print on demand privacy",
+  ],
 };
 
 export default function PrivacyPolicyPage() {

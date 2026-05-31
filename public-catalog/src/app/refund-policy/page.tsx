@@ -3,8 +3,16 @@ import Link from "next/link";
 import { Header } from "@/components/Header";
 
 export const metadata: Metadata = {
-  title: "Refund & Return Policy | ForeverTech",
-  description: "Refund and return policy for ForeverTech orders.",
+  title: "Refund & Return Policy",
+  description:
+    "Refund and return policy for PixelQrypt by ForeverTech. Covers made-to-order apparel replacements, damaged/defective items, shipping issues, and support contact for order help.",
+  keywords: [
+    "PixelQrypt refunds",
+    "ForeverTech return policy",
+    "print on demand returns",
+    "custom t-shirt refund",
+    "order support",
+  ],
 };
 
 export default function RefundPolicyPage() {
@@ -84,4 +92,3 @@ export default function RefundPolicyPage() {
     </div>
   );
 }
-
