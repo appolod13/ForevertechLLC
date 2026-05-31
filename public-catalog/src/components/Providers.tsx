@@ -8,7 +8,7 @@ import { usePathname } from 'next/navigation';
 import { Toaster } from 'sonner';
 
 export function Providers({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
+  const pathname = usePathname() || '';
   const showLive = !(pathname === '/checkout' || pathname.startsWith('/checkout/'));
 
   useEffect(() => {

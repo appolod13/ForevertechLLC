@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -15,13 +15,11 @@ export default function LoginPage() {
 
   const [redirectPath, setRedirectPath] = useState('/');
 
-  // Run on mount to safely get window.location
-  useState(() => {
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      setRedirectPath(urlParams.get('redirect') || '/');
-    }
-  });
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    setRedirectPath(urlParams.get('redirect') || '/');
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

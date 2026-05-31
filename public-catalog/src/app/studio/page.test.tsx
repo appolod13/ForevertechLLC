@@ -7,6 +7,16 @@ vi.mock('sonner', () => ({
   Toaster: () => null,
 }));
 
+vi.mock('next/navigation', async () => {
+  const actual = await vi.importActual<typeof import('next/navigation')>('next/navigation');
+  return {
+    ...actual,
+    usePathname: () => '/',
+    useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+    useSearchParams: () => new URLSearchParams(),
+  };
+});
+
 function renderWithProviders(ui: React.ReactElement) {
   return render(<Providers>{ui}</Providers>);
 }
