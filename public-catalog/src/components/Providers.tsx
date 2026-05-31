@@ -4,9 +4,13 @@ import { LiveStatusProvider } from '@/context/LiveStatusContext';
 import { AuthProvider } from '@/context/AuthContext';
 import { CartProvider } from '@/context/CartContext';
 import { ReactNode, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { Toaster } from 'sonner';
 
 export function Providers({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const showLive = !(pathname === '/checkout' || pathname.startsWith('/checkout/'));
+
   useEffect(() => {
     const shouldReloadForError = (value: unknown) => {
       const message =
@@ -57,10 +61,17 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <AuthProvider>
       <CartProvider>
-        <LiveStatusProvider>
-          {children}
-          <Toaster theme="dark" position="bottom-right" />
-        </LiveStatusProvider>
+        {showLive ? (
+          <LiveStatusProvider>
+            {children}
+            <Toaster theme="dark" position="bottom-right" />
+          </LiveStatusProvider>
+        ) : (
+          <>
+            {children}
+            <Toaster theme="dark" position="bottom-right" />
+          </>
+        )}
       </CartProvider>
     </AuthProvider>
   );

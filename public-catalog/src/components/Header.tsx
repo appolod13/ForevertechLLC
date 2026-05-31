@@ -20,6 +20,7 @@ export function Header() {
   const showDevTools = process.env.NODE_ENV !== 'production' || showAdmin;
   const router = useRouter();
   const pathname = usePathname();
+  const showLiveBadge = !(pathname === '/checkout' || pathname.startsWith('/checkout/'));
 
   useEffect(() => {
     let cancelled = false;
@@ -75,9 +76,11 @@ export function Header() {
               ForeverTech <span className="text-zinc-500 font-normal">Catalog</span>
             </span>
           </Link>
-          <div className="ml-2 hidden md:block">
-            <LiveBadge />
-          </div>
+          {showLiveBadge ? (
+            <div className="ml-2 hidden md:block">
+              <LiveBadge />
+            </div>
+          ) : null}
         </div>
 
         <nav className="hidden md:flex items-center gap-3">
