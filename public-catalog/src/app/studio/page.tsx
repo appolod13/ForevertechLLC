@@ -710,9 +710,10 @@ function StudioPageInner() {
       if (socialAccounts.instagram?.authenticated) platforms.push('instagram');
       if (socialAccounts.tiktok?.authenticated) platforms.push('tiktok');
       if (socialAccounts.youtube?.authenticated) platforms.push('youtube');
-      const res = await fetch(`${MIRROR_API_URL}/api/post`, {
+      const res = await fetch('/api/post', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ 
           content: postContent,
           platforms,
@@ -722,7 +723,10 @@ function StudioPageInner() {
           ipfs: ipfsEnabled
         })
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) {
+        throw new Error(`Posting failed (HTTP ${res.status})`);
+      }
       if (data.success) {
         setPostingStatus('success');
         setPostContent('');
@@ -733,7 +737,11 @@ function StudioPageInner() {
       }
     } catch (e) {
       console.error(e);
-      setPostingStatus('network-error');
+      const msg =
+        (typeof e === 'object' && e !== null && 'message' in e && typeof (e as { message?: unknown }).message === 'string')
+          ? (e as { message: string }).message
+          : (e instanceof Error ? e.message : 'network-error');
+      setPostingStatus(msg || 'network-error');
     } finally {
       setIsPosting(false);
     }
