@@ -6,7 +6,6 @@ import type { CartItem } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
@@ -15,7 +14,6 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 export default function CheckoutPage() {
   const { items, total } = useCart();
   const { user, isLoading } = useAuth();
-  const router = useRouter();
 
   const quantumFeeUsd = Number(process.env.NEXT_PUBLIC_QUANTUM_VERIFIED_FEE_USD || 4.99);
   const [quantumVerified, setQuantumVerified] = useState(false);
@@ -449,7 +447,7 @@ export default function CheckoutPage() {
                 Redirecting to Stripe...
               </>
             ) : (
-              `Proceed to Payment ($${grandTotal.toFixed(2)})`
+              `Proceed to Stripe Checkout ($${grandTotal.toFixed(2)})`
             )}
           </button>
           {checkoutError ? (
@@ -515,14 +513,6 @@ export default function CheckoutPage() {
         </div>
       </div>
       
-      <div className="mt-8 flex justify-center">
-        <button 
-          onClick={() => router.push('/cart')}
-          className="text-sm bg-white text-black font-bold px-8 py-3 rounded-full hover:bg-gray-200 transition-colors shadow-lg"
-        >
-          Back to Cart
-        </button>
-      </div>
     </div>
   );
 }

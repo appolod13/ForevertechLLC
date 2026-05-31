@@ -35,6 +35,27 @@ interface LiveStatusProviderProps {
   children: ReactNode;
 }
 
+function sanitizeEventSourceUrl(value: unknown): string {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) return '';
+  if (raw.startsWith('/')) return raw;
+
+  const fixedScheme = raw.replace(/^(https?)\/\//, '$1://');
+
+  try {
+    const u = new URL(fixedScheme);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+    if (process.env.NODE_ENV === 'production') {
+      if (u.protocol !== 'https:') return '';
+      const hostname = u.hostname.toLowerCase();
+      if (hostname === 'localhost' || hostname === '127.0.0.1') return '';
+    }
+    return u.toString();
+  } catch {
+    return '';
+  }
+}
+
 export function LiveStatusProvider({ children }: LiveStatusProviderProps) {
   const [isConnected, setIsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
@@ -46,7 +67,7 @@ export function LiveStatusProvider({ children }: LiveStatusProviderProps) {
     let eventSource: EventSource | null = null;
     let retryTimeout: ReturnType<typeof setTimeout> | null = null;
 
-    const baseUrl = process.env.NEXT_PUBLIC_EVENTS_URL || '/api/events';
+    const baseUrl = sanitizeEventSourceUrl(process.env.NEXT_PUBLIC_EVENTS_URL) || '/api/events';
 
     const connect = () => {
       // Connect to SSE (only in browser environment)
