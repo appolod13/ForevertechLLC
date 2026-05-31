@@ -41,6 +41,7 @@
 - “Build” expectation: use Python 3.11 to satisfy torch==2.2.0 wheels on macOS; add pytest-asyncio to run async tests.
 - Studio prompt UX: /studio no longer pre-fills the prompt with the long “futuristic megacity” example; prompt starts blank (and ignores that legacy default if it’s found in restored localStorage).
 - Studio “Latest Drops” CTA: the “Customize Product” call-to-action is rendered below the Latest Drops image (not a hover overlay) so it’s visible on mobile/touch devices.
+- Customize CTA: Preview UIs (Studio / Gallery / Catalog preview) route into /customize with imageUrl + prompt so the front-of-shirt preview renders reliably and customers can add to cart from the same flow.
 
 ## public-catalog (Next.js)
 - App: public-catalog/src/app (Next.js 16 App Router, runs on port 3001)

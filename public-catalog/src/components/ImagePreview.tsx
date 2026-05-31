@@ -83,6 +83,24 @@ export function ImagePreview({
     }
   };
 
+  const handleCustomizeGear = () => {
+    if (!imageUrl) return;
+    const prompt = (() => {
+      try {
+        const raw = localStorage.getItem('foreverteck.studio.lastImage');
+        if (!raw) return '';
+        const parsed = JSON.parse(raw) as unknown;
+        if (!parsed || typeof parsed !== 'object') return '';
+        const rec = parsed as { prompt?: unknown };
+        return typeof rec.prompt === 'string' ? rec.prompt.trim() : '';
+      } catch {
+        return '';
+      }
+    })();
+    const href = `/customize?imageUrl=${encodeURIComponent(imageUrl)}&prompt=${encodeURIComponent(prompt)}`;
+    window.location.href = href;
+  };
+
   return (
     <div 
       key={imageUrl || 'empty'}
@@ -213,6 +231,12 @@ export function ImagePreview({
         <div className="flex items-center gap-2">
           {imageUrl && (
             <>
+              <button
+                onClick={handleCustomizeGear}
+                className="h-9 rounded-lg bg-white px-3 text-xs font-semibold text-black hover:bg-zinc-200 transition-colors"
+              >
+                Customize Your Gear
+              </button>
               <button 
                 onClick={() => setShowMetadata(!showMetadata)}
                 className={cn(

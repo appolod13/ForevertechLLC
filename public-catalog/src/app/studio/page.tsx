@@ -1097,7 +1097,7 @@ function StudioPageInner() {
                   }`}
                   className="mt-4 w-full py-3 rounded-lg font-bold bg-white hover:bg-zinc-200 text-black flex items-center justify-center"
                 >
-                  Customize Product
+                  Customize Your Gear
                 </Link>
               ) : null}
               {generatedImage && generatedTextContent && (

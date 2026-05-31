@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useCart } from '@/context/CartContext';
 import { toast } from 'sonner';
+import Link from 'next/link';
 
 export interface CatalogItemProps {
   id: string;
@@ -128,6 +129,11 @@ export function CatalogItem({
   const description = safeContent.length > 200 
     ? safeContent.substring(0, 200) + '...' 
     : safeContent;
+
+  const customizePrompt = (() => {
+    const p = metadata?.prompt ?? metadata?.title ?? safeContent;
+    return typeof p === 'string' ? p : (p ? JSON.stringify(p) : '');
+  })();
 
   if (isHidden) return null;
 
@@ -353,6 +359,14 @@ export function CatalogItem({
               }}
               loading="eager"
             />
+            <div className="absolute bottom-4 right-4">
+              <Link
+                href={`/customize?imageUrl=${encodeURIComponent(imgSrc)}&prompt=${encodeURIComponent(customizePrompt)}`}
+                className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200 transition-colors"
+              >
+                Customize Your Gear
+              </Link>
+            </div>
             <button 
               onClick={() => setShowPreview(false)}
               className="absolute top-4 right-4 h-10 w-10 bg-black/50 hover:bg-black/80 text-white rounded-full flex items-center justify-center transition-colors"

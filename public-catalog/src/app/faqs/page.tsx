@@ -43,7 +43,7 @@ export default function FaqsPage() {
               Go to Studio
             </Link>
             <Link href="/customize" className="rounded-lg border border-gray-700 bg-black/20 px-4 py-2 hover:bg-black/30">
-              Customize a Product
+              Customize Your Gear
             </Link>
             <Link href="/support" className="rounded-lg border border-gray-700 bg-black/20 px-4 py-2 hover:bg-black/30">
               Support

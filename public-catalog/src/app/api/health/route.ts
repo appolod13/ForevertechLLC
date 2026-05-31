@@ -1,4 +1,5 @@
 import os from "os";
+import { getAiGeneratorsConfig } from "@/lib/aiGeneratorsConfig";
 
 export async function GET() {
   const startedAt = process.env.APP_STARTED_AT
@@ -6,6 +7,16 @@ export async function GET() {
     : Date.now();
   const uptimeSec = Math.round(process.uptime());
   const env = process.env as Record<string, string | undefined>;
+  const cfg = getAiGeneratorsConfig();
+  const isLocalHost = (value: string) => {
+    try {
+      const u = new URL(value);
+      const h = u.hostname.toLowerCase();
+      return h === "localhost" || h === "127.0.0.1" || h === "::1";
+    } catch {
+      return false;
+    }
+  };
   const payload = {
     ok: true,
     time: new Date().toISOString(),
@@ -33,6 +44,18 @@ export async function GET() {
           hasShopId: Boolean(env.PRINTIFY_SHOP_ID),
           hasDefaultSku: Boolean(env.PRINTIFY_DEFAULT_SKU),
           hasSizeSkus: ["S", "M", "L", "XL", "XXL"].some(size => Boolean(env[`PRINTIFY_SKU_${size}`])),
+        },
+        generators: {
+          quantum: {
+            enabled: Boolean(cfg.quantum.enabled),
+            internalConfigured: Boolean(cfg.quantum.internalBaseUrl),
+            internalIsLocalhost: Boolean(cfg.quantum.internalBaseUrl && isLocalHost(cfg.quantum.internalBaseUrl)),
+          },
+          fusion: {
+            enabled: Boolean(cfg.fusion.enabled),
+            internalConfigured: Boolean(cfg.fusion.internalBaseUrl),
+            internalIsLocalhost: Boolean(cfg.fusion.internalBaseUrl && isLocalHost(cfg.fusion.internalBaseUrl)),
+          },
         },
       },
     },

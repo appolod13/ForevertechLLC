@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
-import { Heart, RefreshCw, User, BookOpen, Eye, ShoppingCart, Zap, Key } from 'lucide-react';
+import { Heart, RefreshCw, User, BookOpen, Shirt, ShoppingCart, Zap, Key } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import PixelQryptModal from '@/components/PixelQryptModal';
@@ -126,6 +126,12 @@ export default function GalleryPage() {
     });
   };
 
+  const customizeHrefFor = (item: GalleryItem) => {
+    const imageUrl = typeof item.imageUrl === 'string' ? item.imageUrl : '';
+    const prompt = typeof item.prompt === 'string' ? item.prompt : '';
+    return `/customize?imageUrl=${encodeURIComponent(imageUrl)}&prompt=${encodeURIComponent(prompt)}`;
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       <Header />
@@ -221,10 +227,10 @@ export default function GalleryPage() {
                   </div>
                   <div className="flex gap-2 mb-3">
                     <button 
-                      onClick={() => router.push('/customize')}
+                      onClick={() => router.push(customizeHrefFor(item))}
                       className="flex-1 flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-2 rounded-lg text-sm transition-colors"
                     >
-                      <Eye className="w-4 h-4" /> Preview
+                      <Shirt className="w-4 h-4" /> Customize Your Gear
                     </button>
                     <button 
                       onClick={async () => {

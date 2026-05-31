@@ -64,6 +64,16 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
 
+function isLocalHostUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    const h = u.hostname.toLowerCase();
+    return h === "localhost" || h === "127.0.0.1" || h === "::1";
+  } catch {
+    return false;
+  }
+}
+
 function asPositiveInt(v: unknown): number | undefined {
   const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
   const i = Number.isFinite(n) ? Math.trunc(n) : NaN;
@@ -128,6 +138,9 @@ async function tryAIGenerate(
 ): Promise<AIResult> {
   const cfg = getAiGeneratorsConfig();
   const base = cfg.quantum.internalBaseUrl.trim().replace(/\/$/, "");
+  if (process.env.NODE_ENV === "production" && (!base || isLocalHostUrl(base))) {
+    return { success: false, error: "ai_generator_not_configured" };
+  }
   const url = base + "/v1/images/generations";
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
@@ -206,6 +219,7 @@ async function tryFusionGenerate(prompt: string, width: number, height: number, 
   const cfg = getAiGeneratorsConfig();
   const base = cfg.fusion.internalBaseUrl.trim();
   if (!base) return null;
+  if (process.env.NODE_ENV === "production" && isLocalHostUrl(base)) return null;
   const url = base.replace(/\/$/, "") + "/generate";
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
