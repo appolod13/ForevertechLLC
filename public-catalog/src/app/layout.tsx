@@ -6,7 +6,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.pixelqrypt.com"),
   title: {
-    default: "PixelQrypt | AI Art T-Shirts & Prompt-to-Print Merch",
+    default: "Math Art T-Shirts & AI Prompt-to-Print Merch",
     template: "%s | PixelQrypt",
   },
   description:
@@ -14,17 +14,22 @@ export const metadata: Metadata = {
   keywords: [
     "PixelQrypt",
     "ForeverTech",
+    "math art",
     "AI art t-shirts",
     "AI art merch",
+    "emotional AI art",
+    "prompt art",
     "prompt to print",
     "custom t-shirt design",
     "print on demand apparel",
     "fractal art",
+    "generative art",
     "Julia set art",
     "Mandelbrot art",
     "graphic tee",
     "streetwear design",
     "aiart",
+    "mathart",
     "fractalart",
     "custommerch",
   ],
@@ -32,14 +37,14 @@ export const metadata: Metadata = {
     type: "website",
     url: "https://www.pixelqrypt.com",
     siteName: "PixelQrypt",
-    title: "PixelQrypt | AI Art T-Shirts & Prompt-to-Print Merch",
+    title: "Math Art T-Shirts & AI Prompt-to-Print Merch",
     description:
       "Create AI-inspired fractal art from prompts and buy it printed on custom apparel. Save designs to your gallery and checkout securely. Print-on-demand fulfillment and shipping.",
     images: [{ url: "/images/ai-gen-1.png", width: 1200, height: 630, alt: "PixelQrypt AI art apparel preview" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "PixelQrypt | AI Art T-Shirts & Prompt-to-Print Merch",
+    title: "Math Art T-Shirts & AI Prompt-to-Print Merch",
     description:
       "Create AI-inspired fractal art from prompts and buy it printed on custom apparel. Save to gallery, checkout securely, and ship via print-on-demand fulfillment.",
     images: ["/images/ai-gen-1.png"],
