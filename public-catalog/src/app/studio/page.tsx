@@ -723,10 +723,27 @@ function StudioPageInner() {
           ipfs: ipfsEnabled
         })
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data) {
-        throw new Error(`Posting failed (HTTP ${res.status})`);
+      const contentType = res.headers.get('content-type') || '';
+      const data = contentType.includes('application/json') ? await res.json().catch(() => null) : null;
+      if (!data) {
+        throw new Error(`HTTP ${res.status}`);
       }
+
+      if (!res.ok) {
+        const errRaw =
+          (typeof data === 'object' && data !== null && 'error' in data)
+            ? (data as { error?: unknown }).error
+            : null;
+        const err = typeof errRaw === 'string' ? errRaw.trim() : '';
+        const resultsRaw =
+          (typeof data === 'object' && data !== null && 'results' in data)
+            ? (data as { results?: unknown }).results
+            : null;
+        const resultsText = resultsRaw ? (() => { try { return JSON.stringify(resultsRaw); } catch { return ''; } })() : '';
+        const suffix = err || resultsText;
+        throw new Error(suffix ? `HTTP ${res.status}: ${suffix}` : `HTTP ${res.status}`);
+      }
+
       if (data.success) {
         setPostingStatus('success');
         setPostContent('');
