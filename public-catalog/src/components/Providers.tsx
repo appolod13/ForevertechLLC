@@ -6,10 +6,32 @@ import { CartProvider } from '@/context/CartContext';
 import { ReactNode, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { Toaster } from 'sonner';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 
 export function Providers({ children }: { children: ReactNode }) {
   const pathname = usePathname() || '';
   const showLive = !(pathname === '/checkout' || pathname.startsWith('/checkout/'));
+
+  const navArrows = (
+    <div className="fixed bottom-4 left-4 z-50 flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => window.history.back()}
+        aria-label="Back"
+        className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-zinc-800 bg-zinc-950/80 text-zinc-200 shadow-lg backdrop-blur hover:bg-zinc-900"
+      >
+        <ArrowLeft className="h-5 w-5" />
+      </button>
+      <button
+        type="button"
+        onClick={() => window.history.forward()}
+        aria-label="Forward"
+        className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-zinc-800 bg-zinc-950/80 text-zinc-200 shadow-lg backdrop-blur hover:bg-zinc-900"
+      >
+        <ArrowRight className="h-5 w-5" />
+      </button>
+    </div>
+  );
 
   useEffect(() => {
     const shouldReloadForError = (value: unknown) => {
@@ -64,11 +86,13 @@ export function Providers({ children }: { children: ReactNode }) {
         {showLive ? (
           <LiveStatusProvider>
             {children}
+            {navArrows}
             <Toaster theme="dark" position="bottom-right" />
           </LiveStatusProvider>
         ) : (
           <>
             {children}
+            {navArrows}
             <Toaster theme="dark" position="bottom-right" />
           </>
         )}
