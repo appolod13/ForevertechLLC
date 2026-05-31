@@ -72,9 +72,16 @@ export default function RegisterPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              minLength={6}
+              autoComplete="new-password"
               className="w-full rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/50"
               required
             />
+            <div className="mt-2 space-y-1 text-xs text-zinc-500">
+              <div>Minimum 6 characters.</div>
+              <div className="font-mono">Example: FractalMath!2026</div>
+              <div>Recommended: 12+ characters with letters, numbers, and a symbol.</div>
+            </div>
           </div>
 
           <button

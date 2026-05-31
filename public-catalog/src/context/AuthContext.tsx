@@ -1,7 +1,6 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { MIRROR_API_URL } from '@/lib/utils';
 
 interface User {
   id: string;
@@ -18,6 +17,36 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+function friendlyAuthErrorMessage(input: unknown): string {
+  const raw = typeof input === 'string' ? input : '';
+  const code = raw.trim().toLowerCase();
+  if (!code) return 'Request failed';
+
+  if (code === 'password_too_short') return 'Password must be at least 6 characters. Recommended: 12+ characters with letters, numbers, and a symbol.';
+  if (code === 'missing_email_or_password') return 'Please enter your email and password.';
+  if (code === 'supabase_not_configured') return 'Sign up is temporarily unavailable (Supabase not configured).';
+
+  return raw;
+}
+
+async function postAuth<TBody extends Record<string, unknown>>(path: string, body: TBody) {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).catch(() => null);
+
+  if (!res) throw new Error('Failed to fetch. Please check your connection and try again.');
+
+  const contentType = res.headers.get('content-type') || '';
+  const json = contentType.includes('application/json') ? await res.json().catch(() => null) : null;
+  const ok = Boolean(json && typeof json === 'object' && (json as Record<string, unknown>).success === true);
+  const err = json && typeof json === 'object' ? (json as Record<string, unknown>).error : null;
+
+  if (!res.ok || !ok) throw new Error(friendlyAuthErrorMessage(err) || `Request failed (HTTP ${res.status})`);
+  return json as Record<string, unknown>;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -40,17 +69,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${MIRROR_API_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || 'Login failed');
-      
-      setUser(data.user);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      const data = await postAuth('/api/auth/login', { email, password });
+      const u = (data.user || null) as User | null;
+      if (!u) throw new Error('Login failed');
+      setUser(u);
+      localStorage.setItem('user', JSON.stringify(u));
     } catch (error) {
       throw error;
     } finally {
@@ -61,22 +84,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = async (email: string, password: string, name?: string) => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${MIRROR_API_URL}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, name }),
-      });
-      
-      const contentType = res.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Server error: Invalid response format');
-      }
-
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || 'Registration failed');
-      
-      setUser(data.user);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      const data = await postAuth('/api/auth/register', { email, password, name });
+      const u = (data.user || null) as User | null;
+      if (!u) throw new Error('Registration failed');
+      setUser(u);
+      localStorage.setItem('user', JSON.stringify(u));
     } catch (error) {
       throw error;
     } finally {
