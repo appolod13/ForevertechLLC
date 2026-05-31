@@ -115,7 +115,7 @@ export default async function Home() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex items-end p-8">
                 <div className="max-w-xl">
                   <h1 className="text-3xl md:text-5xl font-bold text-white tracking-tight drop-shadow-lg mb-2">
-                    BannerBuild Julia: <span className="text-primary">Emotional</span> Prompt Math Art to Merch
+                    Mandelbrot + Julia Fractal Art: <span className="text-primary">Emotional</span> Prompt Math Art to Merch
                   </h1>
                   <p className="text-zinc-300 text-sm md:text-base line-clamp-2">
                     Your words become numbers, and your numbers become a Julia + Mandelbrot design you can preview on a T-shirt, publish to your gallery, and buy with card checkout.

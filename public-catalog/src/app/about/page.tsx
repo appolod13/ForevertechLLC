@@ -81,7 +81,7 @@ export default function AboutPage() {
               <h2 className="text-xl font-bold">What Makes It Different</h2>
             </div>
             <ul className="mt-4 space-y-2 text-gray-300">
-              <li>BannerBuild-Julia turns your words into numbers and maps them into fractal parameters.</li>
+              <li>Mandelbrot + Julia fractal art turns your words into numbers and maps them into fractal parameters.</li>
               <li>Julia + Mandelbrot fusion creates a mathematical, emotional abstract design style.</li>
               <li>Optional Quantum Verified uses a recorded seed sourced from IBM Quantum services.</li>
               <li>Advanced Fusion blends uploaded images with generated assets for print-ready output.</li>
@@ -113,7 +113,7 @@ export default function AboutPage() {
                 <h3 className="font-bold">1) Generate</h3>
               </div>
               <p className="mt-3 text-gray-300 text-sm leading-relaxed">
-                In Studio, write a prompt and generate an original asset. You can use the emotional mathematics generator (BannerBuild-Julia),
+                In Studio, write a prompt and generate an original asset. You can use the Mandelbrot + Julia fractal art generator,
                 and other enabled engines.
               </p>
             </div>
