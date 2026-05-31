@@ -796,33 +796,45 @@ function StudioPageInner() {
     if (!url) {
       throw new Error('Empty image URL');
     }
-    
-    if (!url.startsWith('data:')) {
-      let path = url;
-      try {
-        const parsed = new URL(url);
-        path = parsed.pathname;
-      } catch {
-      }
-      if (!/\.(png|jpe?g|webp)$/i.test(path)) {
-        throw new Error('Unsupported image format');
-      }
-    }
-    
+
     const img = document.createElement('img');
-    let fetchUrl = url;
-    if (!url.startsWith('data:')) {
-      img.crossOrigin = 'anonymous';
-      fetchUrl = `/api/proxy-image?url=${encodeURIComponent(url)}`;
-    }
+
+    const isData = url.startsWith('data:');
+    const isRelative = !isData && url.startsWith('/');
+    const isSameOriginAbsolute = (() => {
+      if (isData || isRelative) return false;
+      try {
+        const u = new URL(url);
+        return typeof window !== 'undefined' && u.origin === window.location.origin;
+      } catch {
+        return false;
+      }
+    })();
+
+    img.crossOrigin = 'anonymous';
+    const directUrl = url;
+    const proxiedUrl = isData ? url : `/api/proxy-image?url=${encodeURIComponent(url)}`;
+
     const loaded = await new Promise<boolean>((resolve) => {
       img.onload = () => resolve(true);
       img.onerror = () => resolve(false);
-      img.src = fetchUrl;
+      img.src = isData || isRelative || isSameOriginAbsolute ? directUrl : proxiedUrl;
     });
+
     if (!loaded) {
-      throw new Error('Image validation failed');
+      if (isData) {
+        throw new Error('Image validation failed');
+      }
+      const fallbackLoaded = await new Promise<boolean>((resolve) => {
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+        img.src = proxiedUrl;
+      });
+      if (!fallbackLoaded) {
+        throw new Error('Image validation failed');
+      }
     }
+
     if (img.width < 300 || img.height < 300) {
       throw new Error('Image too small for poster');
     }

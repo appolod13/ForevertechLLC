@@ -2,14 +2,32 @@ import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const url = searchParams.get('url');
+    const reqUrl = new URL(request.url);
+    const url = reqUrl.searchParams.get('url');
 
     if (!url) {
       return NextResponse.json({ error: 'Missing url parameter' }, { status: 400 });
     }
 
-    const response = await fetch(url);
+    const raw = String(url || '').trim();
+    const resolvedUrl = (() => {
+      if (!raw) return '';
+      if (raw.startsWith('ipfs://')) {
+        const cid = raw.slice('ipfs://'.length).replace(/^ipfs\//, '');
+        return cid ? `https://ipfs.io/ipfs/${cid}` : '';
+      }
+      if (raw.startsWith('/')) {
+        return new URL(raw, reqUrl.origin).toString();
+      }
+      if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+      return '';
+    })();
+
+    if (!resolvedUrl) {
+      return NextResponse.json({ error: 'Invalid url parameter' }, { status: 400 });
+    }
+
+    const response = await fetch(resolvedUrl);
     
     if (!response.ok) {
       throw new Error(`Failed to fetch image: ${response.statusText}`);
