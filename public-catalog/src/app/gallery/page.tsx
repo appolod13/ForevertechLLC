@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
-import { Heart, RefreshCw, User, BookOpen, Shirt, ShoppingCart, Zap, Key } from 'lucide-react';
+import { Heart, RefreshCw, User, BookOpen, Shirt, ShoppingCart, Zap, Key, Send } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import PixelQryptModal from '@/components/PixelQryptModal';
@@ -132,6 +132,31 @@ export default function GalleryPage() {
     return `/customize?imageUrl=${encodeURIComponent(imageUrl)}&prompt=${encodeURIComponent(prompt)}`;
   };
 
+  const sendToPoster = (item: GalleryItem) => {
+    if (typeof window === 'undefined') return;
+    const img = typeof item.imageUrl === 'string' ? item.imageUrl.trim() : '';
+    if (!img) return;
+    const prompt = typeof item.prompt === 'string' ? item.prompt.trim() : '';
+    const origin = window.location.origin;
+    const customizeUrl = new URL('/customize', origin);
+    customizeUrl.searchParams.set('imageUrl', img);
+    if (prompt) customizeUrl.searchParams.set('prompt', prompt);
+    const shareText = [
+      'PixelQrypt',
+      prompt ? prompt.slice(0, 220) : '',
+      `Customize: ${customizeUrl.toString()}`,
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+      .slice(0, 900);
+
+    const studioUrl = new URL('/studio', origin);
+    studioUrl.searchParams.set('shareImage', img);
+    studioUrl.searchParams.set('shareText', shareText);
+    if (prompt) studioUrl.searchParams.set('sharePrompt', prompt.slice(0, 600));
+    window.location.href = studioUrl.toString();
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       <Header />
@@ -245,6 +270,12 @@ export default function GalleryPage() {
                       <ShoppingCart className="w-4 h-4" /> Purchase
                     </button>
                   </div>
+                  <button
+                    onClick={() => sendToPoster(item)}
+                    className="w-full flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-2 rounded-lg text-sm transition-colors mb-3"
+                  >
+                    <Send className="w-4 h-4" /> Send to Multi-Channel Poster
+                  </button>
                   {item.isQuantumVerified && (
                     <button 
                       onClick={() => setPixelQryptModalOpen(true)}

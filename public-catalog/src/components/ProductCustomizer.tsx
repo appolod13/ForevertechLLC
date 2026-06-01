@@ -32,6 +32,8 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
 
   const [includeQrStamp, setIncludeQrStamp] = useState(true);
   const [qrUrlInput, setQrUrlInput] = useState('');
+  const [backImageDataUrl, setBackImageDataUrl] = useState<string>('');
+  const [backImageError, setBackImageError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/products')
@@ -347,6 +349,93 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
     }
   }, [includeQrStamp, qrUrlInput]);
 
+  const setBackImageFromFile = async (file: File) => {
+    setBackImageError(null);
+    const maxBytes = 2_500_000;
+    if (typeof file.size === 'number' && file.size > maxBytes) {
+      setBackImageError(`Image too large (max ${Math.round(maxBytes / (1024 * 1024))}MB)`);
+      setBackImageDataUrl('');
+      return;
+    }
+
+    const rawDataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+      reader.onerror = () => reject(new Error('read_failed'));
+      reader.readAsDataURL(file);
+    });
+    if (!rawDataUrl.startsWith('data:image/')) {
+      setBackImageError('Only image files are allowed');
+      setBackImageDataUrl('');
+      return;
+    }
+
+    const resized = await new Promise<string>((resolve, reject) => {
+      const img = document.createElement('img');
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const maxSide = 900;
+          const iw = Math.max(1, img.naturalWidth || img.width || 1);
+          const ih = Math.max(1, img.naturalHeight || img.height || 1);
+          const scale = Math.min(1, maxSide / Math.max(iw, ih));
+          const w = Math.max(1, Math.round(iw * scale));
+          const h = Math.max(1, Math.round(ih * scale));
+
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return reject(new Error('canvas_unavailable'));
+          ctx.fillStyle = '#000';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          const out = canvas.toDataURL('image/jpeg', 0.88);
+          resolve(out);
+        } catch (e) {
+          reject(e);
+        }
+      };
+      img.onerror = () => reject(new Error('image_load_failed'));
+      img.src = rawDataUrl;
+    });
+
+    if (!resized.startsWith('data:image/')) {
+      setBackImageError('Failed to process image');
+      setBackImageDataUrl('');
+      return;
+    }
+    if (resized.length > 1_500_000) {
+      setBackImageError('Image is still too large after processing. Please use a smaller image.');
+      setBackImageDataUrl('');
+      return;
+    }
+    setBackImageDataUrl(resized);
+    setView('back');
+  };
+
+  const sendToPoster = () => {
+    if (typeof window === 'undefined') return;
+    const img = typeof initialImageUrl === 'string' ? initialImageUrl.trim() : '';
+    if (!img) return;
+    const origin = window.location.origin;
+    const sharePrompt = typeof resolvedPrompt === 'string' ? resolvedPrompt.trim() : '';
+    const productLabel = `${selectedProduct?.name || 'Product'}${selectedVariant ? ` (${selectedVariant})` : ''}${selectedColor ? ` - ${selectedColor}` : ''}`.trim();
+    const shareText = [
+      `PixelQrypt: ${productLabel}`,
+      sharePrompt ? sharePrompt.slice(0, 220) : '',
+      `Shop: ${window.location.href}`,
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+      .slice(0, 900);
+    const studioUrl = new URL('/studio', origin);
+    studioUrl.searchParams.set('shareImage', img);
+    studioUrl.searchParams.set('shareText', shareText);
+    if (sharePrompt) studioUrl.searchParams.set('sharePrompt', sharePrompt.slice(0, 600));
+    window.location.href = studioUrl.toString();
+  };
+
 
   const backPreviewSeed = useMemo(() => {
     const raw = (backPatternSalt || bannerText || '').slice(0, 220);
@@ -454,6 +543,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
                 variant: selectedVariant,
                 printifySku,
                 backCustomerText: (previewBackText || '').trim(),
+                backImageDataUrl: backImageDataUrl || undefined,
                 qrUrl: qrUrlForOrder || undefined,
                 qrDisabled: includeQrStamp ? undefined : true,
                 originalPrompt: resolvedPrompt,
@@ -572,13 +662,24 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
                   ) : null}
                 </>
               ) : (
-                <img
-                  src={backPreviewUrl}
-                  alt="Back design"
-                  className="absolute inset-0 h-full w-full object-contain"
-                  loading="eager"
-                  decoding="async"
-                />
+                <>
+                  <img
+                    src={backPreviewUrl}
+                    alt="Back design"
+                    className="absolute inset-0 h-full w-full object-contain"
+                    loading="eager"
+                    decoding="async"
+                  />
+                  {backImageDataUrl ? (
+                    <img
+                      src={backImageDataUrl}
+                      alt="Back image"
+                      className="absolute left-[10%] top-[14%] h-[58%] w-[70%] object-contain rounded-md shadow-xl border border-white/10 bg-black/20"
+                      loading="eager"
+                      decoding="async"
+                    />
+                  ) : null}
+                </>
               )}
             </div>
          )}
@@ -650,6 +751,35 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
         
         {selectedProduct && (
             <div className="space-y-6">
+                {!isMug ? (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-300">Back Image (optional)</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        setBackImageFromFile(f);
+                        e.currentTarget.value = '';
+                      }}
+                      className="w-full rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-white focus:border-primary focus:outline-none"
+                    />
+                    <div className="flex items-center justify-between gap-3 text-xs text-zinc-500">
+                      <div>Upload an image to place inside the red back panel.</div>
+                      {backImageDataUrl ? (
+                        <button
+                          type="button"
+                          onClick={() => { setBackImageDataUrl(''); setBackImageError(null); }}
+                          className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1 text-zinc-200 hover:bg-zinc-800"
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                    </div>
+                    {backImageError ? <div className="text-xs text-red-400">{backImageError}</div> : null}
+                  </div>
+                ) : null}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <label className="text-sm font-medium text-zinc-300">QR Link (optional)</label>
@@ -737,6 +867,17 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
                 {orderStatus === 'processing' && <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-black"></div>}
                 {orderStatus === 'success' ? 'Added to Cart!' : 'Add to Cart'}
                 {orderStatus === 'idle' && <ShoppingCart className="w-5 h-5" />}
+            </button>
+            <button
+              type="button"
+              onClick={sendToPoster}
+              disabled={!initialImageUrl}
+              className={cn(
+                "mt-3 w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all border",
+                initialImageUrl ? "border-zinc-700 bg-zinc-900 text-white hover:bg-zinc-800" : "border-zinc-900 bg-zinc-950/40 text-zinc-600 cursor-not-allowed"
+              )}
+            >
+              Send to Multi-Channel Poster
             </button>
             {orderStatus === 'success' && (
                 <p className="text-green-500 text-center mt-2 text-sm font-medium">

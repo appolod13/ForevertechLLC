@@ -137,6 +137,36 @@ export function CatalogItem({
 
   if (isHidden) return null;
 
+  const sendToPoster = () => {
+    if (typeof window === 'undefined') return;
+    const img = (imgSrc || '').trim();
+    if (!img) return;
+    const origin = window.location.origin;
+    const customizeUrl = new URL('/customize', origin);
+    customizeUrl.searchParams.set('imageUrl', img);
+    if (customizePrompt) customizeUrl.searchParams.set('prompt', customizePrompt);
+
+    const title = (() => {
+      const t = metadata?.title;
+      return typeof t === 'string' ? t.trim() : '';
+    })();
+
+    const shareText = [
+      title || 'PixelQrypt',
+      customizePrompt ? customizePrompt.trim().slice(0, 220) : '',
+      `Customize: ${customizeUrl.toString()}`,
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+      .slice(0, 900);
+
+    const studioUrl = new URL('/studio', origin);
+    studioUrl.searchParams.set('shareImage', img);
+    studioUrl.searchParams.set('shareText', shareText);
+    if (customizePrompt) studioUrl.searchParams.set('sharePrompt', customizePrompt.slice(0, 600));
+    window.location.href = studioUrl.toString();
+  };
+
   const handlePurchase = async () => {
     setIsPurchasing(true);
     try {
@@ -340,6 +370,13 @@ export function CatalogItem({
             >
               {isPurchasing ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-black border-t-transparent" /> : <ShoppingCart className="h-4 w-4" />}
               Buy Now
+            </button>
+            <button
+              type="button"
+              onClick={sendToPoster}
+              className="flex items-center justify-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-zinc-800"
+            >
+              Send to Multi-Channel Poster
             </button>
           </div>
         </div>

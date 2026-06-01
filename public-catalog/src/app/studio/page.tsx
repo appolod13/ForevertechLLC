@@ -28,6 +28,9 @@ function StudioPageInner() {
   const searchParams = useSearchParams();
   const testMode = (searchParams?.get('test') || '') === '1';
   const scannedBackText = (searchParams?.get('back') || '').trim();
+  const sharedImage = (searchParams?.get('shareImage') || '').trim();
+  const sharedText = (searchParams?.get('shareText') || '').trim();
+  const sharedPrompt = (searchParams?.get('sharePrompt') || '').trim();
   const [hydrated, setHydrated] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [crossOptimizeLoading, setCrossOptimizeLoading] = useState(false);
@@ -101,6 +104,22 @@ function StudioPageInner() {
     setPostContent((prev) => (prev && prev.trim() ? prev : scannedBackText));
     addLog(`Scanned back text: ${scannedBackText}`, 'success', 'qr_scan');
   }, [hydrated, scannedBackText]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!sharedImage && !sharedText && !sharedPrompt) return;
+    if (sharedImage) {
+      setPosterAttachedImage((prev) => prev || sharedImage);
+      setGeneratedImage((prev) => prev || sharedImage);
+    }
+    if (sharedText) {
+      setPostContent((prev) => (prev && prev.trim() ? prev : sharedText));
+    }
+    if (sharedPrompt) {
+      setPrompt((prev) => (prev && prev.trim() ? prev : sharedPrompt));
+    }
+    addLog('Imported item into Multi-Channel Poster', 'success', 'share_in');
+  }, [hydrated, sharedImage, sharedPrompt, sharedText]);
 
   useEffect(() => {
     setHydrated(true);

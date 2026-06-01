@@ -429,6 +429,71 @@ function customerBackTextFromCartItem(metadata: Record<string, unknown>): string
   return typeof raw === 'string' ? sanitizeCustomerBackText(raw) : '';
 }
 
+function customerBackImageFromCartItem(metadata: Record<string, unknown>): string {
+  const raw = metadata['backImageDataUrl'];
+  if (typeof raw !== 'string') return '';
+  const v = raw.trim();
+  if (!v.startsWith('data:image/')) return '';
+  return v.length > 1_500_000 ? '' : v;
+}
+
+async function buildCustomerBackImageOverlayPng(params: {
+  bgX: number;
+  bgY: number;
+  bgW: number;
+  bgH: number;
+  dataUrl: string;
+}) {
+  const dataUrl = String(params.dataUrl || '').trim();
+  if (!dataUrl || !dataUrl.startsWith('data:image/')) return null;
+  if (dataUrl.length > 1_500_000) return null;
+
+  const match = dataUrl.match(/^data:([A-Za-z0-9+./-]+);base64,(.+)$/);
+  if (!match || match.length < 3) return null;
+  const mime = match[1] || '';
+  if (!mime.startsWith('image/')) return null;
+  const b64 = match[2] || '';
+  if (!b64) return null;
+
+  let input: Buffer;
+  try {
+    input = Buffer.from(b64, 'base64');
+  } catch {
+    return null;
+  }
+
+  const bgX = Math.max(0, Math.trunc(params.bgX));
+  const bgY = Math.max(0, Math.trunc(params.bgY));
+  const bgW = Math.max(1, Math.trunc(params.bgW));
+  const bgH = Math.max(1, Math.trunc(params.bgH));
+
+  const boxX = bgX + Math.max(18, Math.round(bgW * 0.06));
+  const boxY = bgY + Math.max(22, Math.round(bgH * 0.14));
+  const boxW = Math.max(64, Math.round(bgW * 0.72));
+  const boxH = Math.max(64, Math.round(bgH * 0.66));
+
+  const resizedBuf = await sharp(input)
+    .rotate()
+    .resize({
+      width: boxW,
+      height: boxH,
+      fit: 'inside',
+      withoutEnlargement: true,
+    })
+    .png()
+    .toBuffer();
+
+  const meta = await sharp(resizedBuf).metadata();
+  const w = typeof meta.width === 'number' && Number.isFinite(meta.width) ? meta.width : 0;
+  const h = typeof meta.height === 'number' && Number.isFinite(meta.height) ? meta.height : 0;
+  if (w <= 0 || h <= 0) return null;
+
+  const left = boxX + Math.max(0, Math.round((boxW - w) / 2));
+  const top = boxY + Math.max(0, Math.round((boxH - h) / 2));
+
+  return { input: resizedBuf, left, top };
+}
+
 async function buildCustomerBackTextOverlayPng(params: { width: number; height: number; bgX: number; bgY: number; bgW: number; bgH: number; text: string }) {
   const text = sanitizeCustomerBackText(params.text || '');
   if (!text) return null;
@@ -785,6 +850,7 @@ async function renderBackQrStampBase64(params: {
   qrUrl?: string;
   qrDisabled?: boolean;
   customerText?: string;
+  backImageDataUrl?: string;
 }) {
   const cfg = getPrintifyBackTextConfig();
   const clean = sanitizeBannerText(params.text) || 'CUSTOM';
@@ -807,9 +873,15 @@ async function renderBackQrStampBase64(params: {
   const customerOverlay = params.customerText
     ? await buildCustomerBackTextOverlayPng({ width, height, bgX, bgY, bgW, bgH, text: params.customerText })
     : null;
+  const backImageOverlay = params.backImageDataUrl
+    ? await buildCustomerBackImageOverlayPng({ bgX, bgY, bgW, bgH, dataUrl: params.backImageDataUrl })
+    : null;
 
   const targetUrl = buildBackQrTargetUrl(params.origin, clean, params.qrUrl, params.qrDisabled);
-  const overlays = [...(customerOverlay ? [{ input: customerOverlay, left: 0, top: 0 }] : [])];
+  const overlays = [
+    ...(customerOverlay ? [{ input: customerOverlay, left: 0, top: 0 }] : []),
+    ...(backImageOverlay ? [backImageOverlay] : []),
+  ];
   if (targetUrl) {
     const stamp = await buildQrStampPng({ url: targetUrl, stampSide, backgroundColor: cfg.render.backgroundColor });
     const wipeSvg = Buffer.from(
@@ -833,6 +905,7 @@ async function getBackWordPreviewUrl(
   qrUrl?: string,
   customerText?: string,
   qrDisabled?: boolean,
+  backImageDataUrl?: string,
 ) {
   const cfg = getPrintifyBackTextConfig();
   const ttlMs = 24 * 60 * 60 * 1000;
@@ -843,6 +916,8 @@ async function getBackWordPreviewUrl(
   const qrKey = qrDisabled ? '|noqr' : qrUrl ? `|u|${fnv1a32Hex(qrUrl).slice(0, 8)}` : '';
   const ct = sanitizeCustomerBackText(customerText || '');
   const ctKey = ct ? `|t|${fnv1a32Hex(ct).slice(0, 8)}` : '';
+  const bi = typeof backImageDataUrl === 'string' ? backImageDataUrl.trim() : '';
+  const biKey = bi ? `|bi|${fnv1a32Hex(`${bi.length}|${bi.slice(0, 512)}`).slice(0, 10)}` : '';
   const originKey = origin ? (() => {
     try {
       return new URL(origin).host;
@@ -850,11 +925,11 @@ async function getBackWordPreviewUrl(
       return origin;
     }
   })() : 'no_origin';
-  const cacheKey = `${mode}|${style}|back_v1|${originKey}${qrKey}${ctKey}|${cfg.version}${saltKey}|${kw.toUpperCase()}`;
+  const cacheKey = `${mode}|${style}|back_v1|${originKey}${qrKey}${ctKey}${biKey}|${cfg.version}${saltKey}|${kw.toUpperCase()}`;
   const cached = cachedBackWordPreviewUrls.get(cacheKey);
   if (cached && Date.now() - cached.at < ttlMs) return cached.url;
 
-  const base64 =
+  let base64 =
     mode === 'qr_stamp' && origin
       ? await renderBackQrStampBase64({
           origin,
@@ -864,15 +939,46 @@ async function getBackWordPreviewUrl(
           qrUrl,
           qrDisabled,
           customerText: ct || undefined,
+          backImageDataUrl: bi || undefined,
         })
       : style === 'abstract'
         ? await renderBackAbstractBase64(kw, seedSalt)
         : await renderBackBannerBase64(kw, seedSalt);
+  if ((ct || bi) && !(mode === 'qr_stamp' && origin)) {
+    try {
+      const r = cfg.render;
+      const width = r.width;
+      const height = r.height;
+      const bgW = Math.min(r.bgW, width);
+      const bgH = Math.min(r.bgH, height);
+      const bgX = Math.floor((width - bgW) / 2);
+      const bgY = Math.floor((height - bgH) / 2);
+
+      const overlays: Array<{ input: Buffer; left: number; top: number }> = [];
+      if (ct) {
+        const t = await buildCustomerBackTextOverlayPng({ width, height, bgX, bgY, bgW, bgH, text: ct });
+        if (t) overlays.push({ input: t, left: 0, top: 0 });
+      }
+      if (bi) {
+        const i = await buildCustomerBackImageOverlayPng({ bgX, bgY, bgW, bgH, dataUrl: bi });
+        if (i) overlays.push(i);
+      }
+      if (overlays.length) {
+        const out = await sharp(Buffer.from(base64, 'base64'))
+          .composite(overlays)
+          .png({ compressionLevel: 9, adaptiveFiltering: true, palette: true })
+          .toBuffer();
+        base64 = out.toString('base64');
+      }
+    } catch {
+    }
+  }
   const fileSafe = (kw || 'CUSTOM').replace(/\s+/g, '-').replace(/[^A-Za-z0-9-]/g, '').slice(0, 48) || 'CUSTOM';
   const saltTag = seedSalt ? `-q-${seedSalt.slice(0, 8)}` : '';
   const ctTag = ct ? `-t-${fnv1a32Hex(ct).slice(0, 6)}` : '';
+  const biTag = bi ? `-bi-${fnv1a32Hex(`${bi.length}|${bi.slice(0, 512)}`).slice(0, 6)}` : '';
   const prefix = mode === 'qr_stamp' ? `back-qr-stamp-${style}-v1` : `back-${style}-v1`;
-  const previewUrl = await uploadImageToPrintify(`${prefix}-${cfg.version}${saltTag}${ctTag}-${fileSafe}.png`, base64);
+  const previewUrl = await uploadImageToPrintify(`${prefix}-${cfg.version}${saltTag}${ctTag}${biTag}-${fileSafe}.png`, base64);
   cachedBackWordPreviewUrls.set(cacheKey, { url: previewUrl, at: Date.now() });
   return previewUrl;
 }
@@ -1474,6 +1580,7 @@ export async function POST(request: Request) {
       if (backKey) {
         const bannerText = bannerTextFromCartItem(item, metadata);
         const customerBackText = customerBackTextFromCartItem(metadata);
+        const customerBackImage = customerBackImageFromCartItem(metadata);
         const seedSalt = buildBackSeedSalt({
           sessionId: session.id,
           itemId: String(item.id || ''),
@@ -1489,6 +1596,7 @@ export async function POST(request: Request) {
           customerQrUrl || undefined,
           customerBackText || undefined,
           qrDisabled,
+          customerBackImage || undefined,
         );
 
         printAreas[backKey] = [
