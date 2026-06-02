@@ -104,6 +104,24 @@ export default function FaqsPage() {
             </ul>
           </Card>
 
+          <Card title="Why does social login sometimes keep resetting (Meta/Instagram/Facebook)?">
+            <p>
+              Some browsers and privacy tools block the cookies and redirects required for OAuth login (the “Sign in to Instagram/Facebook” flow). When that
+              happens, the developer console or login screen can refresh and appear to erase what you just typed.
+            </p>
+            <p className="font-semibold text-white">Fix checklist</p>
+            <ul className="list-disc pl-6 space-y-2">
+              <li>Turn off ad blockers and tracker blockers for the login domain (for Meta setup this is often developers.facebook.com).</li>
+              <li>Disable privacy, cookie, and script-blocking extensions temporarily while you complete the setup.</li>
+              <li>Open a Private/Incognito window and try the login again.</li>
+              <li>Try Chrome or Edge if your browser keeps resetting the page.</li>
+            </ul>
+            <p>
+              After you finish linking accounts, you can re-enable your blockers. If login is still blocked, make sure your Meta App Domains and Valid OAuth
+              Redirect URIs include your exact site domain (pixelqrypt.com and www.pixelqrypt.com).
+            </p>
+          </Card>
+
           <Card title="What is Printify in this flow?">
             <p>
               Printify is our production partner integration that handles print-on-demand fulfillment: we upload the exact print-ready image, map it to a
