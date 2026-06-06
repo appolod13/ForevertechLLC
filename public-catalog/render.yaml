@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: public-catalog
+    env: node
+    plan: starter
+    buildCommand: "pnpm install; pnpm build"
+    startCommand: "pnpm start"
+    healthCheckPath: "/api/health"
+    envVars:
+      - key: NODE_ENV
+        value: "production"
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        fromService:
+          type: supabase
+          name: supabase
+          property: url
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        fromService:
+          type: supabase
+          name: supabase
+          property: anonKey
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        fromService:
+          type: supabase
+          name: supabase
+          property: serviceRoleKey
+      - key: STRIPE_SECRET_KEY
+        fromService:
+          type: stripe
+          name: stripe
+          property: secretKey
+      - key: STRIPE_WEBHOOK_SECRET
+        fromService:
+          type: stripe
+          name: stripe
+          property: webhookSecret

@@ -183,7 +183,7 @@ function normalizeSubreddit(input: string) {
   const raw = (input || '').trim();
   if (!raw) return '';
   const cleaned = raw.replace(/^https?:\/\/(www\.)?reddit\.com\/r\//i, '').trim();
-  return cleaned.replace(/^\/?r\//i, '').replace(/\/.*/$/, '').trim();
+  return cleaned.replace(/^\/?r\//i, '').replace(/\/.*$/, '').trim();
 }
 
 async function redditRefreshAccessToken(refreshToken: string) {
