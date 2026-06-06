@@ -92,7 +92,8 @@ async function tiktokRefreshAccessToken(refreshToken: string) {
     cache: 'no-store',
   });
   const json = (await res.json().catch(() => null)) as
-    | {
+    |
+      {
         access_token?: string;
         refresh_token?: string;
         expires_in?: number;
@@ -306,10 +307,10 @@ async function redditUploadImage(params: { accessToken: string; imageBlob: Blob;
       throw new Error(`Reddit S3 upload failed with status ${s3Res.status}`);
     }
 
-    return { assetId: (json.asset_id || json.medi-id || '').trim() };
+    return { assetId: (json.asset_id || json['media-id'] || '').trim() };
   }
 
-  return { assetId: (json?.asset_id || json?.medi-id || '').trim() };
+  return { assetId: (json?.asset_id || json?.['media-id'] || '').trim() };
 }
 
 async function redditSubmitTextPost(params: { accessToken: string; subreddit: string; title: string; text: string }) {
@@ -823,7 +824,7 @@ export async function POST(request: Request) {
               // A full implementation would require another Reddit API call to create the actual image post after upload.
               // For this task, we will consider the image uploaded and use a link post for now.
               const r = await redditSubmitLinkPost({ accessToken, subreddit, title, url: publicUrl });
-              results.reddit = { success: true, subreddit, id: r.id, url: r.url || publicUrl, medi-id: redditMediaId };
+              results.reddit = { success: true, subreddit, id: r.id, url: r.url || publicUrl, 'media-id': redditMediaId };
             } else if (publicUrl) {
                 const r = await redditSubmitLinkPost({ accessToken, subreddit, title, url: publicUrl });
                 results.reddit = { success: true, subreddit, id: r.id, url: r.url || publicUrl };
