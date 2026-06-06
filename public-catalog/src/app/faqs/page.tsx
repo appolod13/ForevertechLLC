@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Header } from "@/components/Header";
 
+
 export const metadata: Metadata = {
   title: "FAQs: AI Art T-Shirts, Studio, Checkout & Shipping",
   description:

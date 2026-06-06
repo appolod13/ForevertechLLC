@@ -38,6 +38,18 @@ export default function LoginPage() {
         <h1 className="mb-2 text-2xl font-bold text-white">Welcome back</h1>
         <p className="mb-8 text-zinc-400">Sign in to your account</p>
 
+        <a href="/api/auth/tiktok" className="w-full rounded-lg bg-[#000000] py-3 font-semibold text-white hover:bg-opacity-90 disabled:opacity-50 transition-all mt-4 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M12.527 2.002c.39.382.72.846 1.002 1.345.286.508.487 1.072.603 1.667.11.57.14 1.156.096 1.738a5.21 5.21 0 0 1-.576 1.948 5.43 5.43 0 0 1-1.3 1.543c-.56.42-1.2.71-1.87.857-.68.15-1.37.14-2.04-.03-1.42-.36-2.68-1.2-3.56-2.37-.9-1.2-1.37-2.67-1.32-4.14.04-.68.18-1.35.4-1.99.23-.62.53-1.2.9-1.72.37-.53.8-.98 1.28-1.35.48-.36.99-.65 1.52-.85s1.08-.3 1.64-.31c.56 0 1.12.08 1.66.24Z"/><path d="M12.238 21.998c.39.382.72.846 1.002 1.345.286.508.487 1.072.603 1.667.11.57.14 1.156.096 1.738a5.21 5.21 0 0 1-.576 1.948 5.43 5.43 0 0 1-1.3 1.543c-.56.42-1.2.71-1.87.857-.68.15-1.37.14-2.04-.03-1.42-.36-2.68-1.2-3.56-2.37-.9-1.2-1.37-2.67-1.32-4.14.04-.68.18-1.35.4-1.99.23-.62.53-1.2.9-1.72.37-.53.8-.98 1.28-1.35.48-.36.99-.65 1.52-.85s1.08-.3 1.64-.31c.56 0 1.12.08 1.66.24Z"/></svg>
+          Sign in with TikTok
+        </a>
+
+        <div className="relative flex py-5 items-center">
+            <div className="flex-grow border-t border-gray-400"></div>
+            <span className="flex-shrink mx-4 text-gray-400">OR</span>
+            <div className="flex-grow border-t border-gray-400"></div>
+        </div>
+
+
         {error && (
           <div className="mb-6 rounded-lg bg-red-500/10 p-3 text-sm text-red-400 border border-red-500/20">
             {error}
