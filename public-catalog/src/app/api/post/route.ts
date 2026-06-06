@@ -276,7 +276,7 @@ async function redditUploadImage(params: { accessToken: string; imageBlob: Blob;
   });
 
   const json = (await res.json().catch(() => null)) as
-    | { errors?: Array<[string, string, string?]>; asset_id?: string; medi-id?: string; upload_lease?: { action: string; fields: Array<{ name: string; value: string }> };  }
+    | { errors?: Array<[string, string, string?]>; asset_id?: string; 'media-id'?: string; upload_lease?: { action: string; fields: Array<{ name: string; value: string }> };  }
     | null;
 
   if (!res.ok || json?.errors?.length) {
