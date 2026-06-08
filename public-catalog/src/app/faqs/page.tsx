@@ -2,6 +2,24 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Header } from "@/components/Header";
 
+const VercelConnectionTest = () => {
+  return (
+    <div style={{ 
+      backgroundColor: '#1a1a1a', 
+      border: '2px solid #ffcc00', 
+      padding: '1.5rem', 
+      margin: '2rem 0', 
+      color: '#ffffff', 
+      fontFamily: 'monospace',
+      fontSize: '16px',
+      textAlign: 'center'
+    }}>
+      <h2 style={{color: '#ffcc00', marginBottom: '1rem'}}>VERCEL CONNECTION TEST</h2>
+      <p>If you can see this box, the connection is working.</p>
+    </div>
+  );
+};
+
 
 export const metadata: Metadata = {
   title: "FAQs: AI Art T-Shirts, Studio, Checkout & Shipping",
@@ -33,6 +51,7 @@ export default function FaqsPage() {
     <div className="min-h-screen bg-gray-900 text-white">
       <Header />
       <main className="max-w-5xl mx-auto p-8">
+        <VercelConnectionTest />
         <div className="rounded-2xl border border-gray-700 bg-gradient-to-b from-gray-800 to-gray-900 p-8">
           <h1 className="text-4xl font-bold">FAQs</h1>
           <p className="mt-4 text-gray-300 leading-relaxed max-w-3xl">

@@ -6,8 +6,8 @@ export async function GET(request: Request) {
   const code = searchParams.get('code');
   const state = searchParams.get('state');
 
-  const cookieStore = await cookies();
-  const csrfState = cookieStore.get('tiktok_oauth_state')?.value;
+  const cookieStore = cookies();
+  const csrfState = cookieStore.get('tiktok_csrf_state')?.value;
 
   if (!state || state !== csrfState) {
     return NextResponse.json({ error: 'Invalid CSRF state' }, { status: 400 });
