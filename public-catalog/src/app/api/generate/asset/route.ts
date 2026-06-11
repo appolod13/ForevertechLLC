@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     if (!["thumbnail", "sprite", "bundle"].includes(body?.type)) {
       return fail("validation_error", 400, ["type must be thumbnail|sprite|bundle"]);
     }
-    const provider = body?.provider || "mock";
+    const provider = body?.provider || "fusion";
     logInfo("asset.generate.request", { type: body.type, provider });
     const result = await generateAsset({ provider, type: body.type, prompt: body?.prompt });
     logInfo("asset.generate.success", { meta: result.meta });
