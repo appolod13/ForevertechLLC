@@ -36,6 +36,51 @@ function isLocalHostUrl(value: string): boolean {
   }
 }
 
+// Call the quantum-image-gen service to render real Julia/Mandelbrot fractal art.
+async function tryQuantumAsset(
+  prompt: string,
+  width: number,
+  height: number,
+  timeoutMs: number,
+): Promise<AssetResult | null> {
+  const cfg = getAiGeneratorsConfig();
+  if (!cfg.quantum.enabled) return null;
+  const base = cfg.quantum.internalBaseUrl.trim().replace(/\/$/, "");
+  if (!base) return null;
+  if (process.env.NODE_ENV === "production" && isLocalHostUrl(base)) return null;
+  const url = base + "/v1/images/generations";
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ prompt, width, height, steps: 30, quantum_mode: true }),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const data: unknown = await res.json();
+    const d = isRecord(data) ? data : {};
+    if (d.success !== true || typeof d.imageUrl !== "string" || !d.imageUrl.trim()) return null;
+    const rawImageUrl = (d.imageUrl as string).trim();
+    const assetUrl = rawImageUrl.startsWith("/images/")
+      ? `/api/images/${encodeURIComponent(rawImageUrl.slice("/images/".length))}`
+      : rawImageUrl.startsWith("/") && cfg.quantum.publicBaseUrl.trim()
+        ? `${cfg.quantum.publicBaseUrl.trim().replace(/\/$/, "")}${rawImageUrl}`
+        : rawImageUrl;
+    return {
+      asset_url: assetUrl,
+      meta: { ...(isRecord(d.meta) ? d.meta : {}), provider: "quantum", source: "quantum-image-gen" },
+    };
+  } catch (e) {
+    console.error("Quantum Asset Error", e);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Call the fusion-service /generate endpoint to render a real image asset.
 async function tryFusionAsset(
   prompt: string,
@@ -104,13 +149,19 @@ export async function generateAsset(req: AssetRequest): Promise<AssetResult> {
   const { width, height } = DIMENSIONS[req.type] ?? DIMENSIONS.thumbnail;
   const cfg = getAiGeneratorsConfig();
 
-  // 1) Try the live fusion-service.
+  // 1) Try the real quantum-image-gen service (Julia/Mandelbrot fractal art).
+  const quantum = await tryQuantumAsset(prompt, width, height, cfg.timeouts.quantumMs);
+  if (quantum) {
+    return { asset_url: quantum.asset_url, meta: { ...quantum.meta, type: req.type, prompt } };
+  }
+
+  // 2) Try the live fusion-service.
   const fusion = await tryFusionAsset(prompt, width, height, cfg.timeouts.stdMs);
   if (fusion) {
     return { asset_url: fusion.asset_url, meta: { ...fusion.meta, type: req.type, prompt } };
   }
 
-  // 2) Fall back to a real archived quantum image so the asset still renders.
+  // 3) Fall back to a real archived quantum image so the asset still renders.
   const archive = latestRealQuantumImage();
   if (archive) {
     return { asset_url: archive.asset_url, meta: { ...archive.meta, type: req.type, prompt } };
