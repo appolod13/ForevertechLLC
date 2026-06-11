@@ -6,7 +6,7 @@ import { supabaseInsertSingle, supabaseSelectSingle } from "@/lib/supabaseRest";
 function getStripeClient() {
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey) throw new Error("Missing STRIPE_SECRET_KEY");
-  return new Stripe(secretKey, { apiVersion: "2026-05-27.dahlia" });
+  return new Stripe(secretKey);
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
