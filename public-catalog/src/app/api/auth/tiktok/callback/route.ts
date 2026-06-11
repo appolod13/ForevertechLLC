@@ -6,7 +6,7 @@ export async function GET(request: Request) {
   const code = searchParams.get('code');
   const state = searchParams.get('state');
 
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const csrfState = cookieStore.get('tiktok_csrf_state')?.value;
 
   if (!state || state !== csrfState) {

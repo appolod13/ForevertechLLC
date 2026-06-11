@@ -537,7 +537,7 @@ export async function POST(request: Request) {
           // Send the Tweet via v2 API
           await client.v2.tweet({
             text: tweetText.substring(0, 280), // Ensure we don't exceed Twitter limits
-            ...(mediaId ? { media: { medi-ids: [mediaId] } } : {})
+            ...(mediaId ? { media: { media_ids: [mediaId] as [string] } } : {})
           });
 
           results.twitter = { success: true };

@@ -40,7 +40,7 @@ function CheckoutSuccessInner() {
           body: JSON.stringify({
             id: `evt_dev_${Date.now()}`,
             object: 'event',
-            api_version: '2026-03-25.dahlia',
+            api_version: '2026-05-27.dahlia',
             created: Math.floor(Date.now() / 1000),
             type: 'checkout.session.completed',
             data: { object: { id: sessionId, object: 'checkout.session' } },
