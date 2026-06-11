@@ -112,6 +112,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const { user } = useAuth();
   const [deviceId, setDeviceId] = useState<string>('');
+  const [hasHydrated, setHasHydrated] = useState(false);
 
   const apiBase = useMemo(() => {
     const envBase = normalizeBaseUrl(process.env.NEXT_PUBLIC_CART_API_BASE || '');
@@ -140,12 +141,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
     if (!deviceId) return;
     const stored = readStoredCart(deviceId);
     if (stored.length) setItems(stored);
+    setHasHydrated(true);
   }, [deviceId]);
 
   useEffect(() => {
     if (!deviceId) return;
+    if (!hasHydrated) return;
     writeStoredCart(deviceId, items);
-  }, [deviceId, items]);
+  }, [deviceId, hasHydrated, items]);
 
   const fetchCart = useCallback(async () => {
     if (!deviceId) return;
