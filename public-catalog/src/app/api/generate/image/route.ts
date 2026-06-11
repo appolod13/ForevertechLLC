@@ -1,4 +1,6 @@
 import { NextRequest } from "next/server";
+import fs from "fs";
+import path from "path";
 
 import { getApiKey, validateApiKey } from "@/lib/api/auth";
 import { rateLimitKey, consume } from "@/lib/api/rate-limit";
@@ -8,6 +10,25 @@ import { generateImageForPlatform } from "@/lib/contentFactory/image";
 import { uploadToIpfs } from "@/lib/ipfs/upload";
 import { getAiGeneratorsConfig } from "@/lib/aiGeneratorsConfig";
 import { createHash } from "crypto";
+
+// When the live AI generation services are unavailable, prefer serving the most
+// recent real quantum-generated image instead of a static "AI Image" placeholder.
+function latestRealQuantumImage(): { image_url: string; meta: Record<string, unknown> } | null {
+  try {
+    const imagesDir = path.join(process.cwd(), "..", "quantum-image-gen", "images");
+    if (!fs.existsSync(imagesDir)) return null;
+    const files = fs.readdirSync(imagesDir).filter((f) => f.toLowerCase().endsWith(".png"));
+    if (files.length === 0) return null;
+    files.sort((a, b) => b.localeCompare(a));
+    const latest = files[0];
+    return {
+      image_url: `/api/images/${encodeURIComponent(latest)}`,
+      meta: { provider: "quantum_image_archive", filename: latest, source: "local_archive" },
+    };
+  } catch {
+    return null;
+  }
+}
 
 type Platform = "linkedin" | "instagram" | "twitter";
 type Provider = "mock" | "dalle" | "stablediffusion" | "midjourney";
@@ -360,6 +381,12 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      const archive = latestRealQuantumImage();
+      if (archive) {
+        const meta = { ...archive.meta, fallback: true, degraded_from_quantum: true, degraded_reason: aiService.error || "unknown" };
+        logInfo("image.generate.success", { requestId, meta, note: "quantum_archive_fallback" });
+        return ok({ image_url: archive.image_url, meta, requestId });
+      }
       const result = await generateImageForPlatform("mock", parsed.prompt, "twitter");
       const meta = { ...result.meta, fallback: true, degraded_from_quantum: true };
       logInfo("image.generate.success", { requestId, meta, note: "quantum_mock_fallback" });
@@ -392,6 +419,12 @@ export async function POST(req: NextRequest) {
       logInfo("image.generate.success", { requestId, meta });
       setCache(cacheKey, { createdAt: Date.now(), lastAccessAt: Date.now(), image_url: aiService.image_url, meta });
       return ok({ image_url: aiService.image_url, meta, requestId });
+    }
+    const archive = latestRealQuantumImage();
+    if (archive) {
+      const meta = { ...archive.meta, fallback: true };
+      logInfo("image.generate.success", { requestId, meta, note: "archive_fallback" });
+      return ok({ image_url: archive.image_url, meta, requestId });
     }
     const result = await generateImageForPlatform("mock", parsed.prompt, "twitter");
     const meta = { ...result.meta, fallback: true };
