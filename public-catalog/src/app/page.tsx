@@ -149,7 +149,16 @@ export default async function Home() {
                   Newest Generation
                 </span>
               </div>
-              <div className="h-full w-full bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.18),transparent_55%),radial-gradient(ellipse_at_bottom,rgba(16,185,129,0.10),transparent_55%)]" />
+              {heroImageUrl ? (
+                <img
+                  src={heroImageUrl}
+                  alt="Newest AI generated quantum design"
+                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  loading="eager"
+                />
+              ) : (
+                <div className="h-full w-full bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.18),transparent_55%),radial-gradient(ellipse_at_bottom,rgba(16,185,129,0.10),transparent_55%)]" />
+              )}
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 to-transparent p-4">
                  <p className="text-sm font-medium text-white">Prompt-to-Image Output</p>
                  <p className="text-xs text-zinc-400">Ready to customize, print, and ship</p>
