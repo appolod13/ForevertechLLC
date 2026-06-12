@@ -269,37 +269,113 @@ def fractal_fusion_rgb(width: int, height: int, prompt: str, seed: int) -> bytes
     sx = (fw - 1) / max(1, width - 1)
     sy = (fh - 1) / max(1, height - 1)
 
-    # Pass 2: pseudo-3D shading from the field gradient + color mapping.
+    # Pass 2: cinematic, radiant pseudo-3D shading -> "heavenly / god's eye" look.
+    # We add a strong key light + specular highlights for sculpted 3D relief, a
+    # divine central glow (god rays / heaven's door), bloom on bright crests, a
+    # vivid saturated palette, and a gamma lift so everything reads brighter.
     pixels = width * height
     buf = bytearray(pixels * 3)
+
+    # Key light (sculpts the 3D form) - steep angle for dramatic relief.
     light_x, light_y, light_z = -0.55, -0.65, 0.52
     lnorm = math.sqrt(light_x * light_x + light_y * light_y + light_z * light_z)
     light_x, light_y, light_z = light_x / lnorm, light_y / lnorm, light_z / lnorm
-    relief = 6.0
+    # Rim/fill light from the opposite side for extra dimensional pop.
+    rim_x, rim_y, rim_z = 0.6, 0.45, 0.3
+    rnorm = math.sqrt(rim_x * rim_x + rim_y * rim_y + rim_z * rim_z)
+    rim_x, rim_y, rim_z = rim_x / rnorm, rim_y / rnorm, rim_z / rnorm
+    # View direction (toward camera) for specular reflection.
+    view_z = 1.0
+    relief = 9.5  # stronger normal displacement = deeper 3D
+
+    inv_w = 1.0 / max(1, width - 1)
+    inv_h = 1.0 / max(1, height - 1)
+    gamma = 1.0 / 1.18  # <1 brightens midtones (gentle lift)
+
     for y in range(height):
         fy = y * sy
+        ny = (y * inv_h - 0.5)
         i3 = y * width * 3
         for x in range(width):
             fx = x * sx
             v = sample(fx, fy)
+
+            # Surface normal from the field gradient.
             dx = (sample(fx - 1.0, fy) - sample(fx + 1.0, fy)) * relief
             dy = (sample(fx, fy - 1.0) - sample(fx, fy + 1.0)) * relief
             nz = 1.0
             nlen = math.sqrt(dx * dx + dy * dy + nz * nz)
-            diffuse = (dx * light_x + dy * light_y + nz * light_z) / nlen
-            shade = 0.35 + 0.65 * max(0.0, diffuse)
+            nx, ny_n, nz_n = dx / nlen, dy / nlen, nz / nlen
 
-            # Banded color palette cycling through hue for fractal depth.
-            hue = (base_hue + v * 3.0) % 1.0
-            sat = 0.55 + 0.4 * (1.0 - v)
-            val = (0.15 + 0.9 * v) * shade
+            # Diffuse from key light + softer rim light.
+            diffuse = max(0.0, nx * light_x + ny_n * light_y + nz_n * light_z)
+            rim = max(0.0, nx * rim_x + ny_n * rim_y + nz_n * rim_z)
+
+            # Specular highlight (Blinn-ish) -> glossy 3D crests.
+            hx, hy, hz = light_x, light_y, light_z + view_z
+            hl = math.sqrt(hx * hx + hy * hy + hz * hz) + 1e-9
+            spec_dot = max(0.0, (nx * hx + ny_n * hy + nz_n * hz) / hl)
+            spec = spec_dot ** 28
+
+            shade = 0.30 + 0.85 * diffuse + 0.25 * rim
+
+            # Divine central glow: a soft luminous core like light through
+            # heaven's doors / a glowing iris. Kept subtle so the fractal
+            # structure stays crisp and vivid rather than blown out.
+            nx_c = (x * inv_w - 0.5)
+            dist2 = nx_c * nx_c + ny * ny
+            glow = math.exp(-dist2 * 14.0) * 0.40   # tight, gentle core
+            halo = math.exp(-dist2 * 4.0) * 0.16    # wide soft halo
+
+            # Vivid, ethereal palette: gold/amber core easing into deep azure
+            # and magenta in the depths, cycling for fractal richness.
+            hue = (base_hue + v * 2.4 + 0.08 * interference_hue(q_phase)) % 1.0
+            sat = 0.78 + 0.22 * (1.0 - v)
+            val = (0.28 + 0.85 * v) * shade
+
             r, g, b = _hsv_to_rgb(hue, min(1.0, sat), min(1.0, val))
-            buf[i3] = r
-            buf[i3 + 1] = g
-            buf[i3 + 2] = b
+            rf, gf, bf = r / 255.0, g / 255.0, b / 255.0
+
+            # Add the warm divine glow (golden-white). Modulated by the field
+            # value so the glow illuminates the fractal structure instead of
+            # washing the center into flat white.
+            glow_mod = glow * (0.45 + 0.55 * v)
+            halo_mod = halo * (0.4 + 0.6 * v)
+            rf += glow_mod * 0.85 + halo_mod * 0.30
+            gf += glow_mod * 0.72 + halo_mod * 0.26
+            bf += glow_mod * 0.48 + halo_mod * 0.32
+
+            # Specular adds a near-white sparkle on crests.
+            rf += spec * 0.85
+            gf += spec * 0.85
+            bf += spec * 0.95
+
+            # Bloom: let very bright crests bleed a little for a radiant feel.
+            luma = 0.299 * rf + 0.587 * gf + 0.114 * bf
+            if luma > 0.85:
+                bloom = (luma - 0.85) * 0.5
+                rf += bloom
+                gf += bloom
+                bf += bloom
+
+            # Gamma lift for overall brightness, then tone-map / clamp.
+            rf = rf ** gamma
+            gf = gf ** gamma
+            bf = bf ** gamma
+
+            buf[i3] = 255 if rf >= 1.0 else int(rf * 255)
+            buf[i3 + 1] = 255 if gf >= 1.0 else int(gf * 255)
+            buf[i3 + 2] = 255 if bf >= 1.0 else int(bf * 255)
             i3 += 3
 
     return bytes(buf)
+
+
+def interference_hue(phase: float) -> float:
+    """Small deterministic hue shimmer derived from the quantum phase so the
+    palette feels alive without breaking determinism."""
+    import math
+    return 0.5 + 0.5 * math.sin(phase)
 
 
 class MockTrainer:
