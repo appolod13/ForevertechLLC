@@ -63,6 +63,20 @@ function resolveUnitAmountCents(item: unknown): number | null {
   const rec = isRecord(item) ? item : {};
   const meta = isRecord(rec.metadata) ? (rec.metadata as Record<string, unknown>) : {};
   const productId = getString(meta.productId, 64) || getString(rec.productId, 64);
+
+  // Prefer an explicit cents amount if provided.
+  const metaCents = getNumber(meta.unitAmountCents);
+  if (Number.isFinite(metaCents) && metaCents > 0) {
+    return Math.round(metaCents);
+  }
+
+  // Otherwise use the cart item's price (in dollars) and convert to cents.
+  const priceDollars = getNumber(rec.price);
+  if (Number.isFinite(priceDollars) && priceDollars > 0) {
+    return Math.round(priceDollars * 100);
+  }
+
+  // Fallback for the legacy hardcoded tee product.
   if (productId === 'tee') return 4999;
   return null;
 }
