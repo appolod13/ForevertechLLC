@@ -23,4 +23,5 @@ COPY . .
 
 EXPOSE 5328
 
-CMD ["uvicorn", "quantum_gen.server:app", "--host", "0.0.0.0", "--port", "5328"]
+# Honor Render's dynamically assigned $PORT, falling back to 5328 for local runs.
+CMD ["sh", "-c", "uvicorn quantum_gen.server:app --host 0.0.0.0 --port ${PORT:-5328}"]

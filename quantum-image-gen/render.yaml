@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: quantum-image-gen
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: IMAGES_DIR
+        value: /app/images
