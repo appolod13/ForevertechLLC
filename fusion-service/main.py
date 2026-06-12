@@ -140,6 +140,16 @@ def _hsv_to_rgb(h: float, s: float, v: float):
     return int(r * 255), int(g * 255), int(b * 255)
 
 
+def _cap_render_dims(width: int, height: int, max_side: int = 640):
+    """Cap the longest side to keep the pure-Python render under the request
+    timeout on Render's CPU, preserving aspect ratio."""
+    long_side = max(width, height)
+    if long_side <= max_side:
+        return width, height
+    scale = max_side / long_side
+    return max(64, int(round(width * scale))), max(64, int(round(height * scale)))
+
+
 def fractal_fusion_rgb(width: int, height: int, prompt: str, seed: int) -> bytes:
     """Pure-Python Julia + Mandelbrot fusion with quantum-style interference
     and pseudo-3D normal shading. No third-party deps, so it stays compatible
@@ -422,6 +432,9 @@ async def generate_image(payload: GenerateRequest):
     height = int(payload.height) if payload.height else 512
     width = max(64, min(1536, width))
     height = max(64, min(1536, height))
+    # Cap the actual raster size so the pure-Python shading pass stays well under
+    # the site's request timeout on Render's CPU. The image is displayed scaled.
+    width, height = _cap_render_dims(width, height)
     seed = payload.seed if isinstance(payload.seed, int) and payload.seed != -1 else (abs(hash(payload.prompt)) % (2**31))
 
     try:
@@ -637,6 +650,7 @@ async def brain_roulette(payload: Dict[str, Any] = Body(default={})):
     try:
         size = int(payload.get("size") or 512)
         size = max(64, min(1024, size))
+        size, _ = _cap_render_dims(size, size)
         prompt = str(payload.get("prompt") or "quantum fusion roulette julia mandelbrot art")
         provided_seed = payload.get("seed")
         seed = int(provided_seed) if isinstance(provided_seed, int) and provided_seed != -1 else random.randint(0, 2**31 - 1)
