@@ -116,6 +116,149 @@ def procedural_rgb(width: int, height: int, prompt: str, seed: int) -> bytes:
 
     return bytes(buf)
 
+def _hsv_to_rgb(h: float, s: float, v: float):
+    # h in [0,1), s,v in [0,1] -> (r,g,b) 0..255
+    h = h - int(h)
+    i = int(h * 6.0)
+    f = h * 6.0 - i
+    p = v * (1.0 - s)
+    q = v * (1.0 - s * f)
+    t = v * (1.0 - s * (1.0 - f))
+    i %= 6
+    if i == 0:
+        r, g, b = v, t, p
+    elif i == 1:
+        r, g, b = q, v, p
+    elif i == 2:
+        r, g, b = p, v, t
+    elif i == 3:
+        r, g, b = p, q, v
+    elif i == 4:
+        r, g, b = t, p, v
+    else:
+        r, g, b = v, p, q
+    return int(r * 255), int(g * 255), int(b * 255)
+
+
+def fractal_fusion_rgb(width: int, height: int, prompt: str, seed: int) -> bytes:
+    """Pure-Python Julia + Mandelbrot fusion with quantum-style interference
+    and pseudo-3D normal shading. No third-party deps, so it stays compatible
+    with the lightweight Render deploy."""
+    import math
+
+    rng = random.Random(seed)
+
+    # Julia constant orbits a circle in the complex plane, seeded for variety.
+    angle = (seed % 100000) / 100000.0 * 2.0 * math.pi
+    radius = 0.7885 + (rng.random() - 0.5) * 0.08
+    cr = radius * math.cos(angle)
+    ci = radius * math.sin(angle)
+
+    # Quantum interference parameters derived from the prompt for determinism.
+    phash = abs(hash(prompt)) if prompt else seed
+    q_freq = 2.0 + (phash % 7)
+    q_phase = ((phash >> 3) % 360) * math.pi / 180.0
+    base_hue = (phash % 360) / 360.0
+
+    # Complex-plane viewport (slightly zoomed, centered for a rich composition).
+    zoom = 1.45
+    aspect = width / max(1, height)
+    span_x = zoom * (aspect if aspect >= 1 else 1.0)
+    span_y = zoom * (1.0 if aspect >= 1 else 1.0 / aspect)
+    cx_center, cy_center = -0.15, 0.0
+
+    pixels = width * height
+    max_iter = 110 if pixels <= 512 * 512 else (80 if pixels <= 900 * 900 else 56)
+    log2 = math.log(2.0)
+    bailout = 16.0
+
+    # Pass 1: compute the fused smooth-escape field (the "height map").
+    field = [0.0] * pixels
+    inv_w = 1.0 / max(1, width - 1)
+    inv_h = 1.0 / max(1, height - 1)
+    for y in range(height):
+        iy = cy_center + (y * inv_h - 0.5) * span_y
+        row = y * width
+        for x in range(width):
+            ix = cx_center + (x * inv_w - 0.5) * span_x
+
+            # Julia: fixed c, varying z.
+            zr, zi = ix, iy
+            j_iter = 0
+            while j_iter < max_iter:
+                zr2 = zr * zr
+                zi2 = zi * zi
+                if zr2 + zi2 > bailout:
+                    break
+                zi = 2.0 * zr * zi + ci
+                zr = zr2 - zi2 + cr
+                j_iter += 1
+            if j_iter < max_iter:
+                mag = math.sqrt(zr * zr + zi * zi) + 1e-9
+                j_val = j_iter + 1.0 - math.log(math.log(mag) / log2 + 1e-9) / log2
+            else:
+                j_val = max_iter
+            j_norm = j_val / max_iter
+
+            # Mandelbrot: c = pixel, z starts at 0.
+            mr, mi = 0.0, 0.0
+            m_iter = 0
+            while m_iter < max_iter:
+                mr2 = mr * mr
+                mi2 = mi * mi
+                if mr2 + mi2 > bailout:
+                    break
+                mi = 2.0 * mr * mi + iy
+                mr = mr2 - mi2 + ix
+                m_iter += 1
+            if m_iter < max_iter:
+                mag = math.sqrt(mr * mr + mi * mi) + 1e-9
+                m_val = m_iter + 1.0 - math.log(math.log(mag) / log2 + 1e-9) / log2
+            else:
+                m_val = max_iter
+            m_norm = m_val / max_iter
+
+            # Quantum-style interference (the extra "dimension").
+            interference = 0.5 + 0.5 * math.sin(q_freq * (ix + iy) * math.pi + q_phase)
+
+            fused = (j_norm * 0.62 + m_norm * 0.38) * (0.75 + 0.25 * interference)
+            field[row + x] = fused
+
+    # Pass 2: pseudo-3D shading from the field gradient + color mapping.
+    buf = bytearray(pixels * 3)
+    light_x, light_y, light_z = -0.55, -0.65, 0.52
+    lnorm = math.sqrt(light_x * light_x + light_y * light_y + light_z * light_z)
+    light_x, light_y, light_z = light_x / lnorm, light_y / lnorm, light_z / lnorm
+    relief = 6.0
+    for y in range(height):
+        row = y * width
+        ym = (y - 1) * width if y > 0 else row
+        yp = (y + 1) * width if y < height - 1 else row
+        for x in range(width):
+            idx = row + x
+            v = field[idx]
+            xl = idx - 1 if x > 0 else idx
+            xr = idx + 1 if x < width - 1 else idx
+            dx = (field[xl] - field[xr]) * relief
+            dy = (field[ym + x] - field[yp + x]) * relief
+            nz = 1.0
+            nlen = math.sqrt(dx * dx + dy * dy + nz * nz)
+            diffuse = (dx * light_x + dy * light_y + nz * light_z) / nlen
+            shade = 0.35 + 0.65 * max(0.0, diffuse)
+
+            # Banded color palette cycling through hue for fractal depth.
+            hue = (base_hue + v * 3.0) % 1.0
+            sat = 0.55 + 0.4 * (1.0 - v)
+            val = (0.15 + 0.9 * v) * shade
+            r, g, b = _hsv_to_rgb(hue, min(1.0, sat), min(1.0, val))
+            i3 = idx * 3
+            buf[i3] = r
+            buf[i3 + 1] = g
+            buf[i3 + 2] = b
+
+    return bytes(buf)
+
+
 class MockTrainer:
     device = "mock_cpu"
     style_memory = None
@@ -248,7 +391,13 @@ async def generate_image(payload: GenerateRequest):
     height = max(64, min(1536, height))
     seed = payload.seed if isinstance(payload.seed, int) and payload.seed != -1 else (abs(hash(payload.prompt)) % (2**31))
 
-    rgb = procedural_rgb(width, height, payload.prompt, seed)
+    try:
+        rgb = fractal_fusion_rgb(width, height, payload.prompt, seed)
+        provider = "fusion-julia-mandelbrot-3d"
+    except Exception as e:
+        print(f"[fusion] fractal generation failed, falling back to procedural: {e}")
+        rgb = procedural_rgb(width, height, payload.prompt, seed)
+        provider = "fusion-service-procedural"
     os.makedirs("uploads", exist_ok=True)
     filename = f"gen_{job_id}_{width}x{height}.png"
     out_path = os.path.join("uploads", filename)
@@ -262,7 +411,7 @@ async def generate_image(payload: GenerateRequest):
         "success": True,
         "imageUrl": image_url,
         "meta": {
-            "provider": "fusion-service-procedural",
+            "provider": provider,
             "latency": latency,
             "seed": seed,
             "width": width,
