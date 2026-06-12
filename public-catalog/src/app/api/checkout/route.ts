@@ -136,6 +136,29 @@ export async function POST(request: Request) {
     const shipOptions = quoteShipping({ country: String(shipCountry || 'US'), itemCount });
     const selectedShip = shipOptions.find((o) => o.id === String(shippingOptionId || '')) || shipOptions[0] || null;
 
+    // Stripe requires product_data.images to be fully-qualified public URLs.
+    // Generated assets often use relative paths (e.g. /images/.. or /uploads/..),
+    // which Stripe rejects with "Not a valid URL". Resolve to absolute and drop
+    // anything that still isn't a valid http(s) URL.
+    const lineItemOrigin = getRequestOrigin(request);
+    const toStripeImage = (raw: string): string | null => {
+      const v = (raw || '').trim();
+      if (!v) return null;
+      try {
+        const abs = /^https?:\/\//i.test(v)
+          ? v
+          : lineItemOrigin
+            ? new URL(v, lineItemOrigin + '/').toString()
+            : '';
+        if (!abs) return null;
+        const u = new URL(abs);
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+        return u.toString();
+      } catch {
+        return null;
+      }
+    };
+
     const lineItems = cartItems.map((item: unknown) => {
       const rec = isRecord(item) ? (item as Record<string, unknown>) : {};
       const unitAmount = resolveUnitAmountCents(item);
@@ -144,14 +167,15 @@ export async function POST(request: Request) {
       }
       const title = getString(rec.title) || 'Product';
       const quantity = Math.max(1, Math.trunc(getNumber(rec.quantity) || 1));
-      const imageUrl = getString(rec.imageUrl) || getString(rec.image);
+      const rawImage = getString(rec.imageUrl) || getString(rec.image);
+      const stripeImage = toStripeImage(rawImage);
 
       return {
         price_data: {
           currency: 'usd',
           product_data: {
             name: title,
-            images: imageUrl ? [imageUrl] : [],
+            images: stripeImage ? [stripeImage] : [],
           },
           unit_amount: unitAmount,
         },
