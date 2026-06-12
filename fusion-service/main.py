@@ -602,39 +602,35 @@ async def brain_roulette(payload: Dict[str, Any] = Body(default={})):
     jobs[job_id] = {"status": "roulette_start", "progress": 0, "result": None, "error": None}
     start_time = time.time()
     try:
-        dataset_path = str(payload.get("dataset_path") or os.getenv("CITY_DATASET_PATH") or "/Users/Administrator/Datasets/utopian_clean_city/images")
-        steps = int(payload.get("steps") or 12)
         size = int(payload.get("size") or 512)
-        outline = bool(payload.get("outline") or False)
-        outline_style = str(payload.get("outline_style") or "color")
-        outline_color = payload.get("outline_color")
-        outline_thickness = int(payload.get("outline_thickness") or (3 if outline_style == "color" else 2))
+        size = max(64, min(1024, size))
+        prompt = str(payload.get("prompt") or "quantum fusion roulette julia mandelbrot art")
+        provided_seed = payload.get("seed")
+        seed = int(provided_seed) if isinstance(provided_seed, int) and provided_seed != -1 else random.randint(0, 2**31 - 1)
+
         jobs[job_id]["status"] = "roulette_generate"
         jobs[job_id]["progress"] = 0.55
 
-        design, meta = trainer.brain_roulette(
-            dataset_path=dataset_path,
-            steps=steps,
-            size=size,
-        )
+        # Pure-stdlib fractal fusion render (no Pillow dependency).
+        try:
+            rgb = fractal_fusion_rgb(size, size, prompt, seed)
+            provider = "fusion-julia-mandelbrot-3d"
+        except Exception as e:
+            print(f"[fusion] roulette fractal failed, falling back to procedural: {e}")
+            rgb = procedural_rgb(size, size, prompt, seed)
+            provider = "fusion-service-procedural"
 
-        jobs[job_id]["status"] = "roulette_mockup"
+        jobs[job_id]["status"] = "roulette_render"
         jobs[job_id]["progress"] = 0.85
-        if outline:
-            if outline_style == "mono":
-                if isinstance(outline_color, list) and len(outline_color) == 3:
-                    oc = (int(outline_color[0]), int(outline_color[1]), int(outline_color[2]))
-                else:
-                    oc = (12, 16, 22)
-                design = processor.to_outline_rgba(design, line_color=oc, thickness=outline_thickness)
-            else:
-                design = processor.to_outline_color_rgba(design, thickness=outline_thickness)
-        mockup = processor.create_tshirt_mockup(design, outline_only=outline)
 
+        os.makedirs("uploads", exist_ok=True)
         filename = f"roulette_{job_id}.png"
         path = os.path.join("uploads", filename)
-        mockup.save(path)
+        write_png_rgb(path, size, size, rgb)
+        with open(path, "rb") as fh:
+            body = fh.read()
 
+        meta = {"mode": "roulette", "provider": provider, "seed": seed, "prompt": prompt, "size": size}
         jobs[job_id]["status"] = "done"
         jobs[job_id]["progress"] = 1.0
         jobs[job_id]["result"] = f"/uploads/{filename}"
@@ -643,18 +639,13 @@ async def brain_roulette(payload: Dict[str, Any] = Body(default={})):
         latency = time.time() - start_time
         LATENCY.labels(device=trainer.device).observe(latency)
 
-        buf = BytesIO()
-        mockup.save(buf, format="PNG")
-        body = buf.getvalue()
         headers = {
             "X-Job-Id": job_id,
             "X-Image-Url": jobs[job_id]["result"],
-            "X-Seed": str(meta.get("seed", "")),
-            "X-Mode": str(meta.get("mode", "")),
-            "X-Prompt": str(meta.get("prompt", "")),
-            "X-Init": str(meta.get("init", "")),
-            "X-Outline": "1" if outline else "0",
-            "X-Outline-Style": outline_style,
+            "X-Seed": str(seed),
+            "X-Mode": "roulette",
+            "X-Prompt": prompt,
+            "X-Provider": provider,
         }
         return Response(content=body, media_type="image/png", headers=headers)
     except Exception as e:
