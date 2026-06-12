@@ -272,7 +272,7 @@ export default function CheckoutPage() {
           <div className="space-y-4">
             <Link 
               href="/login?redirect=/checkout" 
-              className="flex w-full justify-center rounded-lg bg-primary py-3 font-semibold text-white hover:bg-primary/90 transition-all"
+              className="flex w-full justify-center rounded-lg border border-white bg-black py-3 font-semibold text-white hover:bg-zinc-900 transition-all"
             >
               Log In
             </Link>
@@ -487,7 +487,7 @@ export default function CheckoutPage() {
             <button
               type="submit"
               disabled={isProcessing || (shippingOptions.length > 0 && !(shippingOptionId || shippingOptions[0]?.id))}
-              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-primary py-4 font-bold text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg border border-white bg-black py-4 font-bold text-white hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="submit-payment"
             >
               {isProcessing ? (
