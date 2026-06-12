@@ -302,7 +302,7 @@ export default function CheckoutPage() {
       </div>
       
       <div className="grid gap-8 md:grid-cols-2">
-        <form onSubmit={handleSubmit} className="space-y-6" data-testid="checkout-form">
+        <form onSubmit={handleSubmit} className="order-2 space-y-6 md:order-1" data-testid="checkout-form">
           <div className="space-y-4">
             <h2 className="text-xl font-semibold text-white">Shipping Information</h2>
             <div className="grid gap-4">
@@ -475,29 +475,34 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          <button 
-            type="submit" 
-            disabled={isProcessing || (shippingOptions.length > 0 && !(shippingOptionId || shippingOptions[0]?.id))}
-            className="w-full rounded-lg bg-primary py-4 font-bold text-white hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            data-testid="submit-payment"
-          >
-            {isProcessing ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin" />
-                Redirecting to Stripe...
-              </>
-            ) : (
-              `Proceed to Stripe Checkout ($${grandTotal.toFixed(2)})`
-            )}
-          </button>
           {checkoutError ? (
             <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
               {checkoutError}
             </div>
           ) : null}
+
+          {/* Sticky action bar on mobile so the Stripe button is always reachable;
+              inline within the form on desktop. */}
+          <div className="sticky bottom-0 z-30 -mx-4 mt-2 border-t border-zinc-800 bg-background/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur md:static md:z-auto md:mx-0 md:mt-0 md:border-0 md:bg-transparent md:px-0 md:pb-0 md:pt-0 md:backdrop-blur-none">
+            <button
+              type="submit"
+              disabled={isProcessing || (shippingOptions.length > 0 && !(shippingOptionId || shippingOptions[0]?.id))}
+              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-primary py-4 font-bold text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+              data-testid="submit-payment"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Redirecting to Stripe...
+                </>
+              ) : (
+                `Proceed to Stripe Checkout ($${grandTotal.toFixed(2)})`
+              )}
+            </button>
+          </div>
         </form>
 
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-6 h-fit">
+        <div className="order-1 rounded-xl border border-zinc-800 bg-zinc-900/30 p-6 h-fit md:order-2">
           <h3 className="text-lg font-semibold text-white mb-4">Order Summary</h3>
           <div className="space-y-4">
             {items.map((item: CartItem) => (
