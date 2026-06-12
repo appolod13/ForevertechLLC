@@ -44,8 +44,8 @@ function initFromEnv(): AiGeneratorsConfig {
   const fusionPublic = sanitizeHttpUrl(process.env.NEXT_PUBLIC_FUSION_API_URL, fusionInternal);
   const quantumPublic = sanitizeHttpUrl(process.env.NEXT_PUBLIC_QUANTUM_API_URL, quantumInternal);
 
-  const stdMs = asPositiveInt(process.env.AI_IMAGE_TIMEOUT_STD_MS) ?? 40_000;
-  const quantumMs = asPositiveInt(process.env.AI_IMAGE_TIMEOUT_QUANTUM_MS) ?? 60_000;
+  const stdMs = asPositiveInt(process.env.AI_IMAGE_TIMEOUT_STD_MS) ?? 90_000;
+  const quantumMs = asPositiveInt(process.env.AI_IMAGE_TIMEOUT_QUANTUM_MS) ?? 120_000;
 
   return {
     fusion: { enabled: true, internalBaseUrl: fusionInternal, publicBaseUrl: fusionPublic },

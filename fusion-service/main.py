@@ -140,7 +140,7 @@ def _hsv_to_rgb(h: float, s: float, v: float):
     return int(r * 255), int(g * 255), int(b * 255)
 
 
-def _cap_render_dims(width: int, height: int, max_side: int = 640):
+def _cap_render_dims(width: int, height: int, max_side: int = 448):
     """Cap the longest side to keep the pure-Python render under the request
     timeout on Render's CPU, preserving aspect ratio."""
     long_side = max(width, height)
