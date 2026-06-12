@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 
+// The Render fusion-service can take ~30s; raise the serverless limit.
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+
 function sniffImageMime(buffer: Buffer): { mime: string; ext: string } | null {
   if (buffer.length >= 8) {
     const pngSig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);

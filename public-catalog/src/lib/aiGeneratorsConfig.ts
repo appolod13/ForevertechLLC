@@ -6,7 +6,10 @@ export type AiGeneratorsConfig = {
 
 type PartialDeep<T> = { [K in keyof T]?: T[K] extends object ? PartialDeep<T[K]> : T[K] };
 
-const DEFAULT_FUSION_INTERNAL = "http://127.0.0.1:8000";
+// Default to the live Render-hosted fusion-service so image generation works in
+// production even when FUSION_SERVICE_URL is not set. A local URL can still be
+// provided via env to develop against a local service.
+const DEFAULT_FUSION_INTERNAL = "https://fusion-service.onrender.com";
 const DEFAULT_QUANTUM_INTERNAL = "http://127.0.0.1:5328";
 
 function asNonEmptyString(v: unknown): string | null {

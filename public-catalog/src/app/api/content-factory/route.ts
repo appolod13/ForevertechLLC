@@ -6,6 +6,10 @@ import { validateFactoryRequest, validateFactoryOutput } from '@/lib/contentFact
 import { addLog, getLogs } from '@/lib/logging';
 import { addGalleryItem } from '@/lib/galleryStore';
 
+// The Render fusion-service can take ~30s; raise the serverless limit.
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+
 type Platform = 'linkedin' | 'instagram' | 'twitter';
 type Provider = 'mock' | 'dalle' | 'stablediffusion' | 'midjourney';
 

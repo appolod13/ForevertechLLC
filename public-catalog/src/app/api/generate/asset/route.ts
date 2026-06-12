@@ -5,6 +5,10 @@ import { ok, fail } from "@/lib/api/response";
 import { logInfo, logError } from "@/lib/api/logger";
 import { generateAsset } from "@/lib/contentFactory/asset";
 
+// The Render fusion-service can take ~30s; raise the serverless limit.
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+
 export async function POST(req: NextRequest) {
   try {
     const key = getApiKey(req.headers);

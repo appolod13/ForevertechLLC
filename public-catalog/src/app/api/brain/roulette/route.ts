@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 
+// The Render fusion-service can take ~30s; raise the serverless limit.
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
