@@ -167,20 +167,28 @@ def fractal_fusion_rgb(width: int, height: int, prompt: str, seed: int) -> bytes
     span_y = zoom * (1.0 if aspect >= 1 else 1.0 / aspect)
     cx_center, cy_center = -0.15, 0.0
 
-    pixels = width * height
-    max_iter = 110 if pixels <= 512 * 512 else (80 if pixels <= 900 * 900 else 56)
     log2 = math.log(2.0)
     bailout = 16.0
 
-    # Pass 1: compute the fused smooth-escape field (the "height map").
-    field = [0.0] * pixels
-    inv_w = 1.0 / max(1, width - 1)
-    inv_h = 1.0 / max(1, height - 1)
-    for y in range(height):
-        iy = cy_center + (y * inv_h - 0.5) * span_y
-        row = y * width
-        for x in range(width):
-            ix = cx_center + (x * inv_w - 0.5) * span_x
+    # Performance: the escape-time loops are the bottleneck, so compute the
+    # fused field on a capped low-res grid, then bilinearly upscale into the
+    # full-resolution shading/color pass. Keeps the look, ~10x faster on Render.
+    MAX_FIELD_DIM = 320
+    long_side = max(width, height)
+    scale = 1.0 if long_side <= MAX_FIELD_DIM else MAX_FIELD_DIM / long_side
+    fw = max(2, min(width, int(round(width * scale))))
+    fh = max(2, min(height, int(round(height * scale))))
+    max_iter = 130 if fw * fh <= 200 * 200 else 90
+
+    # Pass 1: compute the fused smooth-escape field on the low-res grid.
+    field = [0.0] * (fw * fh)
+    inv_fw = 1.0 / max(1, fw - 1)
+    inv_fh = 1.0 / max(1, fh - 1)
+    for y in range(fh):
+        iy = cy_center + (y * inv_fh - 0.5) * span_y
+        row = y * fw
+        for x in range(fw):
+            ix = cx_center + (x * inv_fw - 0.5) * span_x
 
             # Julia: fixed c, varying z.
             zr, zi = ix, iy
@@ -224,23 +232,48 @@ def fractal_fusion_rgb(width: int, height: int, prompt: str, seed: int) -> bytes
             fused = (j_norm * 0.62 + m_norm * 0.38) * (0.75 + 0.25 * interference)
             field[row + x] = fused
 
+    # Bilinearly sample the low-res field at full resolution.
+    def sample(fx: float, fy: float) -> float:
+        if fx < 0.0:
+            fx = 0.0
+        elif fx > fw - 1:
+            fx = fw - 1
+        if fy < 0.0:
+            fy = 0.0
+        elif fy > fh - 1:
+            fy = fh - 1
+        x0 = int(fx)
+        y0 = int(fy)
+        x1 = x0 + 1 if x0 < fw - 1 else x0
+        y1 = y0 + 1 if y0 < fh - 1 else y0
+        tx = fx - x0
+        ty = fy - y0
+        a = field[y0 * fw + x0]
+        b = field[y0 * fw + x1]
+        c = field[y1 * fw + x0]
+        d = field[y1 * fw + x1]
+        top = a + (b - a) * tx
+        bot = c + (d - c) * tx
+        return top + (bot - top) * ty
+
+    sx = (fw - 1) / max(1, width - 1)
+    sy = (fh - 1) / max(1, height - 1)
+
     # Pass 2: pseudo-3D shading from the field gradient + color mapping.
+    pixels = width * height
     buf = bytearray(pixels * 3)
     light_x, light_y, light_z = -0.55, -0.65, 0.52
     lnorm = math.sqrt(light_x * light_x + light_y * light_y + light_z * light_z)
     light_x, light_y, light_z = light_x / lnorm, light_y / lnorm, light_z / lnorm
     relief = 6.0
     for y in range(height):
-        row = y * width
-        ym = (y - 1) * width if y > 0 else row
-        yp = (y + 1) * width if y < height - 1 else row
+        fy = y * sy
+        i3 = y * width * 3
         for x in range(width):
-            idx = row + x
-            v = field[idx]
-            xl = idx - 1 if x > 0 else idx
-            xr = idx + 1 if x < width - 1 else idx
-            dx = (field[xl] - field[xr]) * relief
-            dy = (field[ym + x] - field[yp + x]) * relief
+            fx = x * sx
+            v = sample(fx, fy)
+            dx = (sample(fx - 1.0, fy) - sample(fx + 1.0, fy)) * relief
+            dy = (sample(fx, fy - 1.0) - sample(fx, fy + 1.0)) * relief
             nz = 1.0
             nlen = math.sqrt(dx * dx + dy * dy + nz * nz)
             diffuse = (dx * light_x + dy * light_y + nz * light_z) / nlen
@@ -251,10 +284,10 @@ def fractal_fusion_rgb(width: int, height: int, prompt: str, seed: int) -> bytes
             sat = 0.55 + 0.4 * (1.0 - v)
             val = (0.15 + 0.9 * v) * shade
             r, g, b = _hsv_to_rgb(hue, min(1.0, sat), min(1.0, val))
-            i3 = idx * 3
             buf[i3] = r
             buf[i3 + 1] = g
             buf[i3 + 2] = b
+            i3 += 3
 
     return bytes(buf)
 
