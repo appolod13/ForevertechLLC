@@ -54,6 +54,12 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
+  alternates: {
+    canonical: "/",
+    types: {
+      "application/rss+xml": "https://www.pixelqrypt.com/feed.xml",
+    },
+  },
   icons: {
     icon: "/favicon.ico",
     shortcut: "/favicon.ico",

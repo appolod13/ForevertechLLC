@@ -43,6 +43,7 @@ export function Header() {
     { href: '/pixelqrypt', label: 'PixelQrypt™', visible: true },
     { href: '/studio', label: 'Studio', visible: true },
     { href: '/gallery', label: 'Gallery', visible: true },
+    { href: '/updates', label: 'Updates', visible: true },
     { href: '/faqs', label: 'FAQs', visible: true },
     { href: '/support', label: 'Support', visible: true },
     { href: '/shipping-policy', label: 'Shipping', visible: true },
