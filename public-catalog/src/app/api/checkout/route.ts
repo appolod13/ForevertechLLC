@@ -4,6 +4,7 @@ import { quoteShipping } from '@/lib/shippingConfig';
 import { getQuantumStatus } from '@/lib/quantumVerified';
 import { getCart } from '@/lib/cartStore';
 import { getServiceSupabase } from '@/lib/supabase';
+import { getRequestOrigin } from '@/lib/siteOrigin';
 
 function getStripeClient() {
   const secretKey = process.env.STRIPE_SECRET_KEY;

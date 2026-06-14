@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { getRequestOrigin } from '@/lib/siteOrigin';
 
 function getStripeClient() {
   const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -15,22 +16,6 @@ function getString(v: unknown, maxLen = 256): string {
   const s = typeof v === 'string' ? v : '';
   const t = s.trim();
   return t.length > maxLen ? t.slice(0, maxLen) : t;
-}
-
-function getRequestOrigin(request: Request): string {
-  const env = (process.env.NEXT_PUBLIC_SITE_URL || '').trim();
-  if (env) return env.replace(/\/$/, '');
-
-  const hostHeader = (request.headers.get('x-forwarded-host') || request.headers.get('host') || '').trim();
-  const host = hostHeader.split(',')[0]?.trim() || '';
-  const protoHeader = (request.headers.get('x-forwarded-proto') || '').trim();
-  const proto = protoHeader.split(',')[0]?.trim() || '';
-  if (host) return `${proto || 'https'}://${host}`;
-
-  const origin = (request.headers.get('origin') || '').trim();
-  if (origin) return origin.replace(/\/$/, '');
-
-  return process.env.NODE_ENV !== 'production' ? 'http://localhost:3001' : '';
 }
 
 /**
