@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     // Only enable Stripe Connect payouts when we actually have a creator account.
     // Without it, behavior is unchanged (platform receives the full amount).
     const enablePayout = Boolean(creatorStripeAccountId) && unitAmount > 0;
-    const paymentIntentData: Stripe.Checkout.SessionCreateParams.PaymentIntentData | undefined = enablePayout
+    const paymentIntentData = enablePayout
       ? {
           application_fee_amount: platformFeeAmount,
           transfer_data: { destination: creatorStripeAccountId },
