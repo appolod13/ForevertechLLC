@@ -17,20 +17,41 @@ function getString(v: unknown, maxLen = 400): string {
   return t.length > maxLen ? t.slice(0, maxLen) : t;
 }
 
+// Canonical production site. Stripe's success/cancel (back arrow) must always
+// return here, never to a mistyped/alternate host like "pixelcrypt.com".
+const CANONICAL_SITE_URL = 'https://pixelqrypt.com';
+
+// Normalize any resolved origin so the misspelled "pixelcrypt" domain (and bare
+// www) always maps back to the canonical pixelqrypt.com.
+function normalizeOrigin(rawOrigin: string): string {
+  const cleaned = rawOrigin.replace(/\/$/, '');
+  if (!cleaned) return cleaned;
+  try {
+    const url = new URL(cleaned);
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    if (host === 'pixelcrypt.com' || host === 'pixelqrypt.com') {
+      return CANONICAL_SITE_URL;
+    }
+    return cleaned;
+  } catch {
+    return cleaned;
+  }
+}
+
 function getRequestOrigin(request: Request): string {
   const env = (process.env.NEXT_PUBLIC_SITE_URL || '').trim();
-  if (env) return env.replace(/\/$/, '');
+  if (env) return normalizeOrigin(env);
 
   const hostHeader = (request.headers.get('x-forwarded-host') || request.headers.get('host') || '').trim();
   const host = hostHeader.split(',')[0]?.trim() || '';
   const protoHeader = (request.headers.get('x-forwarded-proto') || '').trim();
   const proto = protoHeader.split(',')[0]?.trim() || '';
-  if (host) return `${proto || 'https'}://${host}`;
+  if (host) return normalizeOrigin(`${proto || 'https'}://${host}`);
 
   const origin = (request.headers.get('origin') || '').trim();
-  if (origin) return origin.replace(/\/$/, '');
+  if (origin) return normalizeOrigin(origin);
 
-  return process.env.NODE_ENV !== 'production' ? 'http://localhost:3001' : '';
+  return process.env.NODE_ENV !== 'production' ? 'http://localhost:3001' : CANONICAL_SITE_URL;
 }
 
 export async function POST(request: Request) {
