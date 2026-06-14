@@ -56,6 +56,32 @@ export async function POST(request: Request) {
     const priceRaw = priceEnv ? Number(priceEnv) : 799;
     const unitAmount = Number.isFinite(priceRaw) ? Math.max(0, Math.min(100_000, Math.trunc(priceRaw))) : 799;
 
+    // Creator revenue share (default 90% to creator, 10% platform fee).
+    // Configurable via PIXELQRYPT_CREATOR_SHARE_BPS (basis points, e.g. 9000 = 90%).
+    const shareBpsEnv = Number((process.env.PIXELQRYPT_CREATOR_SHARE_BPS || '').trim());
+    const creatorShareBps = Number.isFinite(shareBpsEnv) ? Math.max(0, Math.min(10_000, Math.trunc(shareBpsEnv))) : 9000;
+    const creatorShareAmount = Math.round((unitAmount * creatorShareBps) / 10_000);
+    const platformFeeAmount = Math.max(0, unitAmount - creatorShareAmount);
+
+    // Only enable Stripe Connect payouts when we actually have a creator account.
+    // Without it, behavior is unchanged (platform receives the full amount).
+    const enablePayout = Boolean(creatorStripeAccountId) && unitAmount > 0;
+    const paymentIntentData: Stripe.Checkout.SessionCreateParams.PaymentIntentData | undefined = enablePayout
+      ? {
+          application_fee_amount: platformFeeAmount,
+          transfer_data: { destination: creatorStripeAccountId },
+          metadata: {
+            pixelqryptCode: code,
+            galleryItemId,
+            creatorUserId,
+            creatorStripeAccountId,
+            creatorShareBps: String(creatorShareBps),
+            creatorShareAmount: String(creatorShareAmount),
+            platformFeeAmount: String(platformFeeAmount),
+          },
+        }
+      : undefined;
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
@@ -69,6 +95,7 @@ export async function POST(request: Request) {
         },
       ],
       mode: 'payment',
+      ...(paymentIntentData ? { payment_intent_data: paymentIntentData } : {}),
       success_url: `${origin}/pixelqrypt?code=${encodeURIComponent(code)}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/pixelqrypt?code=${encodeURIComponent(code)}`,
       customer_email: email || undefined,
@@ -81,6 +108,10 @@ export async function POST(request: Request) {
         galleryItemId,
         creatorUserId,
         creatorStripeAccountId,
+        creatorShareBps: String(creatorShareBps),
+        creatorShareAmount: String(creatorShareAmount),
+        platformFeeAmount: String(platformFeeAmount),
+        payoutEnabled: String(enablePayout),
       },
     });
 

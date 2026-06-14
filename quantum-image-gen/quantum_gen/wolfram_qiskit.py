@@ -409,10 +409,14 @@ def _analyze_prompt_energy(prompt):
         except:
             pass
 
-    # Default: "roulette of possibilities" (weighted toward rare/bright exotic palettes)
+    # Default: "roulette of possibilities" (weighted toward the signature neon
+    # tee looks first, then rare/bright exotic palettes)
     cmaps = [
-        "aurora", "iridescent", "bioluminescent", "opal", "nebula", "prism", "solarflare",
-        "aurora", "iridescent", "nebula", "prism",
+        "neon_violet", "cyber_teal", "ultra_magenta",
+        "neon_violet", "cyber_teal", "ultra_magenta",
+        "neon_violet", "cyber_teal",
+        "nebula", "prism", "aurora", "iridescent",
+        "bioluminescent", "opal", "solarflare",
         "turbo", "viridis", "plasma", "magma", "inferno", "ocean", "rainbow",
     ]
     # Seed random with prompt to keep it deterministic for the same prompt
@@ -719,6 +723,13 @@ def _apply_colormap_01(vals_01: "np.ndarray", cmap_name: str) -> "np.ndarray":
         "solarflare": [(18, 2, 12), (120, 8, 36), (220, 44, 38), (255, 122, 26), (255, 196, 64), (255, 248, 196)],
         "nebula": [(6, 22, 54), (0, 110, 168), (44, 200, 220), (255, 150, 180), (255, 96, 128), (255, 196, 120)],
         "prism": [(0, 222, 224), (24, 132, 255), (120, 96, 255), (255, 96, 196), (255, 196, 64), (152, 255, 96)],
+        # --- Signature "PixelQrypt" looks tuned to the printed-tee references ---
+        # deep indigo/blue body with electric cyan-green glowing filigree edges
+        "cyber_teal": [(14, 10, 64), (40, 28, 140), (52, 70, 190), (36, 150, 200), (44, 228, 200), (150, 255, 210)],
+        # blue/violet body with hot magenta-pink rim light
+        "neon_violet": [(20, 14, 78), (58, 34, 168), (104, 52, 214), (168, 70, 226), (240, 96, 200), (255, 168, 224)],
+        # purple liquid-marble with magenta diagonal sheen
+        "ultra_magenta": [(26, 10, 60), (72, 24, 150), (128, 40, 198), (196, 56, 210), (255, 86, 168), (255, 156, 196)],
     }.get(name)
 
     if not stops:
@@ -794,6 +805,53 @@ def _apply_dimensional_depth(field_01, rgb_uint8, seed, alive=False):
     rgb = np.clip(rgb * glow, 0.0, 1.0)
 
     return (rgb * 255.0).astype(np.uint8)
+
+
+def _apply_neon_finish(pil_img, seed):
+    """
+    Final pass that reproduces the printed-tee reference aesthetic:
+      - bloom: bright fractal filigree edges glow softly (screen-blended blur)
+      - diagonal light sheen: angled refraction bands sweep across the frame
+    Deterministic for a given seed so the same prompt reproduces the same art.
+    Keeps the image bright and high-impact.
+    """
+    if not np:
+        return pil_img
+
+    rng = np.random.default_rng(int(seed) & 0xFFFFFFFF)
+    rgb = np.asarray(pil_img.convert("RGB"), dtype=np.float32) / 255.0
+    h, w = rgb.shape[:2]
+
+    # --- Bloom: isolate the brightest 35% and screen-blend a blurred copy ---
+    lum = 0.299 * rgb[..., 0] + 0.587 * rgb[..., 1] + 0.114 * rgb[..., 2]
+    thresh = float(np.quantile(lum, 0.65))
+    bright_mask = np.clip((lum - thresh) / max(1e-3, (1.0 - thresh)), 0.0, 1.0)
+    bright = rgb * bright_mask[..., None]
+    bright_img = Image.fromarray((np.clip(bright, 0.0, 1.0) * 255.0).astype(np.uint8))
+    bloom = np.asarray(
+        bright_img.filter(ImageFilter.GaussianBlur(radius=max(2, w // 90))),
+        dtype=np.float32,
+    ) / 255.0
+    rgb = 1.0 - (1.0 - rgb) * (1.0 - bloom * 0.85)
+
+    # --- Diagonal light sheen: a few soft angled bands of refracted light ---
+    angle = float(rng.uniform(0.6, 1.0))  # radians, roughly the reference diagonal
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    proj = (xx * math.cos(angle) + yy * math.sin(angle)) / float(max(w, h))
+    sheen = np.zeros((h, w), dtype=np.float32)
+    n_bands = int(rng.integers(2, 4))
+    for _ in range(n_bands):
+        center = float(rng.uniform(0.05, 0.95))
+        wdt = float(rng.uniform(0.04, 0.10))
+        amp = float(rng.uniform(0.18, 0.34))
+        sheen += amp * np.exp(-((proj - center) ** 2) / (2.0 * wdt * wdt))
+    sheen = np.clip(sheen, 0.0, 0.55)
+    # tint the sheen toward the existing highlight color so it reads as refraction
+    tint = np.array([1.0, 0.92, 1.0], dtype=np.float32)
+    rgb = 1.0 - (1.0 - rgb) * (1.0 - (sheen[..., None] * tint))
+
+    rgb = np.clip(rgb, 0.0, 1.0)
+    return Image.fromarray((rgb * 255.0).astype(np.uint8))
 
 
 def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum=False, seed_salt: str | None = None):
@@ -964,11 +1022,14 @@ def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum
     
     # Alpha composite puts interference on top of Julia
     blended = Image.alpha_composite(img_julia, img_interf).convert("RGB")
-    
-    # Increase the contrast slightly to make the Julia Set colors pop for t-shirts
+
+    # Signature neon finish: bloom on the glowing filigree + diagonal light sheen
+    blended = _apply_neon_finish(blended, _seed_from_text(f"{seed_context}|{rule}|neon-finish"))
+
+    # Boost contrast and saturation so the neon fractal pops on a white tee
     from PIL import ImageEnhance
-    enhancer = ImageEnhance.Contrast(blended)
-    final_img = enhancer.enhance(1.55 if force_quantum else 1.4)
+    final_img = ImageEnhance.Contrast(blended).enhance(1.5 if force_quantum else 1.38)
+    final_img = ImageEnhance.Color(final_img).enhance(1.35 if force_quantum else 1.25)
 
     img_hash = hashlib.sha256(final_img.tobytes()).hexdigest()[:12]
     base_prompt = (prompt or "").strip()
