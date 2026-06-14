@@ -356,7 +356,7 @@ def _analyze_prompt_energy(prompt):
         c_x = base[0] * (1.0 - mix) + boundary[0] * mix + jx
         c_y = base[1] * (1.0 - mix) + boundary[1] * mix + jy
         c_x, c_y = _clamp_c(c_x, c_y)
-        return "magma", c_x, c_y, "diamond" if shape_type == "circle" else shape_type
+        return "solarflare", c_x, c_y, "diamond" if shape_type == "circle" else shape_type
     if any(w in p for w in ["calm", "peace", "water", "flow", "tranquil", "breeze", "ocean"]):
         base = (0.285, 0.01)
         boundary = _pick_boundary_c(prompt_seed)
@@ -365,7 +365,7 @@ def _analyze_prompt_energy(prompt):
         c_x = base[0] * (1.0 - mix) + boundary[0] * mix + jx
         c_y = base[1] * (1.0 - mix) + boundary[1] * mix + jy
         c_x, c_y = _clamp_c(c_x, c_y)
-        return "viridis", c_x, c_y, "wave" if shape_type == "circle" else shape_type
+        return "opal", c_x, c_y, "wave" if shape_type == "circle" else shape_type
     if any(w in p for w in ["energy", "chaos", "power", "electric", "lightning", "dynamic"]):
         base = (-0.8, 0.156)
         boundary = _pick_boundary_c(prompt_seed)
@@ -374,7 +374,7 @@ def _analyze_prompt_energy(prompt):
         c_x = base[0] * (1.0 - mix) + boundary[0] * mix + jx
         c_y = base[1] * (1.0 - mix) + boundary[1] * mix + jy
         c_x, c_y = _clamp_c(c_x, c_y)
-        return "turbo", c_x, c_y, "cross" if shape_type == "circle" else shape_type
+        return "prism", c_x, c_y, "cross" if shape_type == "circle" else shape_type
     if any(w in p for w in ["transcendent", "mystic", "cosmos", "god", "divine", "spirit"]):
         base = (-0.7269, 0.1889)
         boundary = _pick_boundary_c(prompt_seed)
@@ -383,7 +383,7 @@ def _analyze_prompt_energy(prompt):
         c_x = base[0] * (1.0 - mix) + boundary[0] * mix + jx
         c_y = base[1] * (1.0 - mix) + boundary[1] * mix + jy
         c_x, c_y = _clamp_c(c_x, c_y)
-        return "plasma", c_x, c_y, "spiral" if shape_type == "circle" else shape_type
+        return "nebula", c_x, c_y, "spiral" if shape_type == "circle" else shape_type
     if any(w in p for w in ["dark", "void", "abyss", "shadow", "deep"]):
         base = (-0.835, -0.2321)
         boundary = _pick_boundary_c(prompt_seed)
@@ -404,8 +404,12 @@ def _analyze_prompt_energy(prompt):
         except:
             pass
 
-    # Default: "roulette of possibilities"
-    cmaps = ["turbo", "viridis", "plasma", "magma", "inferno", "ocean", "rainbow"]
+    # Default: "roulette of possibilities" (weighted toward rare/bright exotic palettes)
+    cmaps = [
+        "aurora", "iridescent", "bioluminescent", "opal", "nebula", "prism", "solarflare",
+        "aurora", "iridescent", "nebula", "prism",
+        "turbo", "viridis", "plasma", "magma", "inferno", "ocean", "rainbow",
+    ]
     # Seed random with prompt to keep it deterministic for the same prompt
     rng = random.Random(prompt_seed)
     
@@ -702,6 +706,14 @@ def _apply_colormap_01(vals_01: "np.ndarray", cmap_name: str) -> "np.ndarray":
         "inferno": [(0, 0, 4), (31, 12, 72), (85, 15, 109), (136, 34, 106), (186, 54, 85), (227, 89, 51), (249, 140, 10), (252, 255, 164)],
         "ocean": [(0, 12, 38), (0, 66, 98), (0, 133, 139), (0, 190, 170), (180, 255, 245)],
         "rainbow": [(150, 0, 255), (0, 80, 255), (0, 220, 255), (0, 255, 120), (240, 255, 0), (255, 120, 0), (255, 0, 0)],
+        # --- Rare / bright exotic palettes (4D look) ---
+        "aurora": [(7, 18, 38), (10, 84, 96), (16, 196, 168), (96, 255, 184), (210, 255, 140), (255, 138, 196), (255, 92, 174)],
+        "iridescent": [(12, 38, 64), (0, 168, 188), (44, 232, 210), (190, 255, 150), (255, 214, 92), (255, 128, 120), (255, 92, 168)],
+        "bioluminescent": [(4, 10, 36), (8, 64, 120), (0, 190, 220), (48, 255, 210), (170, 255, 120), (236, 255, 92)],
+        "opal": [(28, 64, 92), (96, 200, 210), (188, 255, 224), (255, 232, 176), (255, 176, 188), (214, 196, 255)],
+        "solarflare": [(18, 2, 12), (120, 8, 36), (220, 44, 38), (255, 122, 26), (255, 196, 64), (255, 248, 196)],
+        "nebula": [(6, 22, 54), (0, 110, 168), (44, 200, 220), (255, 150, 180), (255, 96, 128), (255, 196, 120)],
+        "prism": [(0, 222, 224), (24, 132, 255), (120, 96, 255), (255, 96, 196), (255, 196, 64), (152, 255, 96)],
     }.get(name)
 
     if not stops:
@@ -723,6 +735,61 @@ def _pseudo_quantum_probs(seed_context: str, num_states: int) -> "np.ndarray":
     rng = np.random.default_rng(seed)
     raw = rng.random(n, dtype=np.float32) + 1e-6
     return raw / np.sum(raw)
+
+def _apply_dimensional_depth(field_01, rgb_uint8, seed, alive=False):
+    """
+    Gives the flat fractal a true 4D feel:
+      - relief lighting (3D surface shaded from the fractal "depth" field)
+      - iridescent thin-film shimmer whose hue shifts with depth (the 4th axis)
+      - a soft living glow so the piece reads as 'alive'
+    Fully deterministic for a given seed, so the same prompt always reproduces
+    the exact same image. Keeps colors bright.
+    """
+    if not np:
+        return rgb_uint8
+
+    h, w = field_01.shape[:2]
+    rng = np.random.default_rng(int(seed) & 0xFFFFFFFF)
+    rgb = rgb_uint8.astype(np.float32) / 255.0
+    f = np.clip(field_01.astype(np.float32), 0.0, 1.0)
+
+    # --- Relief / 3D lighting derived from the fractal depth field ---
+    gy, gx = np.gradient(f)
+    strength = 2.6 if alive else 2.1
+    nx = -gx * strength
+    ny = -gy * strength
+    nz = np.ones_like(f, dtype=np.float32)
+    norm = np.sqrt(nx * nx + ny * ny + nz * nz) + 1e-6
+    nx, ny, nz = nx / norm, ny / norm, nz / norm
+
+    la = float(rng.uniform(0.0, 2.0 * np.pi))
+    lx, ly, lz = math.cos(la) * 0.62, math.sin(la) * 0.62, 0.78
+    diffuse = np.clip(nx * lx + ny * ly + nz * lz, 0.0, 1.0)
+    spec = np.clip(diffuse, 0.0, 1.0) ** 26.0
+
+    shade = (0.74 + 0.46 * diffuse)[..., None]
+    rgb = np.clip(rgb * shade + spec[..., None] * 0.5, 0.0, 1.0)
+
+    # --- Iridescent thin-film shimmer: color shifts with depth (the 4D layer) ---
+    phase = float(rng.uniform(0.0, 2.0 * np.pi))
+    cycles = float(rng.uniform(2.4, 3.6))
+    irid = np.stack([
+        0.5 + 0.5 * np.sin(2.0 * np.pi * (f * cycles) + phase + 0.0),
+        0.5 + 0.5 * np.sin(2.0 * np.pi * (f * cycles) + phase + 2.0944),
+        0.5 + 0.5 * np.sin(2.0 * np.pi * (f * cycles) + phase + 4.1888),
+    ], axis=-1).astype(np.float32)
+    irid_amt = 0.26 if alive else 0.18
+    # screen-blend the shimmer so highlights stay bright and rare-colored
+    rgb = 1.0 - (1.0 - rgb) * (1.0 - irid * irid_amt)
+
+    # --- Living radial glow ---
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    rr = np.sqrt(((xx - w / 2.0) / (w / 2.0)) ** 2 + ((yy - h / 2.0) / (h / 2.0)) ** 2)
+    glow = np.clip(1.08 - rr * 0.34, 0.62, 1.14)[..., None]
+    rgb = np.clip(rgb * glow, 0.0, 1.0)
+
+    return (rgb * 255.0).astype(np.uint8)
+
 
 def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum=False, seed_salt: str | None = None):
     # Always use Wolfram + Qiskit + Julia + Mandelbrot fusion, no future city fallbacks
@@ -782,9 +849,11 @@ def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum
     # This creates actual interference-like quantum patterns
     img_array = np.zeros((height, width, 3), dtype=np.uint8)
     
-    base_r = random.randint(50, 255)
-    base_g = random.randint(50, 255)
-    base_b = random.randint(50, 255)
+    # Deterministic per prompt+salt so the same words always recreate the same image
+    color_rng = random.Random(_seed_from_text(f"{seed_context}|{rule}|base-color"))
+    base_r = color_rng.randint(50, 255)
+    base_g = color_rng.randint(50, 255)
+    base_b = color_rng.randint(50, 255)
     
     num_states = len(sorted_keys) if sorted_keys is not None else int(probs_np.shape[0])
     
@@ -853,6 +922,7 @@ def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum
     # We'll apply the interference pattern as a subtle translucent overlay.
     img_interf = Image.fromarray(interference_img).convert("RGBA")
     base_rgb = _apply_colormap_01(julia_field, cmap_name)
+    base_rgb = _apply_dimensional_depth(julia_field, base_rgb, _seed_from_text(f"{seed_context}|{rule}|depth"), alive=force_quantum)
     img_julia = Image.fromarray(base_rgb).convert("RGBA")
 
     p = (prompt or "").lower()
@@ -880,6 +950,7 @@ def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum
 
             fused = np.clip(0.35 * combined + 0.65 * ridges, 0.0, 1.0).astype(np.float32)
             fused_rgb = _apply_colormap_01(fused, cmap_name)
+            fused_rgb = _apply_dimensional_depth(fused, fused_rgb, _seed_from_text(f"{seed_context}|{rule}|fused-depth"), alive=force_quantum)
             img_julia = Image.fromarray(fused_rgb).convert("RGBA")
 
     if force_quantum:
