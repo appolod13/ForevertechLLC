@@ -157,14 +157,19 @@ def map_pattern_to_quantum_circuit(pattern_grid, num_qubits=4):
     qc.measure_all()
     return qc
 
-def simulate_quantum_circuit(qc, shots=1024):
+def simulate_quantum_circuit(qc, shots=1024, seed_simulator=None):
     if not qc: return {}
     """
     Simulates the quantum circuit on a CPU backend (Aer).
+    A fixed seed_simulator makes the measurement sampling reproducible, so the
+    same prompt always recreates the exact same image.
     """
     simulator = AerSimulator()
     compiled_circuit = transpile(qc, simulator)
-    job = simulator.run(compiled_circuit, shots=shots)
+    run_kwargs = {"shots": shots}
+    if seed_simulator is not None:
+        run_kwargs["seed_simulator"] = int(seed_simulator) & 0x7FFFFFFF
+    job = simulator.run(compiled_circuit, **run_kwargs)
     result = job.result()
     counts = result.get_counts(compiled_circuit)
     return counts
@@ -812,7 +817,7 @@ def generate_quantum_image(prompt, width=512, height=512, rule=30, force_quantum
     print("Mapping to Quantum Circuit...")
     qc = map_pattern_to_quantum_circuit(pattern, num_qubits=6)
     print("Simulating on Aer backend...")
-    counts = simulate_quantum_circuit(qc)
+    counts = simulate_quantum_circuit(qc, seed_simulator=_seed_from_text(f"{seed_context}|{rule}|aer-sim"))
     print("Rendering image...")
     total_shots = sum(counts.values()) if counts else 0
 
