@@ -77,7 +77,7 @@ export default function CreatorPayoutsPage() {
         <header className="flex flex-col gap-2">
           <h1 className="text-balance text-2xl font-bold leading-relaxed sm:text-3xl">Creator Payouts</h1>
           <p className="text-pretty leading-relaxed text-slate-300">
-            Connect your account to earn <span className="font-semibold text-fuchsia-400">90%</span> every time someone
+            Connect your account to earn <span className="font-semibold text-fuchsia-400">75%</span> every time someone
             scans your shirt&apos;s QR code and buys your design. Payouts are handled securely by Stripe.
           </p>
         </header>
@@ -138,7 +138,7 @@ export default function CreatorPayoutsPage() {
             </div>
 
             <p className="text-pretty text-xs leading-relaxed text-slate-400">
-              Attach this account ID to your published designs so sales route 90% to you automatically. If status shows
+              Attach this account ID to your published designs so sales route 75% to you automatically. If status shows
               &quot;Setup incomplete,&quot; finish the Stripe steps above.
             </p>
           </section>

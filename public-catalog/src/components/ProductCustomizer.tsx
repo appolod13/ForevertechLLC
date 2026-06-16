@@ -55,7 +55,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
           console.error('Products fetch error:', err);
           // Fallback static products in case API fails
           const fallbackProducts = [
-            { id: 'shirt-1', name: 'Premium Tee', description: 'Cotton Tee', basePrice: 49.99, currency: 'usd', variants: ['S', 'M', 'L', 'XL'], colors: ['Black', 'White'], image: '' }
+            { id: 'shirt-1', name: 'Premium Tee', description: 'Cotton Tee', basePrice: 60.00, currency: 'usd', variants: ['S', 'M', 'L', 'XL'], colors: ['Black', 'White'], image: '' }
           ];
           setProducts(fallbackProducts);
           setSelectedProduct(fallbackProducts[0]);

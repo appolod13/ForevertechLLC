@@ -33,7 +33,7 @@ export async function GET() {
       id: 'tee',
       name: 'Premium Tee',
       description: 'Premium cotton tee printed on-demand.',
-      basePrice: 49.99,
+      basePrice: 60.00,
       currency: 'usd',
       variants,
       colors: ['Black', 'White'],

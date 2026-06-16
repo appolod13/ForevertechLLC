@@ -38,13 +38,13 @@ export async function POST(request: Request) {
     if (!origin) return NextResponse.json({ error: 'Missing site origin. Set NEXT_PUBLIC_SITE_URL.' }, { status: 500 });
 
     const priceEnv = (process.env.PIXELQRYPT_DOWNLOAD_PRICE_CENTS || '').trim();
-    const priceRaw = priceEnv ? Number(priceEnv) : 799;
-    const unitAmount = Number.isFinite(priceRaw) ? Math.max(0, Math.min(100_000, Math.trunc(priceRaw))) : 799;
+    const priceRaw = priceEnv ? Number(priceEnv) : 2499;
+    const unitAmount = Number.isFinite(priceRaw) ? Math.max(0, Math.min(100_000, Math.trunc(priceRaw))) : 2499;
 
-    // Creator revenue share (default 90% to creator, 10% platform fee).
-    // Configurable via PIXELQRYPT_CREATOR_SHARE_BPS (basis points, e.g. 9000 = 90%).
+    // Creator revenue share (default 75% to creator, 25% platform fee).
+    // Configurable via PIXELQRYPT_CREATOR_SHARE_BPS (basis points, e.g. 7500 = 75%).
     const shareBpsEnv = Number((process.env.PIXELQRYPT_CREATOR_SHARE_BPS || '').trim());
-    const creatorShareBps = Number.isFinite(shareBpsEnv) ? Math.max(0, Math.min(10_000, Math.trunc(shareBpsEnv))) : 9000;
+    const creatorShareBps = Number.isFinite(shareBpsEnv) ? Math.max(0, Math.min(10_000, Math.trunc(shareBpsEnv))) : 7500;
     const creatorShareAmount = Math.round((unitAmount * creatorShareBps) / 10_000);
     const platformFeeAmount = Math.max(0, unitAmount - creatorShareAmount);
 

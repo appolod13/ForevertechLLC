@@ -21,7 +21,7 @@ function getString(v: unknown, maxLen = 256): string {
 /**
  * Creates (or reuses) a Stripe Connect Express account for a creator and returns
  * an onboarding link. After onboarding, the returned accountId should be stored
- * against the creator's PixelQrypt designs so 90% of each sale is routed to them.
+ * against the creator's PixelQrypt designs so 75% of each sale is routed to them.
  */
 export async function POST(request: Request) {
   try {
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
 
 /**
  * Returns the payout-readiness of a connected account so the UI can show whether
- * a creator can receive their 90% share yet.
+ * a creator can receive their 75% share yet.
  */
 export async function GET(request: Request) {
   try {
