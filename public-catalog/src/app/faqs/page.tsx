@@ -32,7 +32,6 @@ export default function FaqsPage() {
     <div className="min-h-screen bg-gray-900 text-white">
       <Header />
       <main className="max-w-5xl mx-auto p-8">
-        <VercelConnectionTest />
         <div className="rounded-2xl border border-gray-700 bg-gradient-to-b from-gray-800 to-gray-900 p-8">
           <h1 className="text-4xl font-bold">FAQs</h1>
           <p className="mt-4 text-gray-300 leading-relaxed max-w-3xl">
