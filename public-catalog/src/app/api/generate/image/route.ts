@@ -260,18 +260,28 @@ try {
 
   const enhancedNegative = (negative_prompt || "") + ", blurry, low quality, artifacts, deformed, text, watermark, oversaturated, dull colors, poor centering, realistic photo, cartoon";
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ 
-      prompt: enhancedPrompt, 
-      negative_prompt: enhancedNegative, 
-      width, 
-      height, 
-      steps: 50, 
-      seed: -1, 
-      guidance_scale: 8.5 
-    }),
+  // AFTER (new version with rare black matter cosmic style)
+    // === Rare Black Matter Quantum Style Enhancer (matches Printify samples) ===
+    const styleEnhancer = `, ultra detailed quantum fractal black matter art, intricate self-similar mathematical patterns emerging from cosmic void, rare dark nebula colors with deep space black, glowing electric cyan magenta violet neon edges, luminous boundaries and energy flows, mysterious rare color palette, symmetrical centered t-shirt design, high contrast dark cosmic background, professional print ready, sharp intricate details, ethereal glow, 8k resolution`;
+
+    const enhancedPrompt = (prompt || "").trim() 
+      ? `${prompt.trim()}${styleEnhancer}` 
+      : `quantum black matter fractal, intricate mathematical patterns in deep space, rare cosmic colors with glowing neon edges${styleEnhancer}`;
+
+    const enhancedNegative = (negative_prompt || "") + ", blurry, low quality, artifacts, deformed, text, watermark, oversaturated bright colors, light background, realistic photo, cartoonish, dull flat colors, poor centering";
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ 
+        prompt: enhancedPrompt, 
+        negative_prompt: enhancedNegative, 
+        width, 
+        height, 
+        steps: 50, 
+        seed: -1, 
+        guidance_scale: 8.5 
+      }),
       cache: "no-store",
       signal: controller.signal,
     });
