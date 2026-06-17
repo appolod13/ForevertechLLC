@@ -1,3 +1,20 @@
+// public-catalog/src/lib/fractal-generator.ts
+// Stub for fractal prompt enhancement - matches your current API style
+
+export function promoToImagePrompt(basePrompt: string): string {
+  return `${basePrompt}, vibrant quantum nebula fractal mandala, intricate self-similar organic patterns with glowing electric cyan magenta violet neon edges, deep cosmic void background, symmetrical centered t-shirt design, professional merch ready`;
+}
+
+export function getQuantumFieldMetadata(prompt: string) {
+  return {
+    style: "quantum-nebula",
+    voids: "high",
+    colors: "cyan magenta violet",
+    complexity: "medium",
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 /**
  * Fractal Generator Integration - Helper Utilities
  * Usage examples and client-side integration for FusionAI component
