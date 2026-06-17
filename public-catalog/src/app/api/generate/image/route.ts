@@ -279,9 +279,9 @@ async function tryFusionGenerate(prompt: string, width: number, height: number, 
         negative_prompt: enhancedNegative, 
         width, 
         height, 
-        steps: 60, 
+        steps: 90,
         seed: -1, 
-        guidance_scale: 8.8 
+        guidance_scale: 9.9
       }),
       cache: "no-store",
       signal: controller.signal,
