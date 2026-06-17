@@ -247,13 +247,31 @@ async function tryFusionGenerate(prompt: string, width: number, height: number, 
   if (!base) return null;
   if (process.env.NODE_ENV === "production" && isLocalHostUrl(base)) return null;
   const url = base.replace(/\/$/, "") + "/generate";
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ prompt, negative_prompt, width, height, steps: 50, seed: -1, guidance_scale: 8.5 }),
+const controller = new AbortController();
+const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
+
+try {
+  // === NEW: Style matching for quantum/fractal samples ===
+  const styleEnhancer = `, highly detailed quantum fractal art, intricate self-similar patterns, vibrant neon purple pink blue cyan glowing edges, luminous boundaries, cosmic energy flow, mathematical precision, symmetrical centered design, professional t-shirt print ready, sharp focus, 8k resolution, dynamic lighting, ethereal glow`;
+  
+  const enhancedPrompt = (prompt || "").trim() 
+    ? `${prompt.trim()}${styleEnhancer}` 
+    : `quantum fractal art, intricate mathematical patterns, vibrant neon purple pink blue cyan glowing edges, luminous boundaries${styleEnhancer}`;
+
+  const enhancedNegative = (negative_prompt || "") + ", blurry, low quality, artifacts, deformed, text, watermark, oversaturated, dull colors, poor centering, realistic photo, cartoon";
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ 
+      prompt: enhancedPrompt, 
+      negative_prompt: enhancedNegative, 
+      width, 
+      height, 
+      steps: 50, 
+      seed: -1, 
+      guidance_scale: 8.5 
+    }),
       cache: "no-store",
       signal: controller.signal,
     });
