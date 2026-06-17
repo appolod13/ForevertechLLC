@@ -241,7 +241,7 @@ async function tryAIGenerate(
   }
 }
 
-// Lines ~140-190: Clean tryFusionGenerate function with Maximum Voids + Variable Backgrounds
+// Clean tryFusionGenerate with focused replication of your Printify quantum sample
 async function tryFusionGenerate(prompt: string, width: number, height: number, negative_prompt: string | undefined, timeoutMs: number) {
   const cfg = getAiGeneratorsConfig();
   const base = cfg.fusion.internalBaseUrl.trim();
@@ -252,24 +252,24 @@ async function tryFusionGenerate(prompt: string, width: number, height: number, 
   const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
 
   try {
-    // === Master Combined Fractal - Maximum Voids & Variable Backgrounds ===
-    // Backgrounds vary unless emotion detected in prompt
-    const styleEnhancer = `, ultra detailed quantum black matter fractal fusion masterpiece with extreme porosity and voids, single unified cosmic organism blending Mandelbrot set bulbs and Julia set filaments with Sierpinski triangular gaskets full of holes, Koch snowflake recursive boundaries, Vicsek cross branching arms, and especially Menger sponge 3D porous tunnels and cubic voids throughout, massive intricate infinite self-similar mathematical patterns riddled with deep empty spaces and negative voids emerging from absolute deep space black matter void, rare glowing electric cyan magenta violet neon edges outlining countless holes and luminous boundaries, Wolfram physics hypergraph and cellular automata organic complexity with abundant particle interactions and escape-time flows through voids, high contrast mysterious rare nebula color palette heavily dominated by deep blacks and expansive dark voids, perfectly symmetrical centered professional t-shirt print design, sharp intricate mathematical details with strong volumetric depth, ethereal glow around void edges, 8k resolution, mathematical precision, cohesive single fractal organism not split designs`;
+    // === Focused Quantum Nebula Fractal - Matching Printify Sample Style ===
+    // Better imagination: glowing mandala-like fractal with luminous edges, deep cosmic voids
+    const styleEnhancer = `, vibrant quantum nebula fractal mandala, intricate self-similar organic patterns with glowing electric cyan magenta violet neon edges and luminous boundaries, deep purple blue cosmic energy flows, high contrast dark nebula background with rich voids and negative space, symmetrical centered square t-shirt print design, ethereal volumetric glow, sharp intricate mathematical details, professional merch ready, 8k resolution, cinematic lighting, mystical quantum aesthetic`;
 
-    // Dynamic background variation (different every time unless emotion forces consistency)
-    const backgroundVariation = Math.random() > 0.3 
-      ? `, dynamic cosmic background with subtle nebula clouds, distant stars, and faint aurora glow` 
-      : `, pure deep space black matter void with minimal stars for maximum contrast`;
+    // Variable background but keep dark cosmic feel
+    const backgroundVariation = Math.random() > 0.4 
+      ? `, subtle dynamic nebula clouds and distant star specks` 
+      : `, pure deep cosmic black void for maximum contrast`;
 
     const emotionKeywords = ["calm", "peaceful", "serene", "dark", "mysterious", "energetic", "vibrant", "cosmic", "void", "emotional"];
     const hasEmotion = emotionKeywords.some(kw => (prompt || "").toLowerCase().includes(kw));
-    const finalBackground = hasEmotion ? `, consistent deep cosmic void background matching emotional tone` : backgroundVariation;
+    const finalBackground = hasEmotion ? `, consistent deep cosmic void matching emotional tone` : backgroundVariation;
 
     const enhancedPrompt = (prompt || "").trim() 
       ? `${prompt.trim()}${styleEnhancer}${finalBackground}` 
-      : `quantum black matter fractal fusion with massive voids and porosity, Mandelbrot Julia Sierpinski Koch Vicsek Menger combined in deep cosmic emptiness with neon glowing edges around holes${styleEnhancer}${finalBackground}`;
+      : `vibrant glowing quantum nebula fractal mandala with cyan magenta neon edges on dark cosmic background${styleEnhancer}${finalBackground}`;
 
-    const enhancedNegative = (negative_prompt || "") + ", blurry, low quality, artifacts, deformed, text, watermark, oversaturated bright colors, light background, realistic photo, cartoonish, dull flat colors, poor centering, split designs, two separate patterns, duplicated elements, disconnected fractals, multiple isolated shapes, low contrast, bright white background, solid filled areas, minimal voids, low porosity, static identical background, fusion-service default background, ui background";
+    const enhancedNegative = (negative_prompt || "") + ", blurry, low quality, artifacts, deformed, text, watermark, oversaturated bright colors, light background, realistic photo, cartoonish, dull flat colors, poor centering, split designs, two separate patterns, duplicated elements, disconnected fractals, multiple isolated shapes, low contrast, bright white background, solid filled areas, minimal voids, low porosity, generic background, fusion-service default, plain gradient";
 
     const res = await fetch(url, {
       method: "POST",
@@ -279,9 +279,9 @@ async function tryFusionGenerate(prompt: string, width: number, height: number, 
         negative_prompt: enhancedNegative, 
         width, 
         height, 
-        steps: 50, 
+        steps: 60, 
         seed: -1, 
-        guidance_scale: 8.5 
+        guidance_scale: 8.8 
       }),
       cache: "no-store",
       signal: controller.signal,
@@ -474,3 +474,4 @@ export async function POST(req: NextRequest) {
     return fail("internal_error", 500);
   }
 }
+o
