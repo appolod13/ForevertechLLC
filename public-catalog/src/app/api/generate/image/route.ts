@@ -253,7 +253,7 @@ async function tryFusionGenerate(prompt: string, width: number, height: number, 
     const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ prompt, negative_prompt, width, height, steps: 30, seed: -1, guidance_scale: 7.5 }),
+      body: JSON.stringify({ prompt, negative_prompt, width, height, steps: 50, seed: -1, guidance_scale: 8.5 }),
       cache: "no-store",
       signal: controller.signal,
     });
