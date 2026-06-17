@@ -279,7 +279,7 @@ async function tryFusionGenerate(prompt: string, width: number, height: number, 
         negative_prompt: enhancedNegative, 
         width, 
         height, 
-        steps: 314,
+        steps: 114,
         seed: 1, 
         guidance_scale: 1.7
       }),
