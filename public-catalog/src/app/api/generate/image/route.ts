@@ -241,7 +241,7 @@ async function tryAIGenerate(
   }
 }
 
-// Lines ~140-190: Replace entire tryFusionGenerate function
+// Lines ~140-190: Clean tryFusionGenerate function with Maximum Voids + Variable Backgrounds
 async function tryFusionGenerate(prompt: string, width: number, height: number, negative_prompt: string | undefined, timeoutMs: number) {
   const cfg = getAiGeneratorsConfig();
   const base = cfg.fusion.internalBaseUrl.trim();
@@ -251,12 +251,12 @@ async function tryFusionGenerate(prompt: string, width: number, height: number, 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
 
-      try {
+  try {
     // === Master Combined Fractal - Maximum Voids & Variable Backgrounds ===
-    // Backgrounds now vary unless emotion is detected in prompt (e.g. calm, energetic, mysterious)
+    // Backgrounds vary unless emotion detected in prompt
     const styleEnhancer = `, ultra detailed quantum black matter fractal fusion masterpiece with extreme porosity and voids, single unified cosmic organism blending Mandelbrot set bulbs and Julia set filaments with Sierpinski triangular gaskets full of holes, Koch snowflake recursive boundaries, Vicsek cross branching arms, and especially Menger sponge 3D porous tunnels and cubic voids throughout, massive intricate infinite self-similar mathematical patterns riddled with deep empty spaces and negative voids emerging from absolute deep space black matter void, rare glowing electric cyan magenta violet neon edges outlining countless holes and luminous boundaries, Wolfram physics hypergraph and cellular automata organic complexity with abundant particle interactions and escape-time flows through voids, high contrast mysterious rare nebula color palette heavily dominated by deep blacks and expansive dark voids, perfectly symmetrical centered professional t-shirt print design, sharp intricate mathematical details with strong volumetric depth, ethereal glow around void edges, 8k resolution, mathematical precision, cohesive single fractal organism not split designs`;
 
-    // Dynamic background variation (different cosmic scenes every generation unless emotion forces consistency)
+    // Dynamic background variation (different every time unless emotion forces consistency)
     const backgroundVariation = Math.random() > 0.3 
       ? `, dynamic cosmic background with subtle nebula clouds, distant stars, and faint aurora glow` 
       : `, pure deep space black matter void with minimal stars for maximum contrast`;
@@ -269,15 +269,7 @@ async function tryFusionGenerate(prompt: string, width: number, height: number, 
       ? `${prompt.trim()}${styleEnhancer}${finalBackground}` 
       : `quantum black matter fractal fusion with massive voids and porosity, Mandelbrot Julia Sierpinski Koch Vicsek Menger combined in deep cosmic emptiness with neon glowing edges around holes${styleEnhancer}${finalBackground}`;
 
-    const enhancedNegative = (negative_prompt || "") + ", blurry, low quality, artifacts, deformed, text, watermark, oversaturated bright colors, light background, realistic photo, cartoonish, dull flat colors, poor centering, split designs, two separate patterns, duplicated elements, disconnected fractals, multiple isolated shapes, low contrast, bright white background, solid filled areas, minimal voids, low porosity, static identical background, fusion-service default background";
-
-    const res = await fetch(url, { single unified cosmic organism blending Mandelbrot set bulbs and Julia set filaments with Sierpinski triangular gaskets full of holes, Koch snowflake recursive boundaries, Vicsek cross branching arms, and especially Menger sponge 3D porous tunnels and cubic voids throughout, massive intricate infinite self-similar mathematical patterns riddled with deep empty spaces and negative voids emerging from absolute deep space black matter void, rare glowing electric cyan magenta violet neon edges outlining countless holes and luminous boundaries on pure cosmic black, Wolfram physics hypergraph and cellular automata organic complexity with abundant particle interactions and escape-time flows through voids, high contrast mysterious rare nebula color palette heavily dominated by deep blacks and expansive dark voids, perfectly symmetrical centered professional t-shirt print design, sharp intricate mathematical details with strong volumetric depth, ethereal glow around void edges, 8k resolution, mathematical precision, cohesive single fractal organism not split designs`;
-
-    const enhancedPrompt = (prompt || "").trim() 
-      ? `${prompt.trim()}${styleEnhancer}` 
-      : `quantum black matter fractal fusion with massive voids and porosity, Mandelbrot Julia Sierpinski Koch Vicsek Menger combined in deep cosmic emptiness with neon glowing edges around holes${styleEnhancer}`;
-
-    const enhancedNegative = (negative_prompt || "") + ", blurry, low quality, artifacts, deformed, text, watermark, oversaturated bright colors, light background, realistic photo, cartoonish, dull flat colors, poor centering, split designs, two separate patterns, duplicated elements, disconnected fractals, multiple isolated shapes, low contrast, bright white background, solid filled areas, minimal voids, low porosity";
+    const enhancedNegative = (negative_prompt || "") + ", blurry, low quality, artifacts, deformed, text, watermark, oversaturated bright colors, light background, realistic photo, cartoonish, dull flat colors, poor centering, split designs, two separate patterns, duplicated elements, disconnected fractals, multiple isolated shapes, low contrast, bright white background, solid filled areas, minimal voids, low porosity, static identical background, fusion-service default background, ui background";
 
     const res = await fetch(url, {
       method: "POST",
