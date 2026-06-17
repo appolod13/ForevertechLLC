@@ -241,38 +241,43 @@ async function tryAIGenerate(
   }
 }
 
+// Lines ~40-90 (approximate - find "async function tryFusionGenerate")
 async function tryFusionGenerate(prompt: string, width: number, height: number, negative_prompt: string | undefined, timeoutMs: number) {
   const cfg = getAiGeneratorsConfig();
   const base = cfg.fusion.internalBaseUrl.trim();
   if (!base) return null;
   if (process.env.NODE_ENV === "production" && isLocalHostUrl(base)) return null;
   const url = base.replace(/\/$/, "") + "/generate";
-const controller = new AbortController();
-const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
 
-try {
-  // === NEW: Style matching for quantum/fractal samples ===
-  const styleEnhancer = `, highly detailed quantum fractal art, intricate self-similar patterns, vibrant neon purple pink blue cyan glowing edges, luminous boundaries, cosmic energy flow, mathematical precision, symmetrical centered design, professional t-shirt print ready, sharp focus, 8k resolution, dynamic lighting, ethereal glow`;
-  
-  const enhancedPrompt = (prompt || "").trim() 
-    ? `${prompt.trim()}${styleEnhancer}` 
-    : `quantum fractal art, intricate mathematical patterns, vibrant neon purple pink blue cyan glowing edges, luminous boundaries${styleEnhancer}`;
+  try {
+    // === Rare Black Matter Quantum Style Enhancer (matches Printify samples) ===
+    const styleEnhancer = `, ultra detailed quantum fractal black matter art, intricate self-similar mathematical patterns emerging from cosmic void, rare dark nebula colors with deep space black, glowing electric cyan magenta violet neon edges, luminous boundaries and energy flows, mysterious rare color palette, symmetrical centered t-shirt design, high contrast dark cosmic background, professional print ready, sharp intricate details, ethereal glow, 8k resolution`;
 
-  const enhancedNegative = (negative_prompt || "") + ", blurry, low quality, artifacts, deformed, text, watermark, oversaturated, dull colors, poor centering, realistic photo, cartoon";
+    const enhancedPrompt = (prompt || "").trim() 
+      ? `${prompt.trim()}${styleEnhancer}` 
+      : `quantum black matter fractal, intricate mathematical patterns in deep space, rare cosmic colors with glowing neon edges${styleEnhancer}`;
 
-  // BEFORE (current code - around lines 70-80)
+    const enhancedNegative = (negative_prompt || "") + ", blurry, low quality, artifacts, deformed, text, watermark, oversaturated bright colors, light background, realistic photo, cartoonish, dull flat colors, poor centering";
+
     const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ 
-        prompt, 
-        negative_prompt, 
+        prompt: enhancedPrompt, 
+        negative_prompt: enhancedNegative, 
         width, 
         height, 
         steps: 50, 
         seed: -1, 
         guidance_scale: 8.5 
       }),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    // ... rest of the function remains unchanged
+
       cache: "no-store",
       signal: controller.signal,
     });
