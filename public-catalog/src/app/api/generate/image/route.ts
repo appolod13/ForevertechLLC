@@ -15,6 +15,7 @@ import { generateImageForPlatform } from "@/lib/contentFactory/image";
 import { uploadToIpfs } from "@/lib/ipfs/upload";
 import { getAiGeneratorsConfig } from "@/lib/aiGeneratorsConfig";
 import { createHash } from "crypto";
+import { processFractalPromo, recommendFractalSettings, previewPromoRecommendations } from "./fractal-fusion";
 
 // When the live AI generation services are unavailable, prefer serving the most
 // recent real quantum-generated image instead of a static "AI Image" placeholder.
@@ -39,7 +40,17 @@ type Platform = "linkedin" | "instagram" | "twitter";
 type Provider = "mock" | "dalle" | "stablediffusion" | "midjourney";
 
 type ImageRequest = { prompt: string; platform: Platform; provider: Provider };
-type ImageRequestV2 = { prompt: string; negative_prompt?: string; width?: number; height?: number; provider?: Provider; quantum_mode?: boolean; ipfs_upload?: boolean; seed_salt?: string };
+type ImageRequestV2 = {
+  prompt: string;
+  negative_prompt?: string;
+  width?: number;
+  height?: number;
+  provider?: Provider;
+  quantum_mode?: boolean;
+  ipfs_upload?: boolean;
+  seed_salt?: string;
+  use_fractal_fusion?: boolean;
+};
 
 type AIResult =
   | { success: true; image_url: string; meta: Record<string, unknown> }
@@ -56,7 +67,16 @@ const cache = new Map<string, Cached>();
 const CACHE_TTL_MS = 10 * 60_000;
 const CACHE_MAX = 200;
 
-function cacheKeyFor(v: { prompt: string; negative_prompt?: string; width: number; height: number; provider?: Provider; quantum_mode: boolean; seed_salt?: string }): string {
+function cacheKeyFor(v: {
+  prompt: string;
+  negative_prompt?: string;
+  width: number;
+  height: number;
+  provider?: Provider;
+  quantum_mode: boolean;
+  seed_salt?: string;
+  use_fractal_fusion?: boolean;
+}): string {
   const payload = JSON.stringify(v);
   return createHash("sha256").update(payload).digest("hex");
 }
@@ -149,8 +169,13 @@ function validateV2(body: unknown): { valid: boolean; errors: string[]; parsed?:
   const ipfs_upload = Boolean(b.ipfs_upload);
   const seed_salt_raw = typeof b.seed_salt === "string" ? b.seed_salt.trim() : "";
   const seed_salt = seed_salt_raw ? seed_salt_raw.replace(/\s+/g, " ").slice(0, 128) : undefined;
+  const use_fractal_fusion = Boolean(b.use_fractal_fusion);
   if (errors.length) return { valid: false, errors };
-  return { valid: true, errors: [], parsed: { prompt, negative_prompt, width: w, height: h, provider, quantum_mode, ipfs_upload, seed_salt } };
+  return {
+    valid: true,
+    errors: [],
+    parsed: { prompt, negative_prompt, width: w, height: h, provider, quantum_mode, ipfs_upload, seed_salt, use_fractal_fusion },
+  };
 }
 
 async function tryAIGenerate(
@@ -161,6 +186,7 @@ async function tryAIGenerate(
   ipfs_upload: boolean,
   seed_salt: string | undefined,
   timeoutMs: number,
+  params?: Record<string, unknown>,
 ): Promise<AIResult> {
   const cfg = getAiGeneratorsConfig();
   const base = cfg.quantum.internalBaseUrl.trim().replace(/\/$/, "");
@@ -171,10 +197,14 @@ async function tryAIGenerate(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
   try {
+    const steps = params?.steps || 30;
+    const guidance_scale = params?.guidance_scale || 7.5;
+    const seed = params?.seed !== undefined ? params.seed : -1;
+
     const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ prompt, width, height, steps: 30, quantum_mode, ipfs_upload, seed_salt }),
+      body: JSON.stringify({ prompt, width, height, steps, quantum_mode, ipfs_upload, seed_salt, seed, guidance_scale }),
       cache: "no-store",
       signal: controller.signal,
     });
@@ -241,8 +271,18 @@ async function tryAIGenerate(
   }
 }
 
-// Clean tryFusionGenerate with focused replication of your Printify quantum sample
-async function tryFusionGenerate(prompt: string, width: number, height: number, negative_prompt: string | undefined, timeoutMs: number) {
+/**
+ * Enhanced Fusion Generate with 4D Fractal Support
+ * Leverages fractal-generator library for dynamic multi-pattern generation
+ */
+async function tryFusionGenerate(
+  prompt: string,
+  width: number,
+  height: number,
+  negative_prompt: string | undefined,
+  timeoutMs: number,
+  use_fractal_fusion: boolean = true,
+) {
   const cfg = getAiGeneratorsConfig();
   const base = cfg.fusion.internalBaseUrl.trim();
   if (!base) return null;
@@ -252,36 +292,66 @@ async function tryFusionGenerate(prompt: string, width: number, height: number, 
   const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
 
   try {
-    // === Focused Quantum Nebula Fractal - Matching Printify Sample Style ===
-    // Better imagination: glowing mandala-like fractal with luminous edges, deep cosmic voids
-    const styleEnhancer = `, vibrant quantum nebula fractal mandala, intricate self-similar organic patterns with glowing electric cyan magenta violet neon edges and luminous boundaries, deep purple blue cosmic energy flows, high contrast dark nebula background with rich voids and negative space, symmetrical centered square t-shirt print design, ethereal volumetric glow, sharp intricate mathematical details, professional merch ready, 8k resolution, cinematic lighting, mystical quantum aesthetic`;
+    let enhancedPrompt = prompt;
+    let enhancedNegative = negative_prompt || "";
+    let settings = { steps: 203, guidance_scale: 1.2, seed: 1 };
 
-    // Variable background but keep dark cosmic feel
-    const backgroundVariation = Math.random() > 0.4 
-      ? `, subtle dynamic nebula clouds and distant star specks` 
-      : `, pure deep cosmic black void for maximum contrast`;
+    // === NEW: Process through fractal-fusion for dynamic pattern generation ===
+    if (use_fractal_fusion) {
+      const fractalFusion = processFractalPromo({
+        prompt,
+        negative_prompt,
+        width,
+        height,
+        use_fractal_fusion: true,
+      });
+      enhancedPrompt = fractalFusion.prompt;
+      enhancedNegative = fractalFusion.negative_prompt;
 
-    const emotionKeywords = ["calm", "peaceful", "serene", "dark", "mysterious", "energetic", "vibrant", "cosmic", "void", "emotional"];
-    const hasEmotion = emotionKeywords.some(kw => (prompt || "").toLowerCase().includes(kw));
-    const finalBackground = hasEmotion ? `, consistent deep cosmic void matching emotional tone` : backgroundVariation;
+      const recommendations = recommendFractalSettings(prompt);
+      settings = {
+        steps: Math.round(recommendations.steps * 1.35), // Scale up for fusion
+        guidance_scale: recommendations.guidance_scale * 1.15,
+        seed: recommendations.seed ?? 1,
+      };
 
-    const enhancedPrompt = (prompt || "").trim() 
-      ? `${prompt.trim()}${styleEnhancer}${finalBackground}` 
-      : `vibrant glowing quantum nebula fractal mandala with cyan magenta neon edges on dark cosmic background${styleEnhancer}${finalBackground}`;
+      logInfo("fractal_fusion.applied", {
+        original_prompt: prompt,
+        fractal_type: fractalFusion.fractal_config.primary_fractal,
+        emotion: fractalFusion.fractal_config.emotion,
+        settings,
+      });
+    } else {
+      // === FALLBACK: Original static enhancer ===
+      const styleEnhancer = `, vibrant quantum nebula fractal mandala, intricate self-similar organic patterns with glowing electric cyan magenta violet neon edges and luminous boundaries, deep purple blue cosmic energy flows, high contrast dark nebula background with rich voids and negative space, symmetrical centered square t-shirt print design, ethereal volumetric glow, sharp intricate mathematical details, professional merch ready, 8k resolution, cinematic lighting, mystical quantum aesthetic`;
+      const backgroundVariation = Math.random() > 0.4
+        ? `, subtle dynamic nebula clouds and distant star specks`
+        : `, pure deep cosmic black void for maximum contrast`;
 
-    const enhancedNegative = (negative_prompt || "") + ", blurry, low quality, artifacts, deformed, text, watermark, oversaturated bright colors, light background, realistic photo, cartoonish, dull flat colors, poor centering, split designs, two separate patterns, duplicated elements, disconnected fractals, multiple isolated shapes, low contrast, bright white background, solid filled areas, minimal voids, low porosity, generic background, fusion-service default, plain gradient, ui background";
+      const emotionKeywords = ["calm", "peaceful", "serene", "dark", "mysterious", "energetic", "vibrant", "cosmic", "void", "emotional"];
+      const hasEmotion = emotionKeywords.some((kw) => (prompt || "").toLowerCase().includes(kw));
+      const finalBackground = hasEmotion ? `, consistent deep cosmic void matching emotional tone` : backgroundVariation;
+
+      enhancedPrompt = (prompt || "").trim()
+        ? `${prompt.trim()}${styleEnhancer}${finalBackground}`
+        : `vibrant glowing quantum nebula fractal mandala with cyan magenta neon edges on dark cosmic background${styleEnhancer}${finalBackground}`;
+
+      enhancedNegative =
+        (negative_prompt || "") +
+        ", blurry, low quality, artifacts, deformed, text, watermark, oversaturated bright colors, light background, realistic photo, cartoonish, dull flat colors, poor centering, split designs, two separate patterns, duplicated elements, disconnected fractals, multiple isolated shapes, low contrast, bright white background, solid filled areas, minimal voids, low porosity, generic background, fusion-service default, plain gradient, ui background";
+    }
 
     const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ 
-        prompt: enhancedPrompt, 
-        negative_prompt: enhancedNegative, 
-        width, 
-        height, 
-        steps: 203,
-        seed: 1, 
-        guidance_scale: 1.2
+      body: JSON.stringify({
+        prompt: enhancedPrompt,
+        negative_prompt: enhancedNegative,
+        width,
+        height,
+        steps: settings.steps,
+        seed: settings.seed,
+        guidance_scale: settings.guidance_scale,
       }),
       cache: "no-store",
       signal: controller.signal,
@@ -297,9 +367,11 @@ async function tryFusionGenerate(prompt: string, width: number, height: number, 
         : rawImageUrl.startsWith("/") && cfg.fusion.publicBaseUrl.trim()
           ? `${cfg.fusion.publicBaseUrl.trim().replace(/\/$/, "")}${rawImageUrl}`
           : rawImageUrl;
-      return { 
-        image_url: imageUrl, 
-        meta: isRecord(d.meta) ? (d.meta as Record<string, unknown>) : { provider: "fusion" } 
+      return {
+        image_url: imageUrl,
+        meta: isRecord(d.meta)
+          ? (d.meta as Record<string, unknown>)
+          : { provider: "fusion", fractal_fusion_enabled: use_fractal_fusion },
       };
     }
     return null;
@@ -351,7 +423,16 @@ export async function POST(req: NextRequest) {
     const parsed = v2.parsed as ImageRequestV2;
     const width = parsed.width ?? 512;
     const height = parsed.height ?? 512;
-    logInfo("image.generate.request", { requestId, prompt: parsed.prompt, width, height, provider: parsed.provider || "auto", quantum_mode: parsed.quantum_mode, ipfs_upload: parsed.ipfs_upload });
+    logInfo("image.generate.request", {
+      requestId,
+      prompt: parsed.prompt,
+      width,
+      height,
+      provider: parsed.provider || "auto",
+      quantum_mode: parsed.quantum_mode,
+      ipfs_upload: parsed.ipfs_upload,
+      use_fractal_fusion: parsed.use_fractal_fusion,
+    });
 
     const cfg = getAiGeneratorsConfig();
     const stdTimeoutMs = cfg.timeouts.stdMs;
@@ -359,18 +440,18 @@ export async function POST(req: NextRequest) {
     const requestedQuantum = Boolean(parsed.quantum_mode);
     const quantumAllowed = requestedQuantum && cfg.quantum.enabled;
     const timeoutMs = requestedQuantum ? quantumTimeoutMs : stdTimeoutMs;
+    const useFractalFusion = parsed.use_fractal_fusion ?? true; // Default to fractal fusion
 
-    const cacheKey = cacheKeyFor({ prompt: parsed.prompt, negative_prompt: parsed.negative_prompt, width, height, provider: parsed.provider, quantum_mode: Boolean(parsed.quantum_mode), seed_salt: parsed.seed_salt });
-    // const cached = getCache(cacheKey);
-    // if (cached) {
-    //   if (parsed.ipfs_upload && typeof cached.meta.ipfs_url !== "string") {
-    //     const ipfsMeta = await maybeUploadIpfs({ image_url: cached.image_url, requestId });
-    //     cached.meta = { ...cached.meta, ...ipfsMeta };
-    //     setCache(cacheKey, cached);
-    //   }
-    //   logInfo("image.generate.success", { requestId, meta: cached.meta, note: "cached_response" });
-    //   return ok({ image_url: cached.image_url, meta: cached.meta, requestId, cached: true });
-    // }
+    const cacheKey = cacheKeyFor({
+      prompt: parsed.prompt,
+      negative_prompt: parsed.negative_prompt,
+      width,
+      height,
+      provider: parsed.provider,
+      quantum_mode: Boolean(parsed.quantum_mode),
+      seed_salt: parsed.seed_salt,
+      use_fractal_fusion: useFractalFusion,
+    });
 
     if (quantumAllowed) {
       const aiService = await tryAIGenerate(
@@ -381,8 +462,9 @@ export async function POST(req: NextRequest) {
         parsed.ipfs_upload || false,
         parsed.seed_salt,
         timeoutMs,
+        recommendFractalSettings(parsed.prompt),
       );
-      
+
       if (aiService.success) {
         const meta = { ...(aiService.meta || {}) };
         if (parsed.ipfs_upload) {
@@ -403,6 +485,7 @@ export async function POST(req: NextRequest) {
         false,
         parsed.seed_salt,
         timeoutMs,
+        recommendFractalSettings(parsed.prompt),
       );
       if (degraded.success) {
         const meta = { ...(degraded.meta || {}), degraded_from_quantum: true, degraded_reason: aiService.error || "unknown" };
@@ -432,7 +515,8 @@ export async function POST(req: NextRequest) {
       return ok({ image_url: result.image_url, meta, requestId });
     }
 
-    const fusion = cfg.fusion.enabled ? await tryFusionGenerate(parsed.prompt, width, height, parsed.negative_prompt, timeoutMs) : null;
+    // === NEW: Use Fusion with Fractal Support ===
+    const fusion = cfg.fusion.enabled ? await tryFusionGenerate(parsed.prompt, width, height, parsed.negative_prompt, timeoutMs, useFractalFusion) : null;
     if (fusion) {
       const meta = { ...(fusion.meta || {}) };
       if (parsed.ipfs_upload) {
@@ -445,9 +529,9 @@ export async function POST(req: NextRequest) {
     }
 
     const aiService = cfg.quantum.enabled
-      ? await tryAIGenerate(parsed.prompt, width, height, false, parsed.ipfs_upload || false, parsed.seed_salt, timeoutMs)
+      ? await tryAIGenerate(parsed.prompt, width, height, false, parsed.ipfs_upload || false, parsed.seed_salt, timeoutMs, recommendFractalSettings(parsed.prompt))
       : ({ success: false, error: "disabled" } as AIResult);
-    
+
     if (aiService.success) {
       const meta = { ...(aiService.meta || {}) };
       if (parsed.ipfs_upload) {
@@ -471,6 +555,29 @@ export async function POST(req: NextRequest) {
     return ok({ image_url: result.image_url, meta, requestId });
   } catch (e) {
     logError("image.generate.error", e);
+    return fail("internal_error", 500);
+  }
+}
+
+/**
+ * GET endpoint for promo preview recommendations
+ * Allows frontend to show recommendations before generation
+ */
+export async function GET(req: NextRequest) {
+  try {
+    const searchParams = req.nextUrl.searchParams;
+    const promoText = searchParams.get("promo");
+
+    if (!promoText) {
+      return fail("promo_required", 400);
+    }
+
+    const recommendations = previewPromoRecommendations(promoText);
+    logInfo("fractal.preview_requested", { promo: promoText, recommendations });
+
+    return ok({ recommendations, promo: promoText });
+  } catch (e) {
+    logError("fractal.preview_error", e);
     return fail("internal_error", 500);
   }
 }
