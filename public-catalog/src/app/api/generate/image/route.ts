@@ -241,7 +241,7 @@ async function tryAIGenerate(
   }
 }
 
-// Lines ~40-90 (approximate - find "async function tryFusionGenerate")
+// Lines ~140-190: Replace entire tryFusionGenerate function
 async function tryFusionGenerate(prompt: string, width: number, height: number, negative_prompt: string | undefined, timeoutMs: number) {
   const cfg = getAiGeneratorsConfig();
   const base = cfg.fusion.internalBaseUrl.trim();
@@ -276,11 +276,7 @@ async function tryFusionGenerate(prompt: string, width: number, height: number, 
       cache: "no-store",
       signal: controller.signal,
     });
-    // ... rest of the function remains unchanged
 
-      cache: "no-store",
-      signal: controller.signal,
-    });
     if (!res.ok) return null;
     const data: unknown = await res.json();
     const d = isRecord(data) ? data : {};
@@ -291,7 +287,10 @@ async function tryFusionGenerate(prompt: string, width: number, height: number, 
         : rawImageUrl.startsWith("/") && cfg.fusion.publicBaseUrl.trim()
           ? `${cfg.fusion.publicBaseUrl.trim().replace(/\/$/, "")}${rawImageUrl}`
           : rawImageUrl;
-      return { image_url: imageUrl, meta: isRecord(d.meta) ? (d.meta as Record<string, unknown>) : { provider: "fusion" } };
+      return { 
+        image_url: imageUrl, 
+        meta: isRecord(d.meta) ? (d.meta as Record<string, unknown>) : { provider: "fusion" } 
+      };
     }
     return null;
   } catch (e) {
