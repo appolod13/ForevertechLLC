@@ -269,7 +269,7 @@ async function tryFusionGenerate(prompt: string, width: number, height: number, 
       ? `${prompt.trim()}${styleEnhancer}${finalBackground}` 
       : `vibrant glowing quantum nebula fractal mandala with cyan magenta neon edges on dark cosmic background${styleEnhancer}${finalBackground}`;
 
-    const enhancedNegative = (negative_prompt || "") + ", blurry, low quality, artifacts, deformed, text, watermark, oversaturated bright colors, light background, realistic photo, cartoonish, dull flat colors, poor centering, split designs, two separate patterns, duplicated elements, disconnected fractals, multiple isolated shapes, low contrast, bright white background, solid filled areas, minimal voids, low porosity, generic background, fusion-service default, plain gradient";
+    const enhancedNegative = (negative_prompt || "") + ", blurry, low quality, artifacts, deformed, text, watermark, oversaturated bright colors, light background, realistic photo, cartoonish, dull flat colors, poor centering, split designs, two separate patterns, duplicated elements, disconnected fractals, multiple isolated shapes, low contrast, bright white background, solid filled areas, minimal voids, low porosity, generic background, fusion-service default, plain gradient, ui background";
 
     const res = await fetch(url, {
       method: "POST",
