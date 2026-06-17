@@ -251,15 +251,16 @@ async function tryFusionGenerate(prompt: string, width: number, height: number, 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
 
-  try {
-    // === Rare Black Matter Quantum Style Enhancer (matches Printify samples) ===
-    const styleEnhancer = `, ultra detailed quantum fractal black matter art, intricate self-similar mathematical patterns emerging from cosmic void, rare dark nebula colors with deep space black, glowing electric cyan magenta violet neon edges, luminous boundaries and energy flows, mysterious rare color palette, symmetrical centered t-shirt design, high contrast dark cosmic background, professional print ready, sharp intricate details, ethereal glow, 8k resolution`;
+    try {
+    // === Master Combined Fractal - Maximum Voids & Dark Matter Style ===
+    // Heavy emphasis on porosity, holes, tunnels, and cosmic emptiness
+    const styleEnhancer = `, ultra detailed quantum black matter fractal fusion masterpiece with extreme porosity and voids, single unified cosmic organism blending Mandelbrot set bulbs and Julia set filaments with Sierpinski triangular gaskets full of holes, Koch snowflake recursive boundaries, Vicsek cross branching arms, and especially Menger sponge 3D porous tunnels and cubic voids throughout, massive intricate infinite self-similar mathematical patterns riddled with deep empty spaces and negative voids emerging from absolute deep space black matter void, rare glowing electric cyan magenta violet neon edges outlining countless holes and luminous boundaries on pure cosmic black, Wolfram physics hypergraph and cellular automata organic complexity with abundant particle interactions and escape-time flows through voids, high contrast mysterious rare nebula color palette heavily dominated by deep blacks and expansive dark voids, perfectly symmetrical centered professional t-shirt print design, sharp intricate mathematical details with strong volumetric depth, ethereal glow around void edges, 8k resolution, mathematical precision, cohesive single fractal organism not split designs`;
 
     const enhancedPrompt = (prompt || "").trim() 
       ? `${prompt.trim()}${styleEnhancer}` 
-      : `quantum black matter fractal, intricate mathematical patterns in deep space, rare cosmic colors with glowing neon edges${styleEnhancer}`;
+      : `quantum black matter fractal fusion with massive voids and porosity, Mandelbrot Julia Sierpinski Koch Vicsek Menger combined in deep cosmic emptiness with neon glowing edges around holes${styleEnhancer}`;
 
-    const enhancedNegative = (negative_prompt || "") + ", blurry, low quality, artifacts, deformed, text, watermark, oversaturated bright colors, light background, realistic photo, cartoonish, dull flat colors, poor centering";
+    const enhancedNegative = (negative_prompt || "") + ", blurry, low quality, artifacts, deformed, text, watermark, oversaturated bright colors, light background, realistic photo, cartoonish, dull flat colors, poor centering, split designs, two separate patterns, duplicated elements, disconnected fractals, multiple isolated shapes, low contrast, bright white background, solid filled areas, minimal voids, low porosity";
 
     const res = await fetch(url, {
       method: "POST",
