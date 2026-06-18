@@ -2,6 +2,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from main import app
+import main
 import json
 from io import BytesIO
 from PIL import Image
@@ -63,6 +64,62 @@ def test_health_endpoint():
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+def test_generate_endpoint_passes_render_params(monkeypatch):
+    captured = {}
+
+    def fake_fractal_fusion_rgb(width, height, prompt, seed, **kwargs):
+        captured["width"] = width
+        captured["height"] = height
+        captured["prompt"] = prompt
+        captured["seed"] = seed
+        captured["kwargs"] = kwargs
+        return b"\x00" * (width * height * 3)
+
+    monkeypatch.setattr(main, "fractal_fusion_rgb", fake_fractal_fusion_rgb)
+
+    payload = {
+        "prompt": "parameter test",
+        "width": 128,
+        "height": 128,
+        "seed": 321,
+        "quality": 3,
+        "iterations": 222,
+        "palette_index": 5,
+        "rotation": 27.5,
+        "zoom_level": 0.9,
+        "center_x": -0.42,
+        "center_y": 0.18,
+    }
+    response = client.post("/generate", json=payload)
+    assert response.status_code == 200
+
+    assert captured["kwargs"] == {
+        "quality": 3,
+        "iterations": 222,
+        "palette_index": 5,
+        "rotation": 27.5,
+        "zoom_level": 0.9,
+        "center_x": -0.42,
+        "center_y": 0.18,
+    }
+
+def test_fractal_fusion_rgb_render_params_change_output():
+    base = main.fractal_fusion_rgb(48, 48, "same prompt", 123)
+    modified = main.fractal_fusion_rgb(
+        48,
+        48,
+        "same prompt",
+        123,
+        quality=2,
+        iterations=210,
+        palette_index=4,
+        rotation=22.0,
+        zoom_level=1.1,
+        center_x=-0.35,
+        center_y=0.12,
+    )
+    assert base != modified
 
 def test_brain_img2img_invalid_image_rejected():
     response = client.post(

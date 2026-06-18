@@ -150,7 +150,19 @@ def _cap_render_dims(width: int, height: int, max_side: int = 448):
     return max(64, int(round(width * scale))), max(64, int(round(height * scale)))
 
 
-def fractal_fusion_rgb(width: int, height: int, prompt: str, seed: int) -> bytes:
+def fractal_fusion_rgb(
+    width: int,
+    height: int,
+    prompt: str,
+    seed: int,
+    quality: int = 1,
+    iterations: int = 130,
+    palette_index: int = 0,
+    rotation: float = 0.0,
+    zoom_level: float = 1.45,
+    center_x: float = -0.15,
+    center_y: float = 0.0,
+) -> bytes:
     """Pure-Python Julia + Mandelbrot fusion with quantum-style interference
     and pseudo-3D normal shading. No third-party deps, so it stays compatible
     with the lightweight Render deploy."""
@@ -169,13 +181,19 @@ def fractal_fusion_rgb(width: int, height: int, prompt: str, seed: int) -> bytes
     q_freq = 2.0 + (phash % 7)
     q_phase = ((phash >> 3) % 360) * math.pi / 180.0
     base_hue = (phash % 360) / 360.0
+    palette_shift = (int(palette_index) % 24) / 24.0
+    base_hue = (base_hue + palette_shift) % 1.0
 
     # Complex-plane viewport (slightly zoomed, centered for a rich composition).
-    zoom = 1.45
+    quality = max(1, min(3, int(quality)))
+    zoom = max(0.05, float(zoom_level))
     aspect = width / max(1, height)
     span_x = zoom * (aspect if aspect >= 1 else 1.0)
     span_y = zoom * (1.0 if aspect >= 1 else 1.0 / aspect)
-    cx_center, cy_center = -0.15, 0.0
+    cx_center, cy_center = float(center_x), float(center_y)
+    rot_rad = float(rotation) * math.pi / 180.0
+    rot_cos = math.cos(rot_rad)
+    rot_sin = math.sin(rot_rad)
 
     log2 = math.log(2.0)
     bailout = 16.0
@@ -188,17 +206,24 @@ def fractal_fusion_rgb(width: int, height: int, prompt: str, seed: int) -> bytes
     scale = 1.0 if long_side <= MAX_FIELD_DIM else MAX_FIELD_DIM / long_side
     fw = max(2, min(width, int(round(width * scale))))
     fh = max(2, min(height, int(round(height * scale))))
-    max_iter = 130 if fw * fh <= 200 * 200 else 90
+    max_iter = (130 if fw * fh <= 200 * 200 else 90) * quality
+    user_iterations = max(1, int(iterations))
+    if user_iterations != 130:
+        max_iter = user_iterations
 
     # Pass 1: compute the fused smooth-escape field on the low-res grid.
     field = [0.0] * (fw * fh)
     inv_fw = 1.0 / max(1, fw - 1)
     inv_fh = 1.0 / max(1, fh - 1)
     for y in range(fh):
-        iy = cy_center + (y * inv_fh - 0.5) * span_y
+        base_y = (y * inv_fh - 0.5) * span_y
         row = y * fw
         for x in range(fw):
-            ix = cx_center + (x * inv_fw - 0.5) * span_x
+            base_x = (x * inv_fw - 0.5) * span_x
+            rot_x = base_x * rot_cos - base_y * rot_sin
+            rot_y = base_x * rot_sin + base_y * rot_cos
+            ix = cx_center + rot_x
+            iy = cy_center + rot_y
 
             # Julia: fixed c, varying z.
             zr, zi = ix, iy
@@ -497,6 +522,13 @@ class GenerateRequest(BaseModel):
     steps: int = 30
     seed: int = -1
     guidance_scale: float = 7.5
+    quality: int = 1
+    iterations: int = 130
+    palette_index: int = 0
+    rotation: float = 0.0
+    zoom_level: float = 1.45
+    center_x: float = -0.15
+    center_y: float = 0.0
 
 @app.post("/generate")
 async def generate_image(payload: GenerateRequest):
@@ -514,7 +546,19 @@ async def generate_image(payload: GenerateRequest):
     seed = payload.seed if isinstance(payload.seed, int) and payload.seed != -1 else (abs(hash(payload.prompt)) % (2**31))
 
     try:
-        rgb = fractal_fusion_rgb(width, height, payload.prompt, seed)
+        rgb = fractal_fusion_rgb(
+            width,
+            height,
+            payload.prompt,
+            seed,
+            quality=payload.quality,
+            iterations=payload.iterations,
+            palette_index=payload.palette_index,
+            rotation=payload.rotation,
+            zoom_level=payload.zoom_level,
+            center_x=payload.center_x,
+            center_y=payload.center_y,
+        )
         provider = "fusion-julia-mandelbrot-3d"
     except Exception as e:
         print(f"[fusion] fractal generation failed, falling back to procedural: {e}")
