@@ -3,6 +3,10 @@
  * Usage examples and client-side integration for FusionAI component
  */
 
+'use client';
+
+import { useState } from 'react';
+
 /**
  * Example 1: Simple promo-based generation
  * User types: "quantum void sierpinski"
@@ -95,12 +99,13 @@ export const PROMO_TEMPLATES = {
 
 /**
  * Client-side integration example for React component
+ * Usage: const { generate, preview, loading, error, image, meta } = useFractalGenerator();
  */
 export function useFractalGenerator() {
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const [image, setImage] = React.useState<string | null>(null);
-  const [meta, setMeta] = React.useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [image, setImage] = useState<string | null>(null);
+  const [meta, setMeta] = useState<Record<string, unknown> | null>(null);
 
   const generate = async (promo: string) => {
     setLoading(true);
