@@ -261,6 +261,9 @@ def fractal_fusion_rgb(
     q_phase = _as_float(_pick_param("quantum_phase_offset", "q_phase", "phase"), ((phash >> 3) % 360) * math.pi / 180.0)
     q_freq = max(0.1, min(30.0, q_freq_value * (1.0 + complexity_boost * 0.45 + spiral_intensity * 0.08 + chaotic_mood * 0.15)))
     q_phase += (spiral_intensity * 0.15 + geometric_intensity * 0.1 + cosmic_mood * 0.45)
+    warp_strength = 0.04 + 0.07 * complexity_boost + 0.04 * energy_boost + 0.03 * cosmic_mood + 0.02 * (1.0 - minimal_mood)
+    warp_freq_x = 1.8 + ((seed % 11) * 0.17) + spiral_intensity * 0.35 + cosmic_mood * 0.6
+    warp_freq_y = 1.4 + (((seed >> 5) % 13) * 0.11) + geometric_intensity * 0.28 + chaotic_mood * 0.35
     base_hue = (phash % 360) / 360.0
 
     quality_value = _as_float(quality if quality is not None else _pick_param("quality", "detail"), 1.0)
@@ -374,6 +377,11 @@ def fractal_fusion_rgb(
             ny0 = (y * inv_fh - 0.5) * span_y
             ix = cx_center + (nx0 * cos_t - ny0 * sin_t)
             iy = cy_center + (nx0 * sin_t + ny0 * cos_t)
+            if warp_strength > 0.0:
+                warp_x = math.sin((iy + q_phase) * warp_freq_x) * warp_strength * span_x
+                warp_y = math.sin((ix - q_phase) * warp_freq_y) * warp_strength * span_y
+                ix += warp_x
+                iy += warp_y
             # Julia: fixed c, varying z.
             zr, zi = ix, iy
             j_iter = 0
@@ -422,7 +430,20 @@ def fractal_fusion_rgb(
             fused = (j_norm * 0.62 + m_norm * 0.38) * (0.75 + 0.25 * interference)
             fused = fused * (1.0 + 0.18 * complexity_boost * (shape_wave - 0.5))
             fused = fused + (swirl_wave - 0.5) * (0.16 * (energy_boost + complexity_boost) * mood_contrast)
-            field[row + x] = fused
+            lattice_wave = 0.5 + 0.5 * math.sin(
+                (ix * (3.8 + geometric_intensity * 0.9) - iy * (3.2 + spiral_intensity * 0.7)) * math.pi + q_phase * 0.35
+            )
+            cross_wave = 0.5 + 0.5 * math.sin(
+                (ix + iy) * (4.5 + complexity_boost * 2.1 + cosmic_mood * 0.6) * math.pi + q_phase * 1.2
+            )
+            detail_mix = (
+                abs(j_norm - m_norm) * (0.30 + 0.24 * complexity_boost + 0.12 * chaotic_mood)
+                + (j_norm * m_norm) * (0.15 + 0.12 * energy_boost + 0.08 * cosmic_mood)
+            )
+            fused += (lattice_wave - 0.5) * (0.11 + 0.16 * complexity_boost + 0.09 * energy_boost)
+            fused += (cross_wave - 0.5) * (0.07 + 0.11 * energy_boost + 0.06 * chaotic_mood)
+            fused *= 0.92 + detail_mix
+            field[row + x] = _clamp(fused, 0.0, 1.45)
 
     # Bilinearly sample the low-res field at full resolution.
     def sample(fx: float, fy: float) -> float:
