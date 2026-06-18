@@ -148,3 +148,44 @@ def test_generate_endpoint_accepts_render_parameters():
     assert applied.get("iterations") == 240
     assert applied.get("zoom_level") == 2.0
     assert "mandelbrot_zoom" in (applied.get("render_params_keys") or [])
+
+
+def test_render_parameter_aliases_match_canonical_controls():
+    canonical = fractal_fusion_rgb(
+        128,
+        128,
+        "neon fractal skyline",
+        112233,
+        iterations=260,
+        palette_index=4,
+        rotation=28,
+        zoom_level=2.6,
+        center_x=-0.2,
+        center_y=0.1,
+        render_params={"quantum_frequency": 6.0, "quantum_phase_offset": 0.8},
+    )
+    aliases = fractal_fusion_rgb(
+        128,
+        128,
+        "neon fractal skyline",
+        112233,
+        render_params={
+            "max_iterations": 260,
+            "palette": 4,
+            "rotate": 28,
+            "zoom": 2.6,
+            "x": -0.2,
+            "y": 0.1,
+            "q_frequency": 6.0,
+            "q_phase": 0.8,
+        },
+    )
+    assert canonical == aliases
+
+
+def test_prompt_keywords_shift_palette_and_structure():
+    calm = fractal_fusion_rgb(128, 128, "city fractal", 777)
+    fiery = fractal_fusion_rgb(128, 128, "city fractal neon fiery spiral", 777)
+    ocean = fractal_fusion_rgb(128, 128, "city fractal blue cyan spiral", 777)
+    assert calm != fiery
+    assert fiery != ocean

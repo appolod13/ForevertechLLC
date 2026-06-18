@@ -188,6 +188,32 @@ def fractal_fusion_rgb(
         except (TypeError, ValueError):
             return default
 
+    def _pick_param(*keys: str) -> Any:
+        for key in keys:
+            if key in params and params.get(key) is not None:
+                return params.get(key)
+        return None
+
+    prompt_lower = (prompt or "").lower()
+    color_words = {
+        "red": 0.00, "crimson": 0.97, "orange": 0.08, "gold": 0.13, "yellow": 0.16,
+        "green": 0.33, "emerald": 0.36, "teal": 0.46, "cyan": 0.50, "blue": 0.62,
+        "indigo": 0.72, "purple": 0.78, "violet": 0.82, "pink": 0.90, "magenta": 0.87,
+    }
+    hue_hint = 0.0
+    for word, hue in color_words.items():
+        if word in prompt_lower:
+            hue_hint += hue
+    if hue_hint:
+        hue_hint /= max(1, sum(1 for word in color_words if word in prompt_lower))
+
+    complexity_hits = sum(1 for word in ("fractal", "intricate", "detailed", "complex", "recursive") if word in prompt_lower)
+    energy_hits = sum(1 for word in ("neon", "vivid", "glow", "electric", "radiant") if word in prompt_lower)
+    spiral_hits = sum(1 for word in ("spiral", "swirl", "vortex", "galaxy") if word in prompt_lower)
+    geometric_hits = sum(1 for word in ("triangle", "hex", "kaleidoscope", "polygon", "geometry") if word in prompt_lower)
+    complexity_boost = min(0.65, complexity_hits * 0.12 + geometric_hits * 0.08 + spiral_hits * 0.06)
+    energy_boost = min(0.75, energy_hits * 0.16)
+
     # Julia constant orbits a circle in the complex plane, seeded for variety.
     angle = (seed % 100000) / 100000.0 * 2.0 * math.pi
     radius = 0.7885 + (rng.random() - 0.5) * 0.08
@@ -196,44 +222,52 @@ def fractal_fusion_rgb(
 
     # Quantum interference parameters derived from the prompt for determinism.
     phash = abs(hash(prompt)) if prompt else seed
-    q_freq = _as_float(params.get("quantum_frequency"), 2.0 + (phash % 7))
+    q_freq = _as_float(_pick_param("quantum_frequency", "q_frequency"), 2.0 + (phash % 7))
     q_freq = max(0.1, min(30.0, q_freq))
-    q_phase = _as_float(params.get("quantum_phase_offset"), ((phash >> 3) % 360) * math.pi / 180.0)
+    q_phase = _as_float(_pick_param("quantum_phase_offset", "q_phase", "phase"), ((phash >> 3) % 360) * math.pi / 180.0)
+    q_freq = max(0.1, min(30.0, q_freq * (1.0 + complexity_boost * 0.45 + spiral_hits * 0.08)))
+    q_phase += (spiral_hits * 0.15 + geometric_hits * 0.1)
     base_hue = (phash % 360) / 360.0
 
-    quality_value = _as_float(quality if quality is not None else params.get("quality"), 1.0)
+    quality_value = _as_float(quality if quality is not None else _pick_param("quality", "detail"), 1.0)
     quality_value = max(0.5, min(2.0, quality_value))
     requested_iterations = _as_int(
         iterations if iterations is not None else (
-            params.get("iterations")
-            if params.get("iterations") is not None
+            _pick_param("iterations", "max_iterations")
+            if _pick_param("iterations", "max_iterations") is not None
             else max(
-                _as_int(params.get("mandelbrot_max_iterations"), 0),
-                _as_int(params.get("julia_iterations"), 0),
+                _as_int(_pick_param("mandelbrot_max_iterations", "mandelbrot_iterations"), 0),
+                _as_int(_pick_param("julia_iterations", "julia_max_iterations"), 0),
             )
         ),
         0,
     )
     requested_iterations = max(0, requested_iterations)
+    if requested_iterations <= 0 and (complexity_boost > 0.0 or energy_boost > 0.0):
+        requested_iterations = int(80 + 260 * complexity_boost + 110 * energy_boost)
     palette_value = _as_int(
         palette_index if palette_index is not None else (
-            params.get("palette_index") if params.get("palette_index") is not None else params.get("color_seed")
+            _pick_param("palette_index", "palette", "palette_id")
+            if _pick_param("palette_index", "palette", "palette_id") is not None
+            else _pick_param("color_seed", "palette_seed")
         ),
         0,
     )
     base_hue = (base_hue + ((palette_value % 12) / 12.0)) % 1.0
+    if hue_hint:
+        base_hue = (base_hue * 0.3 + hue_hint * 0.7) % 1.0
 
     # Complex-plane viewport (slightly zoomed, centered for a rich composition).
     zoom_from_params = (
         zoom_level
         if zoom_level is not None
         else (
-            params.get("zoom_level")
-            if params.get("zoom_level") is not None
+            _pick_param("zoom_level", "zoom")
+            if _pick_param("zoom_level", "zoom") is not None
             else (
-                params.get("mandelbrot_zoom")
-                if params.get("mandelbrot_zoom") is not None
-                else params.get("julia_zoom")
+                _pick_param("mandelbrot_zoom", "m_zoom")
+                if _pick_param("mandelbrot_zoom", "m_zoom") is not None
+                else _pick_param("julia_zoom", "j_zoom")
             )
         )
     )
@@ -245,19 +279,25 @@ def fractal_fusion_rgb(
     span_y = zoom * (1.0 if aspect >= 1 else 1.0 / aspect)
     cx_center = _as_float(
         center_x if center_x is not None else (
-            params.get("center_x") if params.get("center_x") is not None else params.get("mandelbrot_pan_x")
+            _pick_param("center_x", "x", "pan_x")
+            if _pick_param("center_x", "x", "pan_x") is not None
+            else _pick_param("mandelbrot_pan_x")
         ),
         -0.15,
     )
     cy_center = _as_float(
         center_y if center_y is not None else (
-            params.get("center_y") if params.get("center_y") is not None else params.get("mandelbrot_pan_y")
+            _pick_param("center_y", "y", "pan_y")
+            if _pick_param("center_y", "y", "pan_y") is not None
+            else _pick_param("mandelbrot_pan_y")
         ),
         0.0,
     )
     rotation_degrees = _as_float(
         rotation if rotation is not None else (
-            params.get("rotation") if params.get("rotation") is not None else params.get("sierpinski_rotation")
+            _pick_param("rotation", "rotate", "angle")
+            if _pick_param("rotation", "rotate", "angle") is not None
+            else _pick_param("sierpinski_rotation")
         ),
         0.0,
     )
@@ -330,8 +370,16 @@ def fractal_fusion_rgb(
 
             # Quantum-style interference (the extra "dimension").
             interference = 0.5 + 0.5 * math.sin(q_freq * (ix + iy) * math.pi + q_phase)
+            shape_wave = 0.5 + 0.5 * math.sin(
+                (ix * (2.1 + geometric_hits * 0.9) + iy * (2.7 + spiral_hits * 0.8)) * math.pi + q_phase
+            )
+            swirl_wave = 0.5 + 0.5 * math.sin(
+                ((ix * ix - iy * iy) * (1.4 + spiral_hits * 0.45) + (ix * iy) * 0.9) * math.pi + q_phase * 0.7
+            )
 
             fused = (j_norm * 0.62 + m_norm * 0.38) * (0.75 + 0.25 * interference)
+            fused = fused * (1.0 + 0.18 * complexity_boost * (shape_wave - 0.5))
+            fused = fused + (swirl_wave - 0.5) * (0.16 * (energy_boost + complexity_boost))
             field[row + x] = fused
 
     # Bilinearly sample the low-res field at full resolution.
@@ -416,14 +464,14 @@ def fractal_fusion_rgb(
             # structure stays crisp and vivid rather than blown out.
             nx_c = (x * inv_w - 0.5)
             dist2 = nx_c * nx_c + ny * ny
-            glow = math.exp(-dist2 * 14.0) * 0.40   # tight, gentle core
-            halo = math.exp(-dist2 * 4.0) * 0.16    # wide soft halo
+            glow = math.exp(-dist2 * (14.0 - spiral_hits * 1.8)) * (0.40 + energy_boost * 0.12)
+            halo = math.exp(-dist2 * (4.0 - spiral_hits * 0.45)) * (0.16 + energy_boost * 0.08)
 
             # Vivid, ethereal palette: gold/amber core easing into deep azure
             # and magenta in the depths, cycling for fractal richness.
             hue = (base_hue + v * 2.4 + 0.08 * interference_hue(q_phase)) % 1.0
-            sat = 0.78 + 0.22 * (1.0 - v)
-            val = (0.28 + 0.85 * v) * shade
+            sat = 0.74 + 0.26 * (1.0 - v) + energy_boost * 0.24
+            val = (0.28 + 0.85 * v) * shade * (1.0 + energy_boost * 0.16)
 
             r, g, b = _hsv_to_rgb(hue, min(1.0, sat), min(1.0, val))
             rf, gf, bf = r / 255.0, g / 255.0, b / 255.0
