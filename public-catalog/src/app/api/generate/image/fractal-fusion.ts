@@ -2,9 +2,11 @@
  * Fractal Fusion Integration - Enhanced 4D Multi-Fractal Generator
  * Integrates Sierpinski, Koch, Vicsek, Mandelbrot, Julia, Burning Ship, Trinity, Lyapunov, Newton
  * With Quantum Field Dynamics and Emotion-Based Prompt Processing
+ * NOW WITH ACTUAL RENDER PARAMETERS FOR FUSION SERVICE
  */
 
 import { promoToImagePrompt, getQuantumFieldMetadata } from "@/lib/fractal-generator";
+import { formatFusionRenderRequest, generateUniqueSeed, renderParamsToQueryString } from "@/lib/fractal-render-params";
 
 export interface FractalFusionRequest {
   prompt: string;
@@ -22,11 +24,13 @@ export interface FractalFusionResponse {
   height: number;
   fractal_config: Record<string, unknown>;
   quantum_metadata: Record<string, unknown>;
+  render_params: Record<string, unknown>;
+  api_params: string; // Query string for Fusion API
 }
 
 /**
  * Process promo string through fractal-fusion pipeline
- * Converts one-line promo text into full multi-fractal configuration
+ * Converts one-line promo text into full multi-fractal configuration WITH render parameters
  */
 export function processFractalPromo(request: FractalFusionRequest): FractalFusionResponse {
   if (!request.use_fractal_fusion) {
@@ -37,6 +41,8 @@ export function processFractalPromo(request: FractalFusionRequest): FractalFusio
       height: request.height || 512,
       fractal_config: {},
       quantum_metadata: {},
+      render_params: {},
+      api_params: "",
     };
   }
 
@@ -46,21 +52,43 @@ export function processFractalPromo(request: FractalFusionRequest): FractalFusio
   // Get quantum field metadata for visualization/debugging
   const quantum_metadata = getQuantumFieldMetadata(config.emotion);
 
+  const width = request.width || 512;
+  const height = request.height || 512;
+
+  // === NEW: Generate actual render parameters for Fusion service ===
+  const seed = generateUniqueSeed();
+  const renderRequest = formatFusionRenderRequest(
+    prompt,
+    negative_prompt,
+    config.secondary_fractals,
+    config.complexity,
+    config.intensity,
+    width,
+    height
+  );
+
+  // Convert render params to API query string
+  const apiParams = renderParamsToQueryString(renderRequest.render_params);
+
   return {
     prompt,
     negative_prompt,
-    width: request.width || 512,
-    height: request.height || 512,
+    width,
+    height,
     fractal_config: {
       primary_fractal: config.primary_fractal,
+      secondary_fractals: config.secondary_fractals,
       intensity: config.intensity,
       complexity: config.complexity,
       color_temperature: config.color_temperature,
       emotion: config.emotion,
       quantum_emotion: config.quantum_emotion,
       config: config.config,
+      seed,
     },
     quantum_metadata,
+    render_params: renderRequest.render_params,
+    api_params: apiParams,
   };
 }
 
@@ -88,18 +116,56 @@ export function recommendFractalSettings(promoText: string): {
 }
 
 /**
+ * Preview recommendations without full generation
+ * Useful for UI previews and promo validation
+ */
+export function previewPromoRecommendations(promoText: string) {
+  const { config } = promoToImagePrompt(promoText);
+  const settings = recommendFractalSettings(promoText);
+  const metadata = getQuantumFieldMetadata(config.emotion);
+
+  return {
+    fractal_types: config.secondary_fractals,
+    primary_fractal: config.primary_fractal,
+    emotion: config.emotion,
+    quantum_emotion: config.quantum_emotion,
+    intensity: config.intensity,
+    complexity: config.complexity,
+    color_palette: config.config.color_palette,
+    recommended_settings: settings,
+    quantum_field: {
+      distortion_mode: config.config.quantum_field.distortion_mode,
+      morphing_speed: config.config.quantum_field.morphing_speed,
+      rotation_velocity: config.config.quantum_field.rotation_velocity,
+    },
+    metadata,
+    fractal_blend_count: config.secondary_fractals.length,
+    expected_visual_diversity: `${config.secondary_fractals.length}-layer composite fractal design`,
+  };
+}
+
+/**
  * Fusion generator that chains fractal processing with AI image generation
+ * Now sends actual render parameters to Fusion API
  */
 export async function fusionGenerateImage(
   request: FractalFusionRequest,
-  generatorFn: (prompt: string, negative_prompt: string, width: number, height: number, params?: Record<string, unknown>) => Promise<{ success: boolean; image_url?: string; error?: string }>,
+  generatorFn: (
+    prompt: string,
+    negative_prompt: string,
+    width: number,
+    height: number,
+    params?: Record<string, unknown>,
+    renderParams?: Record<string, unknown>,
+    apiParams?: string
+  ) => Promise<{ success: boolean; image_url?: string; error?: string }>,
 ): Promise<{ success: boolean; image_url?: string; meta?: Record<string, unknown>; error?: string }> {
   try {
-    // Process through fractal fusion pipeline
+    // Process through fractal fusion pipeline WITH render parameters
     const fusion = processFractalPromo(request);
     const settings = recommendFractalSettings(request.prompt);
 
-    // Call the actual image generator with optimized parameters
+    // Call the actual image generator with BOTH optimized AI parameters AND render parameters
     const result = await generatorFn(
       fusion.prompt,
       fusion.negative_prompt,
@@ -110,6 +176,8 @@ export async function fusionGenerateImage(
         guidance_scale: settings.guidance_scale,
         seed: settings.seed,
       },
+      fusion.render_params, // Pass actual fractal render parameters
+      fusion.api_params // Pass as API query string
     );
 
     if (!result.success) {
@@ -126,6 +194,8 @@ export async function fusionGenerateImage(
         provider: "fractal_fusion",
         ...fusion.fractal_config,
         quantum_metadata: fusion.quantum_metadata,
+        render_params_applied: fusion.render_params,
+        api_params: fusion.api_params,
         settings,
       },
     };
@@ -136,30 +206,4 @@ export async function fusionGenerateImage(
       error: e instanceof Error ? e.message : "unknown_error",
     };
   }
-}
-
-/**
- * Parse promo for quick recommendations without full generation
- * Useful for UI previews and promo validation
- */
-export function previewPromoRecommendations(promoText: string) {
-  const { config } = promoToImagePrompt(promoText);
-  const settings = recommendFractalSettings(promoText);
-  const metadata = getQuantumFieldMetadata(config.emotion);
-
-  return {
-    fractal_type: config.primary_fractal,
-    emotion: config.emotion,
-    quantum_emotion: config.quantum_emotion,
-    intensity: config.intensity,
-    complexity: config.complexity,
-    color_palette: config.config.color_palette,
-    recommended_settings: settings,
-    quantum_field: {
-      distortion_mode: config.config.quantum_field.distortion_mode,
-      morphing_speed: config.config.quantum_field.morphing_speed,
-      rotation_velocity: config.config.quantum_field.rotation_velocity,
-    },
-    metadata,
-  };
 }
