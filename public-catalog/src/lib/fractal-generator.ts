@@ -1,8 +1,7 @@
 /**
- * 4D Fractal Generator - Enhanced Edition
- * Merges: Sierpinski Triangle, Koch Snowflake, Vicsek Fractal, Mandelbrot-Julia Set
- * + Quantum Field Dynamics with Emotion-Based Shape Morphing
- * Converts text prompts into multi-dimensional fractal design parameters
+ * 4D Fractal Generator - Multi-Fractal Blending Edition
+ * Creates COMPOSITE fractal designs combining multiple patterns in single image
+ * Each promo generates unique blend of 2-4 fractals layered together
  */
 
 export interface QuantumFieldConfig {
@@ -11,13 +10,14 @@ export interface QuantumFieldConfig {
   phase_offset: number;
   distortion_mode: 'ripple' | 'turbulence' | 'vortex' | 'spiral' | 'wave' | 'chaos' | 'crystalline';
   field_intensity: number;
-  blend_with_fractal: number; // 0-1, how much quantum field blends
+  blend_with_fractal: number;
   color_influence: string;
   morphing_speed: number;
   rotation_velocity: number;
 }
 
 export interface FractalConfig {
+  primary_fractals: string[]; // CHANGED: Array of fractals to blend
   sierpinski_depth: number;
   koch_iterations: number;
   vicsek_scale: number;
@@ -38,16 +38,19 @@ export interface FractalConfig {
 }
 
 export interface FractalPromptParsed {
-  primary_fractal: 'sierpinski' | 'koch' | 'vicsek' | 'mandelbrot' | 'julia' | 'burning_ship' | 'trinity' | 'lyapunov' | 'newton' | 'hybrid';
-  intensity: number; // 0-1
-  complexity: number; // 0-1
+  primary_fractal: string; // First primary
+  secondary_fractals: string[]; // Additional fractals to blend
+  intensity: number;
+  complexity: number;
   color_temperature: 'cool' | 'warm' | 'balanced' | 'neon' | 'cosmic' | 'void' | 'ethereal' | 'acidic';
   emotion: string;
   quantum_emotion: string;
   config: FractalConfig;
 }
 
-// Expanded emotion keywords with quantum field properties
+// ALL 9 FRACTALS
+const ALL_FRACTALS = ['sierpinski', 'koch', 'vicsek', 'mandelbrot', 'julia', 'burning_ship', 'trinity', 'lyapunov', 'newton'];
+
 const EMOTION_KEYWORDS: Record<string, { intensity: number; distortion: string; colors: string[] }> = {
   // Calm emotions
   'peaceful': { intensity: 0.2, distortion: 'wave', colors: ['#001a33', '#00264d', '#003d66', '#0066cc', '#0099ff'] },
@@ -82,110 +85,111 @@ const EMOTION_KEYWORDS: Record<string, { intensity: number; distortion: string; 
   'fractured': { intensity: 0.65, distortion: 'crystalline', colors: ['#330033', '#660066', '#990099', '#ff00ff', '#00ffff'] },
   'crystalline': { intensity: 0.7, distortion: 'crystalline', colors: ['#000066', '#0033ff', '#00ccff', '#ffffff', '#ccccff'] },
 
-  // Emotional states
+  // Other emotions
   'angry': { intensity: 0.9, distortion: 'turbulence', colors: ['#660000', '#990000', '#cc0000', '#ff0000', '#ff3300'] },
   'melancholic': { intensity: 0.45, distortion: 'ripple', colors: ['#0a1a2e', '#1a2e4d', '#2d4d66', '#4d7599', '#6699cc'] },
   'joyful': { intensity: 0.8, distortion: 'spiral', colors: ['#ffaa00', '#ffff00', '#ff6600', '#ff0080', '#00ffff'] },
   'dreamlike': { intensity: 0.55, distortion: 'wave', colors: ['#1a0a3d', '#3d1a66', '#6633ff', '#aa66ff', '#00ffff'] },
   'mysterious': { intensity: 0.6, distortion: 'vortex', colors: ['#0a0a33', '#1a1a66', '#2d2d99', '#5555ff', '#ff00ff'] },
-
-  // Texture emotions
-  'smooth': { intensity: 0.35, distortion: 'wave', colors: ['#0a1a33', '#1a3d66', '#2d66aa', '#00ccff', '#00ffff'] },
-  'rough': { intensity: 0.75, distortion: 'turbulence', colors: ['#330033', '#660066', '#990099', '#ff00ff', '#ffff00'] },
-  'sharp': { intensity: 0.8, distortion: 'crystalline', colors: ['#0066ff', '#00ffff', '#ff0080', '#ffff00', '#ffffff'] },
-  'electric': { intensity: 0.92, distortion: 'chaos', colors: ['#00ffff', '#00ff00', '#ffff00', '#ff00ff', '#0066ff'] },
-
-  // Mathematical emotions
-  'geometric': { intensity: 0.65, distortion: 'crystalline', colors: ['#000066', '#0033ff', '#00ccff', '#00ff99', '#ffff00'] },
-  'mathematical': { intensity: 0.7, distortion: 'crystalline', colors: ['#1a1a33', '#3333ff', '#00ffff', '#ffff00', '#ffffff'] },
-  'algorithmic': { intensity: 0.68, distortion: 'vortex', colors: ['#000033', '#003366', '#0066ff', '#00ffff', '#00ff00'] },
-  'recursive': { intensity: 0.72, distortion: 'spiral', colors: ['#0a0a1a', '#1a1a33', '#3333ff', '#00ffff', '#ff00ff'] },
-};
-
-const INTENSITY_KEYWORDS: Record<string, number> = {
-  'soft': 0.2, 'gentle': 0.22, 'subtle': 0.25, 'tender': 0.23,
-  'light': 0.3, 'faint': 0.28, 'whisper': 0.25,
-  'medium': 0.5, 'moderate': 0.52, 'balanced': 0.55, 'normal': 0.5,
-  'strong': 0.75, 'bold': 0.78, 'powerful': 0.8,
-  'intense': 0.88, 'vivid': 0.9, 'explosive': 0.95, 'extreme': 1.0, 'maximum': 1.0,
-};
-
-const COMPLEXITY_KEYWORDS: Record<string, number> = {
-  'simple': 0.15, 'basic': 0.2, 'minimal': 0.18,
-  'detailed': 0.55, 'intricate': 0.65, 'elaborate': 0.68,
-  'complex': 0.75, 'very detailed': 0.8, 'ultra-detailed': 0.92, 'infinite': 1.0,
-};
-
-const COLOR_TEMPERATURE_KEYWORDS: Record<string, 'cool' | 'warm' | 'balanced' | 'neon' | 'cosmic' | 'void' | 'ethereal' | 'acidic'> = {
-  'cool': 'cool', 'cold': 'cool', 'cyan': 'cool', 'blue': 'cool', 'ice': 'cool',
-  'warm': 'warm', 'hot': 'warm', 'magenta': 'warm', 'red': 'warm', 'fire': 'warm',
-  'balanced': 'balanced', 'neutral': 'balanced',
-  'neon': 'neon', 'electric': 'neon', 'bright': 'neon', 'glowing': 'neon',
-  'cosmic': 'cosmic', 'space': 'cosmic', 'void': 'void', 'dark': 'void', 'black': 'void',
-  'ethereal': 'ethereal', 'mystical': 'ethereal', 'spiritual': 'ethereal',
-  'acidic': 'acidic', 'toxic': 'acidic', 'nuclear': 'acidic', 'radioactive': 'acidic',
 };
 
 /**
- * Parse natural language promo string into 4D fractal configuration with quantum field
- * Example: "quantum void sierpinski with neon edges and flowing energy" -> FractalPromptParsed
+ * MULTI-FRACTAL: Select 2-4 fractals to blend based on promo
+ */
+function selectFractalsToBlend(prompt: string, complexity: number): string[] {
+  const normalized = prompt.toLowerCase();
+  let selected: string[] = [];
+
+  // Check for specific fractal names
+  ALL_FRACTALS.forEach(fractal => {
+    if (normalized.includes(fractal)) {
+      selected.push(fractal);
+    }
+  });
+
+  // If no specific fractals found, select based on complexity
+  if (selected.length === 0) {
+    if (complexity > 0.8) {
+      // Ultra-detailed: blend 4 fractals
+      selected = ['sierpinski', 'koch', 'mandelbrot', 'julia'];
+    } else if (complexity > 0.6) {
+      // Medium-detailed: blend 3 fractals
+      const options = [
+        ['sierpinski', 'koch', 'vicsek'],
+        ['julia', 'mandelbrot', 'burning_ship'],
+        ['koch', 'trinity', 'lyapunov'],
+        ['mandelbrot', 'newton', 'sierpinski'],
+        ['vicsek', 'julia', 'koch']
+      ];
+      selected = options[Math.floor(Math.random() * options.length)];
+    } else {
+      // Simple: blend 2 fractals
+      const options = [
+        ['sierpinski', 'koch'],
+        ['mandelbrot', 'julia'],
+        ['burning_ship', 'vicsek'],
+        ['trinity', 'lyapunov'],
+        ['newton', 'koch']
+      ];
+      selected = options[Math.floor(Math.random() * options.length)];
+    }
+  }
+
+  // If only 1 fractal selected, add 1-2 more for blending
+  if (selected.length === 1) {
+    const primary = selected[0];
+    const remaining = ALL_FRACTALS.filter(f => f !== primary);
+    const toAdd = Math.floor(1 + complexity);
+    for (let i = 0; i < toAdd; i++) {
+      const idx = Math.floor(Math.random() * remaining.length);
+      selected.push(remaining[idx]);
+      remaining.splice(idx, 1);
+    }
+  }
+
+  return selected.slice(0, 4); // Max 4 fractals to blend
+}
+
+/**
+ * Parse promo and select multiple fractals for blending
  */
 export function parsePromptTo4DFractal(prompt: string): FractalPromptParsed {
   const normalized = prompt.toLowerCase();
   
-  // Detect primary fractal type
-  let primary_fractal: 'sierpinski' | 'koch' | 'vicsek' | 'mandelbrot' | 'julia' | 'burning_ship' | 'trinity' | 'lyapunov' | 'newton' | 'hybrid' = 'hybrid';
-  if (normalized.includes('sierpinski') || normalized.includes('triangle')) {
-    primary_fractal = 'sierpinski';
-  } else if (normalized.includes('koch') || normalized.includes('snowflake')) {
-    primary_fractal = 'koch';
-  } else if (normalized.includes('vicsek') || normalized.includes('cross')) {
-    primary_fractal = 'vicsek';
-  } else if (normalized.includes('mandelbrot')) {
-    primary_fractal = 'mandelbrot';
-  } else if (normalized.includes('julia')) {
-    primary_fractal = 'julia';
-  } else if (normalized.includes('burning') || normalized.includes('ship')) {
-    primary_fractal = 'burning_ship';
-  } else if (normalized.includes('trinity')) {
-    primary_fractal = 'trinity';
-  } else if (normalized.includes('lyapunov')) {
-    primary_fractal = 'lyapunov';
-  } else if (normalized.includes('newton')) {
-    primary_fractal = 'newton';
-  }
-
-  // Detect intensity
   let intensity = 0.7;
-  for (const [keyword, value] of Object.entries(INTENSITY_KEYWORDS)) {
+  for (const [keyword, value] of Object.entries({ 'soft': 0.2, 'gentle': 0.22, 'subtle': 0.25, 'tender': 0.23, 'light': 0.3, 'medium': 0.5, 'balanced': 0.55, 'strong': 0.75, 'bold': 0.78, 'intense': 0.88, 'vivid': 0.9, 'explosive': 0.95, 'extreme': 1.0 })) {
     if (normalized.includes(keyword)) {
       intensity = value;
       break;
     }
   }
 
-  // Detect complexity
   let complexity = 0.65;
-  for (const [keyword, value] of Object.entries(COMPLEXITY_KEYWORDS)) {
+  for (const [keyword, value] of Object.entries({ 'simple': 0.15, 'basic': 0.2, 'minimal': 0.18, 'detailed': 0.55, 'intricate': 0.65, 'elaborate': 0.68, 'complex': 0.75, 'very detailed': 0.8, 'ultra-detailed': 0.92, 'infinite': 1.0 })) {
     if (normalized.includes(keyword)) {
       complexity = value;
       break;
     }
   }
 
-  // Detect color temperature
   let color_temperature: 'cool' | 'warm' | 'balanced' | 'neon' | 'cosmic' | 'void' | 'ethereal' | 'acidic' = 'balanced';
-  for (const [keyword, value] of Object.entries(COLOR_TEMPERATURE_KEYWORDS)) {
+  const tempMap: Record<string, 'cool' | 'warm' | 'balanced' | 'neon' | 'cosmic' | 'void' | 'ethereal' | 'acidic'> = {
+    'cool': 'cool', 'cold': 'cool', 'cyan': 'cool', 'blue': 'cool', 'ice': 'cool',
+    'warm': 'warm', 'hot': 'warm', 'magenta': 'warm', 'red': 'warm', 'fire': 'warm',
+    'balanced': 'balanced', 'neutral': 'balanced',
+    'neon': 'neon', 'electric': 'neon', 'bright': 'neon', 'glowing': 'neon',
+    'cosmic': 'cosmic', 'space': 'cosmic', 'void': 'void', 'dark': 'void', 'black': 'void',
+    'ethereal': 'ethereal', 'mystical': 'ethereal', 'spiritual': 'ethereal',
+    'acidic': 'acidic', 'toxic': 'acidic', 'nuclear': 'acidic', 'radioactive': 'acidic',
+  };
+  for (const [keyword, value] of Object.entries(tempMap)) {
     if (normalized.includes(keyword)) {
       color_temperature = value;
       break;
     }
   }
 
-  // Extract primary emotion and quantum emotion
   let emotion = 'quantum';
-  let quantum_emotion = 'ethereal';
-  
   for (const emotionKeyword of Object.keys(EMOTION_KEYWORDS)) {
     if (normalized.includes(emotionKeyword)) {
       emotion = emotionKeyword;
@@ -193,7 +197,7 @@ export function parsePromptTo4DFractal(prompt: string): FractalPromptParsed {
     }
   }
 
-  // Find secondary quantum emotion
+  let quantum_emotion = 'ethereal';
   const quantumEmotions = ['flowing', 'spiraling', 'pulsing', 'crystalline', 'chaotic', 'harmonic'];
   for (const qEmotion of quantumEmotions) {
     if (normalized.includes(qEmotion)) {
@@ -202,11 +206,15 @@ export function parsePromptTo4DFractal(prompt: string): FractalPromptParsed {
     }
   }
 
-  // Generate 4D configuration with quantum field
-  const config = generateFractalConfig(primary_fractal, intensity, complexity, color_temperature, emotion, quantum_emotion);
+  // SELECT MULTIPLE FRACTALS FOR BLENDING
+  const secondary_fractals = selectFractalsToBlend(prompt, complexity);
+  const primary_fractal = secondary_fractals[0] || 'hybrid';
+
+  const config = generateMultiFractalConfig(secondary_fractals, intensity, complexity, color_temperature, emotion, quantum_emotion);
 
   return {
     primary_fractal,
+    secondary_fractals,
     intensity,
     complexity,
     color_temperature,
@@ -217,17 +225,11 @@ export function parsePromptTo4DFractal(prompt: string): FractalPromptParsed {
 }
 
 /**
- * Generate quantum field configuration based on emotion
+ * Generate quantum field configuration
  */
-function generateQuantumFieldConfig(
-  emotion: string,
-  quantum_emotion: string,
-  intensity: number,
-  complexity: number
-): QuantumFieldConfig {
+function generateQuantumFieldConfig(emotion: string, quantum_emotion: string, intensity: number, complexity: number): QuantumFieldConfig {
   const emotionData = EMOTION_KEYWORDS[emotion] || EMOTION_KEYWORDS['quantum'];
   
-  // Map quantum emotions to distortion modes
   const distortionMap: Record<string, 'ripple' | 'turbulence' | 'vortex' | 'spiral' | 'wave' | 'chaos' | 'crystalline'> = {
     'flowing': 'wave',
     'spiraling': 'spiral',
@@ -251,154 +253,9 @@ function generateQuantumFieldConfig(
 }
 
 /**
- * Generate fractal configuration from parsed parameters
+ * Generate multi-fractal configuration
  */
-function generateFractalConfig(
-  fractal_type: string,
-  intensity: number,
-  complexity: number,
-  color_temperature: 'cool' | 'warm' | 'balanced' | 'neon' | 'cosmic' | 'void' | 'ethereal' | 'acidic',
-  emotion: string,
-  quantum_emotion: string
-): FractalConfig {
-  // Extended base configurations for each fractal type
-  const baseConfigs: Record<string, Partial<FractalConfig>> = {
-    sierpinski: {
-      sierpinski_depth: Math.round(5 + complexity * 10),
-      koch_iterations: 2,
-      vicsek_scale: 0.3,
-      mandelbrot_iterations: 20,
-      burning_ship_iterations: 15,
-      trinity_fractal_param: 0.8,
-      lyapunov_exponent: -0.5,
-      newton_fractal_iterations: 10,
-      symmetry: 3,
-      blend_mode: 'overlay'
-    },
-    koch: {
-      sierpinski_depth: 2,
-      koch_iterations: Math.round(3 + complexity * 6),
-      vicsek_scale: 0.5,
-      mandelbrot_iterations: 15,
-      burning_ship_iterations: 12,
-      trinity_fractal_param: 0.7,
-      lyapunov_exponent: -0.4,
-      newton_fractal_iterations: 12,
-      symmetry: 6,
-      blend_mode: 'screen'
-    },
-    vicsek: {
-      sierpinski_depth: 3,
-      koch_iterations: 2,
-      vicsek_scale: 1 - (0.3 * complexity),
-      mandelbrot_iterations: 25,
-      burning_ship_iterations: 20,
-      trinity_fractal_param: 0.9,
-      lyapunov_exponent: -0.6,
-      newton_fractal_iterations: 15,
-      symmetry: 5,
-      blend_mode: 'multiply'
-    },
-    mandelbrot: {
-      sierpinski_depth: 3,
-      koch_iterations: 2,
-      vicsek_scale: 0.4,
-      mandelbrot_zoom: Math.pow(2, 2 + complexity * 10),
-      mandelbrot_iterations: Math.round(80 + complexity * 250),
-      burning_ship_iterations: Math.round(60 + complexity * 200),
-      trinity_fractal_param: 0.85,
-      lyapunov_exponent: -0.55,
-      newton_fractal_iterations: 20,
-      symmetry: 1,
-      blend_mode: 'soft-light'
-    },
-    julia: {
-      sierpinski_depth: 2,
-      koch_iterations: 1,
-      vicsek_scale: 0.5,
-      mandelbrot_zoom: Math.pow(2, 1 + complexity * 8),
-      mandelbrot_iterations: Math.round(100 + complexity * 250),
-      julia_constant_real: -0.7269 + (intensity * 0.15),
-      julia_constant_imag: 0.1889 + (intensity * 0.15),
-      burning_ship_iterations: 80,
-      trinity_fractal_param: 0.88,
-      lyapunov_exponent: -0.52,
-      newton_fractal_iterations: 18,
-      symmetry: 1,
-      blend_mode: 'overlay'
-    },
-    burning_ship: {
-      sierpinski_depth: 2,
-      koch_iterations: 2,
-      vicsek_scale: 0.35,
-      mandelbrot_zoom: Math.pow(2, 2 + complexity * 9),
-      mandelbrot_iterations: Math.round(120 + complexity * 280),
-      burning_ship_iterations: Math.round(150 + complexity * 300),
-      trinity_fractal_param: 0.82,
-      lyapunov_exponent: -0.58,
-      newton_fractal_iterations: 22,
-      symmetry: 2,
-      blend_mode: 'color-dodge'
-    },
-    trinity: {
-      sierpinski_depth: 4,
-      koch_iterations: 3,
-      vicsek_scale: 0.45,
-      mandelbrot_zoom: Math.pow(2, 1.5 + complexity * 7),
-      mandelbrot_iterations: Math.round(90 + complexity * 230),
-      trinity_fractal_param: 1.0 - (0.2 * complexity),
-      burning_ship_iterations: 70,
-      lyapunov_exponent: -0.48,
-      newton_fractal_iterations: 16,
-      symmetry: 3,
-      blend_mode: 'hard-light'
-    },
-    lyapunov: {
-      sierpinski_depth: 3,
-      koch_iterations: 2,
-      vicsek_scale: 0.4,
-      mandelbrot_zoom: Math.pow(2, 0.5 + complexity * 5),
-      mandelbrot_iterations: 60,
-      burning_ship_iterations: 50,
-      trinity_fractal_param: 0.75,
-      lyapunov_exponent: -0.6 + (intensity * 0.1),
-      newton_fractal_iterations: 14,
-      symmetry: 1,
-      blend_mode: 'color-burn'
-    },
-    newton: {
-      sierpinski_depth: 2,
-      koch_iterations: 1,
-      vicsek_scale: 0.5,
-      mandelbrot_zoom: Math.pow(2, 1 + complexity * 4),
-      mandelbrot_iterations: 40,
-      burning_ship_iterations: 35,
-      trinity_fractal_param: 0.7,
-      lyapunov_exponent: -0.4,
-      newton_fractal_iterations: Math.round(25 + complexity * 100),
-      symmetry: 1,
-      blend_mode: 'overlay'
-    },
-    hybrid: {
-      sierpinski_depth: Math.round(3 + complexity * 7),
-      koch_iterations: Math.round(2 + complexity * 4),
-      vicsek_scale: 0.4 + (intensity * 0.3),
-      mandelbrot_zoom: Math.pow(2, 1 + complexity * 6),
-      mandelbrot_iterations: Math.round(70 + complexity * 200),
-      julia_constant_real: -0.7 + (intensity * 0.2),
-      julia_constant_imag: 0.15 + (intensity * 0.2),
-      burning_ship_iterations: Math.round(60 + complexity * 180),
-      trinity_fractal_param: 0.8 + (intensity * 0.1),
-      lyapunov_exponent: -0.52 + (intensity * 0.08),
-      newton_fractal_iterations: Math.round(12 + complexity * 50),
-      symmetry: 4,
-      blend_mode: 'overlay'
-    }
-  };
-
-  const baseConfig = baseConfigs[fractal_type] || baseConfigs.hybrid;
-
-  // Expanded color palettes
+function generateMultiFractalConfig(fractals: string[], intensity: number, complexity: number, color_temperature: 'cool' | 'warm' | 'balanced' | 'neon' | 'cosmic' | 'void' | 'ethereal' | 'acidic', emotion: string, quantum_emotion: string): FractalConfig {
   const palettes: Record<string, string[]> = {
     cool: ['#000000', '#0a1a3a', '#1a4d7a', '#00d4ff', '#00ffff', '#0066ff', '#0a1a3a'],
     warm: ['#000000', '#2a0a0a', '#7a1a1a', '#ff00ff', '#ff0080', '#ff3300', '#2a0a0a'],
@@ -410,24 +267,24 @@ function generateFractalConfig(
     acidic: ['#00ff00', '#00ffff', '#ffff00', '#ff00ff', '#ff0080', '#00ff00', '#ccff00'],
   };
 
-  // Quantum field configuration
   const quantum_field = generateQuantumFieldConfig(emotion, quantum_emotion, intensity, complexity);
 
   return {
-    sierpinski_depth: baseConfig.sierpinski_depth || 5,
-    koch_iterations: baseConfig.koch_iterations || 2,
-    vicsek_scale: baseConfig.vicsek_scale || 0.4,
-    mandelbrot_zoom: baseConfig.mandelbrot_zoom || 1,
-    mandelbrot_iterations: baseConfig.mandelbrot_iterations || 50,
-    julia_constant_real: baseConfig.julia_constant_real || -0.7269,
-    julia_constant_imag: baseConfig.julia_constant_imag || 0.1889,
-    burning_ship_iterations: baseConfig.burning_ship_iterations || 50,
-    trinity_fractal_param: baseConfig.trinity_fractal_param || 0.8,
-    lyapunov_exponent: baseConfig.lyapunov_exponent || -0.5,
-    newton_fractal_iterations: baseConfig.newton_fractal_iterations || 15,
-    blend_mode: baseConfig.blend_mode || 'overlay',
+    primary_fractals: fractals,
+    sierpinski_depth: Math.round(5 + complexity * 10),
+    koch_iterations: Math.round(3 + complexity * 6),
+    vicsek_scale: 1 - (0.3 * complexity),
+    mandelbrot_zoom: Math.pow(2, 2 + complexity * 10),
+    mandelbrot_iterations: Math.round(80 + complexity * 250),
+    julia_constant_real: -0.7269 + (intensity * 0.15),
+    julia_constant_imag: 0.1889 + (intensity * 0.15),
+    burning_ship_iterations: Math.round(60 + complexity * 200),
+    trinity_fractal_param: 0.85,
+    lyapunov_exponent: -0.55,
+    newton_fractal_iterations: 20,
+    blend_mode: 'overlay',
     color_palette: palettes[color_temperature],
-    symmetry: baseConfig.symmetry || 1,
+    symmetry: 1,
     rotation: Math.random() * Math.PI * 2,
     scale: 0.9 + (intensity * 0.1),
     quantum_field
@@ -435,64 +292,44 @@ function generateFractalConfig(
 }
 
 /**
- * Convert FractalConfig to optimized prompt for image generation
+ * Convert multi-fractal config to enhanced prompt
  */
-export function fractalConfigToPrompt(config: FractalConfig, emotion: string, quantum_emotion: string): string {
-  const fractals: string[] = [];
+export function fractalConfigToPrompt(config: FractalConfig, emotion: string, quantum_emotion: string, fractals: string[]): string {
+  // Describe ALL selected fractals
+  const fractalDescriptions = fractals.map((f, i) => {
+    const descriptions: Record<string, string> = {
+      'sierpinski': `Sierpinski recursive triangles layered ${i === 0 ? 'as foundation' : 'overlaid with transparency'}`,
+      'koch': `Koch snowflake intricate branching ${i === 0 ? 'as primary' : 'blended in'}`,
+      'vicsek': `Vicsek cross-shaped self-similar fractal ${i === 0 ? 'dominant' : 'layered'}`,
+      'mandelbrot': `Mandelbrot infinite boundary complexity ${i === 0 ? 'leading' : 'contributing to'} the design`,
+      'julia': `Julia set organic flowing patterns ${i === 0 ? 'primary layer' : 'secondary layer'}`,
+      'burning_ship': `Burning Ship fire-like recursive patterns ${i === 0 ? 'main pattern' : 'mixed in'}`,
+      'trinity': `Trinity fractal 3-fold symmetric patterns ${i === 0 ? 'central' : 'incorporated'}`,
+      'lyapunov': `Lyapunov chaos theory visualization ${i === 0 ? 'base' : 'additive layer'}`,
+      'newton': `Newton fractal basin of attraction dynamics ${i === 0 ? 'primary' : 'secondary'}`,
+    };
+    return descriptions[f] || f;
+  }).join(', ');
 
-  if (config.sierpinski_depth > 2) {
-    fractals.push(`Sierpinski triangle depth ${config.sierpinski_depth}, recursive geometric patterns`);
-  }
-  if (config.koch_iterations > 1) {
-    fractals.push(`Koch snowflake iterations ${config.koch_iterations}, intricate branching`);
-  }
-  if (config.vicsek_scale > 0.3) {
-    fractals.push(`Vicsek cross-shaped fractal, self-similar scaling ${Math.round(config.vicsek_scale * 100)}%`);
-  }
-  if (config.mandelbrot_iterations > 20) {
-    fractals.push(`Mandelbrot set with ${config.mandelbrot_iterations} iterations, zoom level ${Math.round(Math.log2(config.mandelbrot_zoom))}`);
-  }
-  if (config.julia_constant_real !== 0 || config.julia_constant_imag !== 0) {
-    fractals.push(`Julia set [c=${config.julia_constant_real.toFixed(3)} + ${config.julia_constant_imag.toFixed(3)}i], organic flowing patterns`);
-  }
-  if (config.burning_ship_iterations > 20) {
-    fractals.push(`Burning Ship iterations ${config.burning_ship_iterations}, fire-like recursive structures`);
-  }
-  if (config.trinity_fractal_param > 0) {
-    fractals.push(`Trinity fractal with parameter ${config.trinity_fractal_param.toFixed(2)}, tri-symmetric patterns`);
-  }
-  if (config.newton_fractal_iterations > 10) {
-    fractals.push(`Newton fractal with ${config.newton_fractal_iterations} iterations, basin of attraction dynamics`);
-  }
+  const blendTechnique = fractals.length > 2 ? `multiple fractal types merged with overlay and soft-light blending` : `${fractals.length} fractal types composited together`;
 
-  // Quantum field description
-  const quantumFieldDesc = `quantum field with ${config.quantum_field.distortion_mode} distortion (amplitude ${config.quantum_field.wave_amplitude.toFixed(2)}, frequency ${config.quantum_field.frequency.toFixed(1)}), morphing ${config.quantum_field.morphing_speed > 0.2 ? 'rapidly' : 'gently'}, rotating at ${Math.abs(config.quantum_field.rotation_velocity).toFixed(2)}`;
-
-  const colorDesc = config.color_palette[0] === '#000000' && config.color_palette[3]?.includes('00d4')
-    ? 'cyan magenta neon edges on black void'
-    : 'vibrant quantum gradient';
-
-  const symmetryDesc = config.symmetry === 1 ? '' : `, ${config.symmetry}-fold rotational symmetry`;
-
-  const blendDesc = config.blend_mode === 'multiply' ? 'layered overlapping fractals' : `merged fractal geometries (${config.blend_mode})`;
-
-  const prompt = `4D ${emotion} fractal composite with ${quantum_emotion} quantum field: ${fractals.join(' + ')}. ${quantumFieldDesc} in background, ${blendDesc} with ${colorDesc}, perfectly centered square t-shirt print${symmetryDesc}, ethereal luminous glow with deep mathematical precision, high contrast dark dynamic background that shifts with ${quantum_emotion} energy, ${config.scale > 0.95 ? 'large scale dominant design' : 'dynamic adaptive scaling'}, intricate self-similar organic patterns, professional merch-ready, 8k resolution, cinematic volumetric lighting, mystical quantum aesthetic`;
+  const prompt = `4D ${emotion} multi-fractal composite artwork: ${fractalDescriptions}. All ${fractals.length} fractal types ${blendTechnique}, creating intricate cross-pattern geometries. Quantum field with ${quantum_emotion} distortion mode (morphing speed ${config.quantum_field.morphing_speed.toFixed(2)}), flowing dynamic background. Color palette: ${config.color_palette.slice(0, 4).join(', ')} on black void with glowing neon accents. Perfectly centered square t-shirt print, self-similar recursive patterns throughout, ethereal luminous glow, high contrast design, mathematical precision with organic flow, professional merch-ready, 8k resolution, cinematic volumetric lighting, mystical quantum aesthetic, seamless integration of all fractal components`;
 
   return prompt;
 }
 
 /**
- * Generate negative prompt to prevent unwanted elements
+ * Generate negative prompt
  */
 export function generateFractalNegativePrompt(intensity: number, emotion: string): string {
-  const baseNegative = "blurry, low quality, artifacts, deformed, text, watermark, realistic photo, cartoonish, dull flat colors, poor centering, split designs, duplicated elements, disconnected patterns, multiple isolated shapes, low contrast, bright white background, solid filled areas, generic gradient, ui background, plain design";
+  const baseNegative = "blurry, low quality, artifacts, deformed, text, watermark, realistic photo, cartoonish, dull flat colors, poor centering, split designs, disconnected patterns, multiple isolated shapes, low contrast, bright white background, solid filled areas, generic gradient, ui background, plain design, single pattern, monolithic design, separate unrelated fractals";
   
   let emotionSpecific = "";
   
   if (intensity > 0.85) {
     emotionSpecific = ", oversaturated, washed out, faded colors";
   } else if (intensity < 0.3) {
-    emotionSpecific = ", overly complex, chaotic, unreadable, too busy";
+    emotionSpecific = ", overly complex, chaotic unreadable, too busy";
   }
 
   if (emotion.includes('void') || emotion.includes('dark')) {
@@ -505,7 +342,7 @@ export function generateFractalNegativePrompt(intensity: number, emotion: string
 }
 
 /**
- * Full pipeline: Promo string -> Image Generation Prompt
+ * Full pipeline: Promo → Multi-Fractal Image Prompt
  */
 export function promoToImagePrompt(promoText: string): {
   prompt: string;
@@ -513,7 +350,7 @@ export function promoToImagePrompt(promoText: string): {
   config: FractalPromptParsed;
 } {
   const parsed = parsePromptTo4DFractal(promoText);
-  const prompt = fractalConfigToPrompt(parsed.config, parsed.emotion, parsed.quantum_emotion);
+  const prompt = fractalConfigToPrompt(parsed.config, parsed.emotion, parsed.quantum_emotion, parsed.secondary_fractals);
   const negative_prompt = generateFractalNegativePrompt(parsed.intensity, parsed.emotion);
 
   return {
@@ -524,15 +361,7 @@ export function promoToImagePrompt(promoText: string): {
 }
 
 /**
- * Generate canvas instructions for visualization
- */
-export function generateCanvasPrompt(config: FractalConfig, width: number = 512, height: number = 512): string {
-  const quantumField = config.quantum_field;
-  return `Canvas ${width}x${height}: Apply ${config.symmetry}-fold symmetry with ${config.blend_mode} blend. Layer fractals at rotation ${(config.rotation * 180 / Math.PI).toFixed(1)}°, scale ${(config.scale * 100).toFixed(0)}%. Quantum field: ${quantumField.distortion_mode} with amplitude ${quantumField.wave_amplitude.toFixed(2)}, frequency ${quantumField.frequency.toFixed(1)}, morphing speed ${quantumField.morphing_speed.toFixed(2)}, rotation velocity ${quantumField.rotation_velocity.toFixed(2)}`;
-}
-
-/**
- * Get emotion-based quantum field visualization metadata
+ * Get quantum field metadata
  */
 export function getQuantumFieldMetadata(emotion: string): Record<string, unknown> {
   const emotionData = EMOTION_KEYWORDS[emotion] || EMOTION_KEYWORDS['quantum'];
