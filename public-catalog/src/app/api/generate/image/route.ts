@@ -318,6 +318,23 @@ export async function POST(req: NextRequest) {
     const parsed = v2.parsed as ImageRequestV2;
     const width = parsed.width ?? 512;
     const height = parsed.height ?? 512;
+
+    // === Master Combined Fractal - Ultimate Quantum Black Matter Style ===
+    // Fusion of Mandelbrot/Julia bulbs, Sierpinski voids, Koch snowflake boundaries, Vicsek crosses, Menger sponge porosity — all in ONE cohesive structure
+    const prompt = parsed.prompt;
+    const negative_prompt = parsed.negative_prompt;
+    const styleEnhancer = `, ultra detailed quantum black matter fractal fusion masterpiece, single unified cosmic structure blending Mandelbrot set bulbs and Julia set filaments with Sierpinski triangular gaskets, Koch snowflake recursive boundaries, Vicsek cross branching arms, and Menger sponge 3D porous voids and tunnels, intricate infinite self-similar mathematical patterns emerging from deep space black matter void, rare glowing electric cyan magenta violet neon edges and luminous boundaries on absolute cosmic black, Wolfram physics hypergraph and cellular automata organic complexity with particle interactions and escape-time flows, high contrast mysterious rare nebula color palette dominated by deep blacks and dark voids, perfectly symmetrical centered professional t-shirt print design, sharp intricate mathematical details with volumetric depth and ethereal glow, 8k resolution, mathematical precision, cohesive single fractal organism not split designs`;
+
+    const enhancedPrompt = (prompt || "").trim()
+      ? `${prompt.trim()}${styleEnhancer}`
+      : `quantum black matter fractal fusion, Mandelbrot Julia Sierpinski Koch Vicsek Menger combined in deep cosmic void with neon glowing edges${styleEnhancer}`;
+
+    const enhancedNegative = (negative_prompt || "") + ", blurry, low quality, artifacts, deformed, text, watermark, oversaturated bright colors, light background, realistic photo, cartoonish, dull flat colors, poor centering, split designs, two separate patterns, duplicated elements, disconnected fractals, multiple isolated shapes, low contrast, bright white background";
+
+    // Apply the enhanced prompt/negative so every downstream generator uses them.
+    parsed.prompt = enhancedPrompt;
+    parsed.negative_prompt = enhancedNegative;
+
     logInfo("image.generate.request", { requestId, prompt: parsed.prompt, width, height, provider: parsed.provider || "auto", quantum_mode: parsed.quantum_mode, ipfs_upload: parsed.ipfs_upload });
 
     const cfg = getAiGeneratorsConfig();
