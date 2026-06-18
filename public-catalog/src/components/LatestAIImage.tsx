@@ -22,6 +22,17 @@ export function LatestAIImage({
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    const withCacheBust = (input: string) => {
+      if (!input || input.startsWith('data:') || input.startsWith('blob:')) return input;
+      try {
+        const u = new URL(input, window.location.origin);
+        u.searchParams.set('_t', String(Date.now()));
+        return u.toString();
+      } catch {
+        return input;
+      }
+    };
+
     const resolveUrl = (input: string) => {
       const s = String(input || '').trim();
       if (!s) return '';
@@ -36,7 +47,7 @@ export function LatestAIImage({
     if (overrideUrl) {
       const normalized = resolveUrl(overrideUrl);
       if (normalized) {
-        setImageUrl(normalized);
+        setImageUrl(withCacheBust(normalized));
         setLoading(false);
         setError(false);
       } else {
@@ -49,7 +60,7 @@ export function LatestAIImage({
 
     async function fetchImage() {
       try {
-        const res = await fetch('/api/latest-ai-image').catch(() => {
+        const res = await fetch('/api/latest-ai-image', { cache: 'no-store' }).catch(() => {
           throw new Error('Network error: Failed to fetch');
         });
         if (!res.ok) throw new Error('Failed to fetch');
@@ -63,7 +74,7 @@ export function LatestAIImage({
         if (data.success && data.imageUrl) {
           const fullUrl = resolveUrl(data.imageUrl);
           if (!fullUrl) throw new Error('Invalid image url');
-          setImageUrl(fullUrl);
+          setImageUrl(withCacheBust(fullUrl));
         } else {
           setError(true);
         }

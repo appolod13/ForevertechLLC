@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const imagesDir = path.join(process.cwd(), '..', 'quantum-image-gen', 'images');
@@ -10,20 +12,38 @@ export async function GET() {
       if (files.length > 0) {
         files.sort((a, b) => b.localeCompare(a));
         const latest = files[0];
-        return NextResponse.json({
-          success: true,
-          imageUrl: `/api/images/${latest}`,
-          filename: latest
-        });
+        return NextResponse.json(
+          {
+            success: true,
+            imageUrl: `/api/images/${latest}`,
+            filename: latest
+          },
+          {
+            headers: {
+              'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+              Pragma: 'no-cache',
+              Expires: '0',
+            },
+          },
+        );
       }
     }
   } catch (e) {
     // fallback below
   }
 
-  return NextResponse.json({
-    success: true,
-    imageUrl: '/images/ai-gen-1.png',
-    filename: 'ai-gen-1.png'
-  });
+  return NextResponse.json(
+    {
+      success: true,
+      imageUrl: '/images/ai-gen-1.png',
+      filename: 'ai-gen-1.png'
+    },
+    {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        Pragma: 'no-cache',
+        Expires: '0',
+      },
+    },
+  );
 }
