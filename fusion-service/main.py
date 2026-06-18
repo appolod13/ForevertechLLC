@@ -9,7 +9,7 @@ import zlib
 import binascii
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Body
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, Field
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -28,6 +28,11 @@ import random
 import glob
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+DEFAULT_FRACTAL_ITERATIONS = 130
+MIN_QUALITY = 1
+MAX_QUALITY = 3
+DEFAULT_ZOOM_LEVEL = 1.45
+MIN_ZOOM_LEVEL = 0.05
 
 
 def _png_chunk(tag: bytes, data: bytes) -> bytes:
@@ -150,10 +155,25 @@ def _cap_render_dims(width: int, height: int, max_side: int = 448):
     return max(64, int(round(width * scale))), max(64, int(round(height * scale)))
 
 
-def fractal_fusion_rgb(width: int, height: int, prompt: str, seed: int) -> bytes:
+def fractal_fusion_rgb(
+    width: int,
+    height: int,
+    prompt: str,
+    seed: int,
+    quality: int = MIN_QUALITY,
+    iterations: int = DEFAULT_FRACTAL_ITERATIONS,
+    palette_index: int = 0,
+    rotation: float = 0.0,
+    zoom_level: float = DEFAULT_ZOOM_LEVEL,
+    center_x: float = -0.15,
+    center_y: float = 0.0,
+) -> bytes:
     """Pure-Python Julia + Mandelbrot fusion with quantum-style interference
     and pseudo-3D normal shading. No third-party deps, so it stays compatible
-    with the lightweight Render deploy."""
+    with the lightweight Render deploy.
+
+    quality scales the iteration budget (1..3) and therefore render detail and
+    compute cost; iterations can override the default bailout iteration count."""
     import math
 
     rng = random.Random(seed)
@@ -169,13 +189,19 @@ def fractal_fusion_rgb(width: int, height: int, prompt: str, seed: int) -> bytes
     q_freq = 2.0 + (phash % 7)
     q_phase = ((phash >> 3) % 360) * math.pi / 180.0
     base_hue = (phash % 360) / 360.0
+    palette_shift = (int(palette_index) % 24) / 24.0
+    base_hue = (base_hue + palette_shift) % 1.0
 
     # Complex-plane viewport (slightly zoomed, centered for a rich composition).
-    zoom = 1.45
+    quality = max(MIN_QUALITY, min(MAX_QUALITY, int(quality)))
+    zoom = max(MIN_ZOOM_LEVEL, float(zoom_level))
     aspect = width / max(1, height)
     span_x = zoom * (aspect if aspect >= 1 else 1.0)
     span_y = zoom * (1.0 if aspect >= 1 else 1.0 / aspect)
-    cx_center, cy_center = -0.15, 0.0
+    cx_center, cy_center = float(center_x), float(center_y)
+    rot_rad = float(rotation) * math.pi / 180.0
+    rot_cos = math.cos(rot_rad)
+    rot_sin = math.sin(rot_rad)
 
     log2 = math.log(2.0)
     bailout = 16.0
@@ -188,17 +214,25 @@ def fractal_fusion_rgb(width: int, height: int, prompt: str, seed: int) -> bytes
     scale = 1.0 if long_side <= MAX_FIELD_DIM else MAX_FIELD_DIM / long_side
     fw = max(2, min(width, int(round(width * scale))))
     fh = max(2, min(height, int(round(height * scale))))
-    max_iter = 130 if fw * fh <= 200 * 200 else 90
+    max_iter = DEFAULT_FRACTAL_ITERATIONS if fw * fh <= 200 * 200 else 90
+    user_iterations = max(1, int(iterations))
+    if user_iterations != DEFAULT_FRACTAL_ITERATIONS:
+        max_iter = user_iterations
+    max_iter *= quality
 
     # Pass 1: compute the fused smooth-escape field on the low-res grid.
     field = [0.0] * (fw * fh)
     inv_fw = 1.0 / max(1, fw - 1)
     inv_fh = 1.0 / max(1, fh - 1)
     for y in range(fh):
-        iy = cy_center + (y * inv_fh - 0.5) * span_y
+        base_y = (y * inv_fh - 0.5) * span_y
         row = y * fw
         for x in range(fw):
-            ix = cx_center + (x * inv_fw - 0.5) * span_x
+            base_x = (x * inv_fw - 0.5) * span_x
+            rot_x = base_x * rot_cos - base_y * rot_sin
+            rot_y = base_x * rot_sin + base_y * rot_cos
+            ix = cx_center + rot_x
+            iy = cy_center + rot_y
 
             # Julia: fixed c, varying z.
             zr, zi = ix, iy
@@ -497,6 +531,13 @@ class GenerateRequest(BaseModel):
     steps: int = 30
     seed: int = -1
     guidance_scale: float = 7.5
+    quality: int = Field(default=MIN_QUALITY, ge=MIN_QUALITY, le=MAX_QUALITY)
+    iterations: int = Field(default=DEFAULT_FRACTAL_ITERATIONS, ge=1)
+    palette_index: int = 0
+    rotation: float = 0.0
+    zoom_level: float = Field(default=DEFAULT_ZOOM_LEVEL, ge=MIN_ZOOM_LEVEL)
+    center_x: float = -0.15
+    center_y: float = 0.0
 
 @app.post("/generate")
 async def generate_image(payload: GenerateRequest):
@@ -514,7 +555,19 @@ async def generate_image(payload: GenerateRequest):
     seed = payload.seed if isinstance(payload.seed, int) and payload.seed != -1 else (abs(hash(payload.prompt)) % (2**31))
 
     try:
-        rgb = fractal_fusion_rgb(width, height, payload.prompt, seed)
+        rgb = fractal_fusion_rgb(
+            width,
+            height,
+            payload.prompt,
+            seed,
+            quality=payload.quality,
+            iterations=payload.iterations,
+            palette_index=payload.palette_index,
+            rotation=payload.rotation,
+            zoom_level=payload.zoom_level,
+            center_x=payload.center_x,
+            center_y=payload.center_y,
+        )
         provider = "fusion-julia-mandelbrot-3d"
     except Exception as e:
         print(f"[fusion] fractal generation failed, falling back to procedural: {e}")
