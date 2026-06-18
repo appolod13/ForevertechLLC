@@ -222,19 +222,20 @@ def fractal_fusion_rgb(
 
     # Quantum interference parameters derived from the prompt for determinism.
     phash = abs(hash(prompt)) if prompt else seed
-    q_freq = _as_float(_pick_param("quantum_frequency", "q_frequency"), 2.0 + (phash % 7))
-    q_freq = max(0.1, min(30.0, q_freq))
+    q_freq_value = _as_float(_pick_param("quantum_frequency", "q_frequency"), 2.0 + (phash % 7))
+    q_freq_value = max(0.1, min(30.0, q_freq_value))
     q_phase = _as_float(_pick_param("quantum_phase_offset", "q_phase", "phase"), ((phash >> 3) % 360) * math.pi / 180.0)
-    q_freq = max(0.1, min(30.0, q_freq * (1.0 + complexity_boost * 0.45 + spiral_hits * 0.08)))
+    q_freq = max(0.1, min(30.0, q_freq_value * (1.0 + complexity_boost * 0.45 + spiral_hits * 0.08)))
     q_phase += (spiral_hits * 0.15 + geometric_hits * 0.1)
     base_hue = (phash % 360) / 360.0
 
     quality_value = _as_float(quality if quality is not None else _pick_param("quality", "detail"), 1.0)
     quality_value = max(0.5, min(2.0, quality_value))
+    iterations_param = _pick_param("iterations", "max_iterations")
     requested_iterations = _as_int(
         iterations if iterations is not None else (
-            _pick_param("iterations", "max_iterations")
-            if _pick_param("iterations", "max_iterations") is not None
+            iterations_param
+            if iterations_param is not None
             else max(
                 _as_int(_pick_param("mandelbrot_max_iterations", "mandelbrot_iterations"), 0),
                 _as_int(_pick_param("julia_iterations", "julia_max_iterations"), 0),
@@ -245,10 +246,11 @@ def fractal_fusion_rgb(
     requested_iterations = max(0, requested_iterations)
     if requested_iterations <= 0 and (complexity_boost > 0.0 or energy_boost > 0.0):
         requested_iterations = int(80 + 260 * complexity_boost + 110 * energy_boost)
+    palette_param = _pick_param("palette_index", "palette", "palette_id")
     palette_value = _as_int(
         palette_index if palette_index is not None else (
-            _pick_param("palette_index", "palette", "palette_id")
-            if _pick_param("palette_index", "palette", "palette_id") is not None
+            palette_param
+            if palette_param is not None
             else _pick_param("color_seed", "palette_seed")
         ),
         0,
@@ -258,15 +260,17 @@ def fractal_fusion_rgb(
         base_hue = (base_hue * 0.3 + hue_hint * 0.7) % 1.0
 
     # Complex-plane viewport (slightly zoomed, centered for a rich composition).
+    zoom_param = _pick_param("zoom_level", "zoom")
+    mandelbrot_zoom_param = _pick_param("mandelbrot_zoom", "m_zoom")
     zoom_from_params = (
         zoom_level
         if zoom_level is not None
         else (
-            _pick_param("zoom_level", "zoom")
-            if _pick_param("zoom_level", "zoom") is not None
+            zoom_param
+            if zoom_param is not None
             else (
-                _pick_param("mandelbrot_zoom", "m_zoom")
-                if _pick_param("mandelbrot_zoom", "m_zoom") is not None
+                mandelbrot_zoom_param
+                if mandelbrot_zoom_param is not None
                 else _pick_param("julia_zoom", "j_zoom")
             )
         )
@@ -277,26 +281,29 @@ def fractal_fusion_rgb(
     aspect = width / max(1, height)
     span_x = zoom * (aspect if aspect >= 1 else 1.0)
     span_y = zoom * (1.0 if aspect >= 1 else 1.0 / aspect)
+    center_x_param = _pick_param("center_x", "x", "pan_x")
     cx_center = _as_float(
         center_x if center_x is not None else (
-            _pick_param("center_x", "x", "pan_x")
-            if _pick_param("center_x", "x", "pan_x") is not None
+            center_x_param
+            if center_x_param is not None
             else _pick_param("mandelbrot_pan_x")
         ),
         -0.15,
     )
+    center_y_param = _pick_param("center_y", "y", "pan_y")
     cy_center = _as_float(
         center_y if center_y is not None else (
-            _pick_param("center_y", "y", "pan_y")
-            if _pick_param("center_y", "y", "pan_y") is not None
+            center_y_param
+            if center_y_param is not None
             else _pick_param("mandelbrot_pan_y")
         ),
         0.0,
     )
+    rotation_param = _pick_param("rotation", "rotate", "angle")
     rotation_degrees = _as_float(
         rotation if rotation is not None else (
-            _pick_param("rotation", "rotate", "angle")
-            if _pick_param("rotation", "rotate", "angle") is not None
+            rotation_param
+            if rotation_param is not None
             else _pick_param("sierpinski_rotation")
         ),
         0.0,
