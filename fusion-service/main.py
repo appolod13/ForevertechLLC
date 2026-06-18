@@ -227,11 +227,13 @@ def fractal_fusion_rgb(
 
     complexity_boost = complexity_hits * 0.12 + geometric_hits * 0.08 + spiral_hits * 0.06
     complexity_boost += chaotic_mood * 0.48 + cosmic_mood * 0.22 + dreamy_mood * 0.10
+    complexity_boost += (1.0 - minimal_mood) * 0.08
     complexity_boost -= minimal_mood * 0.35 + calm_mood * 0.18
-    complexity_boost = _clamp(complexity_boost, 0.0, 0.85)
+    complexity_boost = _clamp(complexity_boost, 0.0, 0.95)
 
     energy_boost = energy_hits * 0.16
     energy_boost += chaotic_mood * 0.40 + cosmic_mood * 0.20 + dark_mood * 0.10
+    energy_boost += (1.0 - minimal_mood) * 0.06
     energy_boost -= calm_mood * 0.22 + minimal_mood * 0.34
     energy_boost = _clamp(energy_boost, 0.0, 0.9)
 
@@ -281,8 +283,14 @@ def fractal_fusion_rgb(
         0,
     )
     requested_iterations = max(0, requested_iterations)
-    if requested_iterations <= 0 and (complexity_boost > 0.0 or energy_boost > 0.0):
-        requested_iterations = int(80 + 260 * complexity_boost + 110 * energy_boost)
+    if requested_iterations <= 0:
+        requested_iterations = int(
+            120
+            + 230 * complexity_boost
+            + 120 * energy_boost
+            + 32 * (spiral_intensity / 8.0)
+            + 24 * (1.0 - minimal_mood)
+        )
     palette_param = _pick_param("palette_index", "palette", "palette_id")
     palette_value = _as_int(
         palette_index if palette_index is not None else (
@@ -349,6 +357,19 @@ def fractal_fusion_rgb(
     theta = rotation_degrees * math.pi / 180.0
     cos_t = math.cos(theta)
     sin_t = math.sin(theta)
+    flow_theta = ((seed % 720) / 720.0) * 2.0 * math.pi + q_phase * 0.25
+    flow_cos = math.cos(flow_theta)
+    flow_sin = math.sin(flow_theta)
+    connectivity_strength = _clamp(
+        0.16
+        + 0.26 * complexity_boost
+        + 0.18 * energy_boost
+        + 0.14 * (spiral_intensity / 8.0)
+        + 0.10 * cosmic_mood
+        - 0.14 * minimal_mood,
+        0.08,
+        0.72,
+    )
 
     log2 = math.log(2.0)
     bailout = 16.0
@@ -440,9 +461,28 @@ def fractal_fusion_rgb(
                 abs(j_norm - m_norm) * (0.30 + 0.24 * complexity_boost + 0.12 * chaotic_mood)
                 + (j_norm * m_norm) * (0.15 + 0.12 * energy_boost + 0.08 * cosmic_mood)
             )
+            filament_wave = 0.5 + 0.5 * math.sin(
+                (ix * flow_cos + iy * flow_sin)
+                * (5.5 + complexity_boost * 2.4 + spiral_intensity * 0.22)
+                * math.pi
+                + q_phase * 1.15
+            )
+            radial_theta = math.atan2(iy, ix + 1e-9)
+            radial_dist = math.sqrt(ix * ix + iy * iy)
+            thread_wave = 0.5 + 0.5 * math.sin(
+                (
+                    radial_theta * (3.2 + spiral_intensity * 0.55 + chaotic_mood * 0.7)
+                    + radial_dist * (8.0 + complexity_boost * 2.8 + cosmic_mood * 1.4)
+                )
+                * math.pi
+                + q_phase * 0.6
+            )
             fused += (lattice_wave - 0.5) * (0.11 + 0.16 * complexity_boost + 0.09 * energy_boost)
             fused += (cross_wave - 0.5) * (0.07 + 0.11 * energy_boost + 0.06 * chaotic_mood)
-            fused *= 0.92 + detail_mix
+            fused += (filament_wave - 0.5) * (0.18 * connectivity_strength)
+            fused += (thread_wave - 0.5) * (0.22 * connectivity_strength)
+            fused += (0.5 - abs(filament_wave - thread_wave)) * (0.10 * connectivity_strength)
+            fused *= 0.94 + detail_mix
             field[row + x] = _clamp(fused, 0.0, 1.45)
 
     # Bilinearly sample the low-res field at full resolution.
