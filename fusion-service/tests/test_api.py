@@ -2,7 +2,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from main import app
-import main
+import main as fusion_main
 import json
 from io import BytesIO
 from PIL import Image
@@ -65,7 +65,7 @@ def test_health_endpoint():
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
-def test_generate_endpoint_passes_render_params(monkeypatch):
+def test_generate_endpoint_forwards_render_params_to_fractal_fusion(monkeypatch):
     captured = {}
 
     def fake_fractal_fusion_rgb(width, height, prompt, seed, **kwargs):
@@ -76,7 +76,7 @@ def test_generate_endpoint_passes_render_params(monkeypatch):
         captured["kwargs"] = kwargs
         return b"\x00" * (width * height * 3)
 
-    monkeypatch.setattr(main, "fractal_fusion_rgb", fake_fractal_fusion_rgb)
+    monkeypatch.setattr(fusion_main, "fractal_fusion_rgb", fake_fractal_fusion_rgb)
 
     payload = {
         "prompt": "parameter test",
@@ -105,8 +105,10 @@ def test_generate_endpoint_passes_render_params(monkeypatch):
     }
 
 def test_fractal_fusion_rgb_render_params_change_output():
-    base = main.fractal_fusion_rgb(48, 48, "same prompt", 123)
-    modified = main.fractal_fusion_rgb(
+    base = fusion_main.fractal_fusion_rgb(48, 48, "same prompt", 123)
+    quality_variant = fusion_main.fractal_fusion_rgb(48, 48, "same prompt", 123, quality=2)
+    rotation_variant = fusion_main.fractal_fusion_rgb(48, 48, "same prompt", 123, rotation=22.0)
+    modified = fusion_main.fractal_fusion_rgb(
         48,
         48,
         "same prompt",
@@ -119,6 +121,8 @@ def test_fractal_fusion_rgb_render_params_change_output():
         center_x=-0.35,
         center_y=0.12,
     )
+    assert base != quality_variant
+    assert base != rotation_variant
     assert base != modified
 
 def test_brain_img2img_invalid_image_rejected():
