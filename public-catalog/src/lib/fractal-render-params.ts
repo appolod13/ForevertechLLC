@@ -3,7 +3,7 @@
  * These are ACTUAL parameters that change HOW the fractal is rendered, not just text descriptions
  */
 
-export interface FractalRenderParams {
+export interface FractalRenderParams extends Record<string, unknown> {
   // Sierpinski Parameters
   sierpinski_depth?: number;
   sierpinski_rotation?: number;
@@ -231,10 +231,10 @@ export function renderParamsToQueryString(params: FractalRenderParams): string {
   // Simple params
   if (params.sierpinski_depth) queryParts.push(`sierpinski_depth=${params.sierpinski_depth}`);
   if (params.koch_iterations) queryParts.push(`koch_iterations=${params.koch_iterations}`);
-  if (params.vicsek_scale) queryParts.push(`vicsek_scale=${params.vicsek_scale.toFixed(2)}`);
-  if (params.mandelbrot_zoom) queryParts.push(`mandelbrot_zoom=${params.mandelbrot_zoom.toFixed(2)}`);
-  if (params.julia_c_real) queryParts.push(`julia_c_real=${params.julia_c_real.toFixed(4)}`);
-  if (params.julia_c_imag) queryParts.push(`julia_c_imag=${params.julia_c_imag.toFixed(4)}`);
+  if (params.vicsek_scale) queryParts.push(`vicsek_scale=${params.vicsek_scale?.toFixed(2)}`);
+  if (params.mandelbrot_zoom) queryParts.push(`mandelbrot_zoom=${params.mandelbrot_zoom?.toFixed(2)}`);
+  if (params.julia_c_real) queryParts.push(`julia_c_real=${params.julia_c_real?.toFixed(4)}`);
+  if (params.julia_c_imag) queryParts.push(`julia_c_imag=${params.julia_c_imag?.toFixed(4)}`);
   if (params.output_width) queryParts.push(`width=${params.output_width}`);
   if (params.output_height) queryParts.push(`height=${params.output_height}`);
   if (params.color_seed) queryParts.push(`seed=${params.color_seed}`);
