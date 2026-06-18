@@ -36,9 +36,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
           return new NextResponse(ab, {
             headers: {
               'Content-Type': contentType,
-              'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-              Pragma: 'no-cache',
-              Expires: '0',
+              'Cache-Control': 'no-store',
               'Content-Length': String(ab.byteLength),
             },
           });
@@ -53,9 +51,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
     return new NextResponse(fileBuffer, {
       headers: {
         'Content-Type': contentTypeForFilename(safeFilename),
-        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-        Pragma: 'no-cache',
-        Expires: '0',
+        'Cache-Control': 'no-store',
         'Content-Length': String(fileBuffer.byteLength),
       },
     });
