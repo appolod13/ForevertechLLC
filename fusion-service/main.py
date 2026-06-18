@@ -150,13 +150,43 @@ def _cap_render_dims(width: int, height: int, max_side: int = 448):
     return max(64, int(round(width * scale))), max(64, int(round(height * scale)))
 
 
-def fractal_fusion_rgb(width: int, height: int, prompt: str, seed: int) -> bytes:
+def fractal_fusion_rgb(
+    width: int,
+    height: int,
+    prompt: str,
+    seed: int,
+    quality: Optional[float] = None,
+    iterations: Optional[int] = None,
+    palette_index: Optional[int] = None,
+    rotation: Optional[float] = None,
+    zoom_level: Optional[float] = None,
+    center_x: Optional[float] = None,
+    center_y: Optional[float] = None,
+    render_params: Optional[Dict[str, Any]] = None,
+) -> bytes:
     """Pure-Python Julia + Mandelbrot fusion with quantum-style interference
     and pseudo-3D normal shading. No third-party deps, so it stays compatible
     with the lightweight Render deploy."""
     import math
 
     rng = random.Random(seed)
+    params = render_params or {}
+
+    def _as_float(value: Any, default: float) -> float:
+        try:
+            if value is None:
+                return default
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _as_int(value: Any, default: int) -> int:
+        try:
+            if value is None:
+                return default
+            return int(value)
+        except (TypeError, ValueError):
+            return default
 
     # Julia constant orbits a circle in the complex plane, seeded for variety.
     angle = (seed % 100000) / 100000.0 * 2.0 * math.pi
@@ -166,16 +196,74 @@ def fractal_fusion_rgb(width: int, height: int, prompt: str, seed: int) -> bytes
 
     # Quantum interference parameters derived from the prompt for determinism.
     phash = abs(hash(prompt)) if prompt else seed
-    q_freq = 2.0 + (phash % 7)
-    q_phase = ((phash >> 3) % 360) * math.pi / 180.0
+    q_freq = _as_float(params.get("quantum_frequency"), 2.0 + (phash % 7))
+    q_freq = max(0.1, min(30.0, q_freq))
+    q_phase = _as_float(params.get("quantum_phase_offset"), ((phash >> 3) % 360) * math.pi / 180.0)
     base_hue = (phash % 360) / 360.0
 
+    quality_value = _as_float(quality if quality is not None else params.get("quality"), 1.0)
+    quality_value = max(0.5, min(2.0, quality_value))
+    requested_iterations = _as_int(
+        iterations if iterations is not None else (
+            params.get("iterations")
+            if params.get("iterations") is not None
+            else max(
+                _as_int(params.get("mandelbrot_max_iterations"), 0),
+                _as_int(params.get("julia_iterations"), 0),
+            )
+        ),
+        0,
+    )
+    requested_iterations = max(0, requested_iterations)
+    palette_value = _as_int(
+        palette_index if palette_index is not None else (
+            params.get("palette_index") if params.get("palette_index") is not None else params.get("color_seed")
+        ),
+        0,
+    )
+    base_hue = (base_hue + ((palette_value % 12) / 12.0)) % 1.0
+
     # Complex-plane viewport (slightly zoomed, centered for a rich composition).
-    zoom = 1.45
+    zoom_from_params = (
+        zoom_level
+        if zoom_level is not None
+        else (
+            params.get("zoom_level")
+            if params.get("zoom_level") is not None
+            else (
+                params.get("mandelbrot_zoom")
+                if params.get("mandelbrot_zoom") is not None
+                else params.get("julia_zoom")
+            )
+        )
+    )
+    zoom_factor = _as_float(zoom_from_params, 1.0)
+    zoom_factor = max(0.05, min(1000.0, zoom_factor))
+    zoom = 1.45 / zoom_factor
     aspect = width / max(1, height)
     span_x = zoom * (aspect if aspect >= 1 else 1.0)
     span_y = zoom * (1.0 if aspect >= 1 else 1.0 / aspect)
-    cx_center, cy_center = -0.15, 0.0
+    cx_center = _as_float(
+        center_x if center_x is not None else (
+            params.get("center_x") if params.get("center_x") is not None else params.get("mandelbrot_pan_x")
+        ),
+        -0.15,
+    )
+    cy_center = _as_float(
+        center_y if center_y is not None else (
+            params.get("center_y") if params.get("center_y") is not None else params.get("mandelbrot_pan_y")
+        ),
+        0.0,
+    )
+    rotation_degrees = _as_float(
+        rotation if rotation is not None else (
+            params.get("rotation") if params.get("rotation") is not None else params.get("sierpinski_rotation")
+        ),
+        0.0,
+    )
+    theta = rotation_degrees * math.pi / 180.0
+    cos_t = math.cos(theta)
+    sin_t = math.sin(theta)
 
     log2 = math.log(2.0)
     bailout = 16.0
@@ -183,23 +271,27 @@ def fractal_fusion_rgb(width: int, height: int, prompt: str, seed: int) -> bytes
     # Performance: the escape-time loops are the bottleneck, so compute the
     # fused field on a capped low-res grid, then bilinearly upscale into the
     # full-resolution shading/color pass. Keeps the look, ~10x faster on Render.
-    MAX_FIELD_DIM = 320
+    MAX_FIELD_DIM = max(64, int(round(320 * quality_value)))
     long_side = max(width, height)
     scale = 1.0 if long_side <= MAX_FIELD_DIM else MAX_FIELD_DIM / long_side
     fw = max(2, min(width, int(round(width * scale))))
     fh = max(2, min(height, int(round(height * scale))))
-    max_iter = 130 if fw * fh <= 200 * 200 else 90
+    max_iter = (130 if fw * fh <= 200 * 200 else 90)
+    if requested_iterations > 0:
+        max_iter = requested_iterations
+    max_iter = max(20, min(1200, max_iter))
 
     # Pass 1: compute the fused smooth-escape field on the low-res grid.
     field = [0.0] * (fw * fh)
     inv_fw = 1.0 / max(1, fw - 1)
     inv_fh = 1.0 / max(1, fh - 1)
     for y in range(fh):
-        iy = cy_center + (y * inv_fh - 0.5) * span_y
         row = y * fw
         for x in range(fw):
-            ix = cx_center + (x * inv_fw - 0.5) * span_x
-
+            nx0 = (x * inv_fw - 0.5) * span_x
+            ny0 = (y * inv_fh - 0.5) * span_y
+            ix = cx_center + (nx0 * cos_t - ny0 * sin_t)
+            iy = cy_center + (nx0 * sin_t + ny0 * cos_t)
             # Julia: fixed c, varying z.
             zr, zi = ix, iy
             j_iter = 0
@@ -497,6 +589,14 @@ class GenerateRequest(BaseModel):
     steps: int = 30
     seed: int = -1
     guidance_scale: float = 7.5
+    quality: Optional[float] = None
+    iterations: Optional[int] = None
+    palette_index: Optional[int] = None
+    rotation: Optional[float] = None
+    zoom_level: Optional[float] = None
+    center_x: Optional[float] = None
+    center_y: Optional[float] = None
+    render_params: Optional[Dict[str, Any]] = None
 
 @app.post("/generate")
 async def generate_image(payload: GenerateRequest):
@@ -512,9 +612,23 @@ async def generate_image(payload: GenerateRequest):
     # the site's request timeout on Render's CPU. The image is displayed scaled.
     width, height = _cap_render_dims(width, height)
     seed = payload.seed if isinstance(payload.seed, int) and payload.seed != -1 else (abs(hash(payload.prompt)) % (2**31))
+    render_params = payload.render_params or {}
 
     try:
-        rgb = fractal_fusion_rgb(width, height, payload.prompt, seed)
+        rgb = fractal_fusion_rgb(
+            width,
+            height,
+            payload.prompt,
+            seed,
+            quality=payload.quality,
+            iterations=payload.iterations,
+            palette_index=payload.palette_index,
+            rotation=payload.rotation,
+            zoom_level=payload.zoom_level,
+            center_x=payload.center_x,
+            center_y=payload.center_y,
+            render_params=render_params,
+        )
         provider = "fusion-julia-mandelbrot-3d"
     except Exception as e:
         print(f"[fusion] fractal generation failed, falling back to procedural: {e}")
@@ -537,7 +651,17 @@ async def generate_image(payload: GenerateRequest):
             "latency": latency,
             "seed": seed,
             "width": width,
-            "height": height
+            "height": height,
+            "render_params_applied": {
+                "quality": payload.quality,
+                "iterations": payload.iterations,
+                "palette_index": payload.palette_index,
+                "rotation": payload.rotation,
+                "zoom_level": payload.zoom_level,
+                "center_x": payload.center_x,
+                "center_y": payload.center_y,
+                "render_params_keys": sorted(list(render_params.keys())),
+            },
         }
     }
 

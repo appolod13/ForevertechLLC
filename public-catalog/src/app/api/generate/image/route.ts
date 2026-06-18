@@ -295,6 +295,14 @@ async function tryFusionGenerate(
     let enhancedPrompt = prompt;
     let enhancedNegative = negative_prompt || "";
     let settings = { steps: 203, guidance_scale: 1.2, seed: 1 };
+    let renderParams: Record<string, unknown> = {};
+    let quality: number | undefined;
+    let iterations: number | undefined;
+    let paletteIndex: number | undefined;
+    let rotation: number | undefined;
+    let zoomLevel: number | undefined;
+    let centerX: number | undefined;
+    let centerY: number | undefined;
 
     // === NEW: Process through fractal-fusion for dynamic pattern generation ===
     if (use_fractal_fusion) {
@@ -307,6 +315,7 @@ async function tryFusionGenerate(
       });
       enhancedPrompt = fractalFusion.prompt;
       enhancedNegative = fractalFusion.negative_prompt;
+      renderParams = fractalFusion.render_params;
 
       const recommendations = recommendFractalSettings(prompt);
       settings = {
@@ -314,6 +323,19 @@ async function tryFusionGenerate(
         guidance_scale: recommendations.guidance_scale * 1.15,
         seed: recommendations.seed ?? 1,
       };
+      const complexity = Number(fractalFusion.fractal_config.complexity ?? 0.5);
+      quality = Number.isFinite(complexity) ? Math.max(0.5, Math.min(2.0, 0.9 + complexity)) : undefined;
+      iterations = typeof renderParams.mandelbrot_max_iterations === "number" ? Math.trunc(renderParams.mandelbrot_max_iterations as number) : settings.steps;
+      paletteIndex = typeof renderParams.color_seed === "number" ? Math.abs(Math.trunc(renderParams.color_seed as number)) % 12 : undefined;
+      rotation = typeof renderParams.sierpinski_rotation === "number" ? Number(renderParams.sierpinski_rotation) : undefined;
+      zoomLevel =
+        typeof renderParams.mandelbrot_zoom === "number"
+          ? Number(renderParams.mandelbrot_zoom)
+          : typeof renderParams.julia_zoom === "number"
+            ? Number(renderParams.julia_zoom)
+            : undefined;
+      centerX = typeof renderParams.mandelbrot_pan_x === "number" ? Number(renderParams.mandelbrot_pan_x) : undefined;
+      centerY = typeof renderParams.mandelbrot_pan_y === "number" ? Number(renderParams.mandelbrot_pan_y) : undefined;
 
       logInfo("fractal_fusion.applied", {
         original_prompt: prompt,
@@ -352,6 +374,14 @@ async function tryFusionGenerate(
         steps: settings.steps,
         seed: settings.seed,
         guidance_scale: settings.guidance_scale,
+        quality,
+        iterations,
+        palette_index: paletteIndex,
+        rotation,
+        zoom_level: zoomLevel,
+        center_x: centerX,
+        center_y: centerY,
+        render_params: renderParams,
       }),
       cache: "no-store",
       signal: controller.signal,

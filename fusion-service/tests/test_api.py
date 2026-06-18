@@ -1,7 +1,7 @@
 
 import pytest
 from fastapi.testclient import TestClient
-from main import app
+from main import app, fractal_fusion_rgb
 import json
 from io import BytesIO
 from PIL import Image
@@ -98,3 +98,53 @@ def test_brain_roulette_returns_png():
     response = client.post("/brain/roulette", json={"dataset_path": "tests/tmp_roulette", "steps": 2, "size": 256, "outline": True, "outline_style": "color", "outline_thickness": 2})
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("image/png")
+
+def test_fractal_render_parameters_change_output():
+    baseline = fractal_fusion_rgb(128, 128, "quantum city skyline", 12345)
+    tuned = fractal_fusion_rgb(
+        128,
+        128,
+        "quantum city skyline",
+        12345,
+        quality=1.8,
+        iterations=280,
+        palette_index=5,
+        rotation=42.0,
+        zoom_level=2.4,
+        center_x=-0.22,
+        center_y=0.15,
+        render_params={
+            "quantum_frequency": 8.5,
+            "quantum_phase_offset": 1.3,
+        },
+    )
+    assert baseline != tuned
+
+def test_generate_endpoint_accepts_render_parameters():
+    response = client.post(
+        "/generate",
+        json={
+            "prompt": "fractal city",
+            "width": 256,
+            "height": 256,
+            "quality": 1.4,
+            "iterations": 240,
+            "palette_index": 4,
+            "rotation": 18,
+            "zoom_level": 2.0,
+            "center_x": -0.1,
+            "center_y": 0.2,
+            "render_params": {
+                "mandelbrot_max_iterations": 260,
+                "mandelbrot_zoom": 4.0,
+                "mandelbrot_pan_x": -0.2,
+                "mandelbrot_pan_y": 0.1,
+            },
+        },
+    )
+    assert response.status_code == 200
+    meta = response.json().get("meta", {})
+    applied = meta.get("render_params_applied", {})
+    assert applied.get("iterations") == 240
+    assert applied.get("zoom_level") == 2.0
+    assert "mandelbrot_zoom" in (applied.get("render_params_keys") or [])
