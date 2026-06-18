@@ -323,7 +323,7 @@ async function tryFusionGenerate(
       });
     } else {
       // === FALLBACK: Original static enhancer ===
-      const styleEnhancer = `, vibrant quantum nebula fractal mandala, intricate self-similar organic patterns with glowing electric cyan magenta violet neon edges and luminous boundaries, deep purple blue cosmic energy flows, high contrast dark nebula background with rich voids and negative space, symmetrical centered square t-shirt print design, ethereal volumetric glow, sharp intricate mathematical details, professional merch ready, 8k resolution, cinematic lighting, mystical quantum aesthetic`;
+      const styleEnhancer = `, vibrant quantum nebula fractal mandala, intricate self-similar organic patterns with glowing electric cyan magenta violet neon edges and luminous boundaries, deep p[...]`;
       const backgroundVariation = Math.random() > 0.4
         ? `, subtle dynamic nebula clouds and distant star specks`
         : `, pure deep cosmic black void for maximum contrast`;
@@ -338,7 +338,7 @@ async function tryFusionGenerate(
 
       enhancedNegative =
         (negative_prompt || "") +
-        ", blurry, low quality, artifacts, deformed, text, watermark, oversaturated bright colors, light background, realistic photo, cartoonish, dull flat colors, poor centering, split designs, two separate patterns, duplicated elements, disconnected fractals, multiple isolated shapes, low contrast, bright white background, solid filled areas, minimal voids, low porosity, generic background, fusion-service default, plain gradient, ui background";
+        `, blurry, low quality, artifacts, deformed, text, watermark, oversaturated bright colors, light background, realistic photo, cartoonish, dull flat colors, poor centering, split designs`;
     }
 
     const res = await fetch(url, {
