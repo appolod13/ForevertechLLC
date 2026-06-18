@@ -189,3 +189,16 @@ def test_prompt_keywords_shift_palette_and_structure():
     ocean = fractal_fusion_rgb(128, 128, "city fractal blue cyan spiral", 777)
     assert calm != fiery
     assert fiery != ocean
+
+
+def test_mood_keywords_control_style_predictably():
+    calm_minimal = fractal_fusion_rgb(128, 128, "city fractal calm serene minimal clean", 9876)
+    chaotic = fractal_fusion_rgb(128, 128, "city fractal chaotic wild turbulent glitch", 9876)
+    cosmic = fractal_fusion_rgb(128, 128, "city fractal cosmic nebula astral celestial", 9876)
+
+    calm_minimal_repeat = fractal_fusion_rgb(128, 128, "city fractal calm serene minimal clean", 9876)
+
+    assert calm_minimal == calm_minimal_repeat
+    assert calm_minimal != chaotic
+    assert chaotic != cosmic
+    assert calm_minimal != cosmic

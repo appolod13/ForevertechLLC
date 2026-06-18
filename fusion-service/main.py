@@ -194,6 +194,9 @@ def fractal_fusion_rgb(
                 return params.get(key)
         return None
 
+    def _clamp(value: float, lo: float, hi: float) -> float:
+        return lo if value < lo else hi if value > hi else value
+
     prompt_lower = (prompt or "").lower()
     color_words = {
         "red": 0.00, "crimson": 0.97, "orange": 0.08, "gold": 0.13, "yellow": 0.16,
@@ -211,8 +214,39 @@ def fractal_fusion_rgb(
     energy_hits = sum(1 for word in ("neon", "vivid", "glow", "electric", "radiant") if word in prompt_lower)
     spiral_hits = sum(1 for word in ("spiral", "swirl", "vortex", "galaxy") if word in prompt_lower)
     geometric_hits = sum(1 for word in ("triangle", "hex", "kaleidoscope", "polygon", "geometry") if word in prompt_lower)
-    complexity_boost = min(0.65, complexity_hits * 0.12 + geometric_hits * 0.08 + spiral_hits * 0.06)
-    energy_boost = min(0.75, energy_hits * 0.16)
+
+    def _hit_ratio(words: tuple[str, ...]) -> float:
+        return sum(1 for word in words if word in prompt_lower) / max(1, len(words))
+
+    calm_mood = _hit_ratio(("calm", "serene", "peaceful", "tranquil", "soft", "gentle", "ambient", "zen"))
+    chaotic_mood = _hit_ratio(("chaotic", "chaos", "wild", "storm", "turbulent", "glitch", "volatile", "fractured"))
+    cosmic_mood = _hit_ratio(("cosmic", "space", "astral", "celestial", "nebula", "galactic", "stellar", "universe"))
+    minimal_mood = _hit_ratio(("minimal", "clean", "simple", "sparse", "plain", "monochrome", "monotone", "flat"))
+    dreamy_mood = _hit_ratio(("dreamy", "ethereal", "mystic", "surreal", "fantasy", "floating"))
+    dark_mood = _hit_ratio(("dark", "noir", "void", "night", "shadow", "gothic"))
+
+    complexity_boost = complexity_hits * 0.12 + geometric_hits * 0.08 + spiral_hits * 0.06
+    complexity_boost += chaotic_mood * 0.48 + cosmic_mood * 0.22 + dreamy_mood * 0.10
+    complexity_boost -= minimal_mood * 0.35 + calm_mood * 0.18
+    complexity_boost = _clamp(complexity_boost, 0.0, 0.85)
+
+    energy_boost = energy_hits * 0.16
+    energy_boost += chaotic_mood * 0.40 + cosmic_mood * 0.20 + dark_mood * 0.10
+    energy_boost -= calm_mood * 0.22 + minimal_mood * 0.34
+    energy_boost = _clamp(energy_boost, 0.0, 0.9)
+
+    spiral_intensity = _clamp(spiral_hits + cosmic_mood * 2.2 + chaotic_mood * 0.9 - minimal_mood * 0.6, 0.0, 8.0)
+    geometric_intensity = _clamp(geometric_hits + minimal_mood * 1.5 + calm_mood * 0.5 - chaotic_mood * 0.4, 0.0, 8.0)
+    mood_contrast = _clamp(1.0 + chaotic_mood * 0.38 + cosmic_mood * 0.22 - calm_mood * 0.20 - minimal_mood * 0.30, 0.55, 1.7)
+    mood_saturation = _clamp(1.0 + chaotic_mood * 0.20 + cosmic_mood * 0.18 + dreamy_mood * 0.12 - calm_mood * 0.10 - minimal_mood * 0.32, 0.45, 1.8)
+    mood_glow = _clamp(1.0 + cosmic_mood * 0.45 + dreamy_mood * 0.32 + energy_boost * 0.20 - dark_mood * 0.16 - minimal_mood * 0.22, 0.45, 2.0)
+    mood_hue_shift = (
+        cosmic_mood * 0.10
+        + dreamy_mood * 0.06
+        - calm_mood * 0.03
+        - minimal_mood * 0.04
+        - dark_mood * 0.02
+    )
 
     # Julia constant orbits a circle in the complex plane, seeded for variety.
     angle = (seed % 100000) / 100000.0 * 2.0 * math.pi
@@ -225,8 +259,8 @@ def fractal_fusion_rgb(
     q_freq_value = _as_float(_pick_param("quantum_frequency", "q_frequency"), 2.0 + (phash % 7))
     q_freq_value = max(0.1, min(30.0, q_freq_value))
     q_phase = _as_float(_pick_param("quantum_phase_offset", "q_phase", "phase"), ((phash >> 3) % 360) * math.pi / 180.0)
-    q_freq = max(0.1, min(30.0, q_freq_value * (1.0 + complexity_boost * 0.45 + spiral_hits * 0.08)))
-    q_phase += (spiral_hits * 0.15 + geometric_hits * 0.1)
+    q_freq = max(0.1, min(30.0, q_freq_value * (1.0 + complexity_boost * 0.45 + spiral_intensity * 0.08 + chaotic_mood * 0.15)))
+    q_phase += (spiral_intensity * 0.15 + geometric_intensity * 0.1 + cosmic_mood * 0.45)
     base_hue = (phash % 360) / 360.0
 
     quality_value = _as_float(quality if quality is not None else _pick_param("quality", "detail"), 1.0)
@@ -258,6 +292,7 @@ def fractal_fusion_rgb(
     base_hue = (base_hue + ((palette_value % 12) / 12.0)) % 1.0
     if hue_hint:
         base_hue = (base_hue * 0.3 + hue_hint * 0.7) % 1.0
+    base_hue = (base_hue + mood_hue_shift) % 1.0
 
     # Complex-plane viewport (slightly zoomed, centered for a rich composition).
     zoom_param = _pick_param("zoom_level", "zoom")
@@ -378,15 +413,15 @@ def fractal_fusion_rgb(
             # Quantum-style interference (the extra "dimension").
             interference = 0.5 + 0.5 * math.sin(q_freq * (ix + iy) * math.pi + q_phase)
             shape_wave = 0.5 + 0.5 * math.sin(
-                (ix * (2.1 + geometric_hits * 0.9) + iy * (2.7 + spiral_hits * 0.8)) * math.pi + q_phase
+                (ix * (2.1 + geometric_intensity * 0.9) + iy * (2.7 + spiral_intensity * 0.8)) * math.pi + q_phase
             )
             swirl_wave = 0.5 + 0.5 * math.sin(
-                ((ix * ix - iy * iy) * (1.4 + spiral_hits * 0.45) + (ix * iy) * 0.9) * math.pi + q_phase * 0.7
+                ((ix * ix - iy * iy) * (1.4 + spiral_intensity * 0.45 + chaotic_mood * 0.4) + (ix * iy) * 0.9) * math.pi + q_phase * 0.7
             )
 
             fused = (j_norm * 0.62 + m_norm * 0.38) * (0.75 + 0.25 * interference)
             fused = fused * (1.0 + 0.18 * complexity_boost * (shape_wave - 0.5))
-            fused = fused + (swirl_wave - 0.5) * (0.16 * (energy_boost + complexity_boost))
+            fused = fused + (swirl_wave - 0.5) * (0.16 * (energy_boost + complexity_boost) * mood_contrast)
             field[row + x] = fused
 
     # Bilinearly sample the low-res field at full resolution.
@@ -471,13 +506,15 @@ def fractal_fusion_rgb(
             # structure stays crisp and vivid rather than blown out.
             nx_c = (x * inv_w - 0.5)
             dist2 = nx_c * nx_c + ny * ny
-            glow = math.exp(-dist2 * (14.0 - spiral_hits * 1.8)) * (0.40 + energy_boost * 0.12)
-            halo = math.exp(-dist2 * (4.0 - spiral_hits * 0.45)) * (0.16 + energy_boost * 0.08)
+            glow = math.exp(-dist2 * (14.0 - spiral_intensity * 1.8)) * (0.40 + energy_boost * 0.12) * mood_glow
+            halo = math.exp(-dist2 * (4.0 - spiral_intensity * 0.45)) * (0.16 + energy_boost * 0.08) * mood_glow
 
             # Vivid, ethereal palette: gold/amber core easing into deep azure
             # and magenta in the depths, cycling for fractal richness.
-            hue = (base_hue + v * 2.4 + 0.08 * interference_hue(q_phase)) % 1.0
-            sat = 0.74 + 0.26 * (1.0 - v) + energy_boost * 0.24
+            v = _clamp(0.5 + (v - 0.5) * mood_contrast, 0.0, 1.0)
+            hue_cycle = _clamp(2.4 + chaotic_mood * 0.7 + cosmic_mood * 1.1 + dreamy_mood * 0.25 - calm_mood * 0.45 - minimal_mood * 0.85, 1.0, 4.4)
+            hue = (base_hue + v * hue_cycle + 0.08 * interference_hue(q_phase)) % 1.0
+            sat = (0.74 + 0.26 * (1.0 - v) + energy_boost * 0.24) * mood_saturation
             val = (0.28 + 0.85 * v) * shade * (1.0 + energy_boost * 0.16)
 
             r, g, b = _hsv_to_rgb(hue, min(1.0, sat), min(1.0, val))
