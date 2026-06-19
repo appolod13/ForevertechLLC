@@ -14,7 +14,30 @@ import { logInfo, logError } from "@/lib/api/logger";
 import { generateImageForPlatform } from "@/lib/contentFactory/image";
 import { uploadToIpfs } from "@/lib/ipfs/upload";
 import { getAiGeneratorsConfig } from "@/lib/aiGeneratorsConfig";
+import { generateNeonFractalDataUrl } from "@/lib/neonFractal";
 import { createHash } from "crypto";
+
+// In-app neon fractal generator: always available (no external service needed),
+// deterministic from the prompt, and produces the signature PixelQrypt look.
+// This guarantees the user's typed words always drive the generated image.
+async function tryInAppFractal(
+  prompt: string,
+  width: number,
+  height: number,
+  seed_salt?: string,
+): Promise<{ image_url: string; meta: Record<string, unknown> } | null> {
+  try {
+    const size = Math.min(1024, Math.max(256, Math.max(width || 0, height || 0) || 512));
+    const image_url = await generateNeonFractalDataUrl(prompt || "", size, seed_salt);
+    return {
+      image_url,
+      meta: { provider: "in_app_neon_fractal", engine: "neonFractal", deterministic: true, size },
+    };
+  } catch (e) {
+    console.error("In-app fractal error", e);
+    return null;
+  }
+}
 
 // When the live AI generation services are unavailable, prefer serving the most
 // recent real quantum-generated image instead of a static "AI Image" placeholder.
@@ -345,6 +368,28 @@ export async function POST(req: NextRequest) {
     const timeoutMs = requestedQuantum ? quantumTimeoutMs : stdTimeoutMs;
 
     const cacheKey = cacheKeyFor({ prompt: parsed.prompt, negative_prompt: parsed.negative_prompt, width, height, provider: parsed.provider, quantum_mode: Boolean(parsed.quantum_mode), seed_salt: parsed.seed_salt });
+
+    // Primary path: the in-app neon fractal generator. It is instant, reliable,
+    // deterministic, and produces the signature PixelQrypt look directly from the
+    // user's words — no external service required. The previous external services
+    // (e.g. the Render fusion service) cold-start and time out, which caused the
+    // live site to fall back to a static archive image that ignored the prompt.
+    // Set PREFER_EXTERNAL_IMAGE_SERVICE=1 to opt back into the external services.
+    const preferExternal = (process.env.PREFER_EXTERNAL_IMAGE_SERVICE || "").trim() === "1";
+    if (!preferExternal) {
+      const inApp = await tryInAppFractal(parsed.prompt, width, height, parsed.seed_salt);
+      if (inApp) {
+        const meta = { ...inApp.meta };
+        if (parsed.ipfs_upload) {
+          const ipfsMeta = await maybeUploadIpfs({ image_url: inApp.image_url, requestId });
+          Object.assign(meta, ipfsMeta);
+        }
+        logInfo("image.generate.success", { requestId, meta, note: "in_app_neon_fractal" });
+        setCache(cacheKey, { createdAt: Date.now(), lastAccessAt: Date.now(), image_url: inApp.image_url, meta });
+        return ok({ image_url: inApp.image_url, meta, requestId });
+      }
+    }
+
     // const cached = getCache(cacheKey);
     // if (cached) {
     //   if (parsed.ipfs_upload && typeof cached.meta.ipfs_url !== "string") {
@@ -403,6 +448,13 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      const inAppFb = await tryInAppFractal(parsed.prompt, width, height, parsed.seed_salt);
+      if (inAppFb) {
+        const meta = { ...inAppFb.meta, fallback: true, degraded_from_quantum: true, degraded_reason: aiService.error || "unknown" };
+        logInfo("image.generate.success", { requestId, meta, note: "quantum_in_app_fallback" });
+        setCache(cacheKey, { createdAt: Date.now(), lastAccessAt: Date.now(), image_url: inAppFb.image_url, meta });
+        return ok({ image_url: inAppFb.image_url, meta, requestId });
+      }
       const archive = latestRealQuantumImage();
       if (archive) {
         const meta = { ...archive.meta, fallback: true, degraded_from_quantum: true, degraded_reason: aiService.error || "unknown" };
@@ -441,6 +493,13 @@ export async function POST(req: NextRequest) {
       logInfo("image.generate.success", { requestId, meta });
       setCache(cacheKey, { createdAt: Date.now(), lastAccessAt: Date.now(), image_url: aiService.image_url, meta });
       return ok({ image_url: aiService.image_url, meta, requestId });
+    }
+    const inAppStd = await tryInAppFractal(parsed.prompt, width, height, parsed.seed_salt);
+    if (inAppStd) {
+      const meta = { ...inAppStd.meta, fallback: true };
+      logInfo("image.generate.success", { requestId, meta, note: "in_app_fallback" });
+      setCache(cacheKey, { createdAt: Date.now(), lastAccessAt: Date.now(), image_url: inAppStd.image_url, meta });
+      return ok({ image_url: inAppStd.image_url, meta, requestId });
     }
     const archive = latestRealQuantumImage();
     if (archive) {
