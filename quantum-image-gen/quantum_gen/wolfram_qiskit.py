@@ -1,4 +1,4 @@
-# Dynamic general fractal generator - any words control pattern
+## Dynamic general fractal generator - any words control pattern
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
