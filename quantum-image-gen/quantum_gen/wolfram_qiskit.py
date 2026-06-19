@@ -336,6 +336,10 @@ def _analyze_prompt_energy(prompt):
     """
     p = (prompt or "").lower()
     
+    # FORCE purple magenta Mandelbrot style for t-shirt looks
+    if any(w in p for w in ["purple", "magenta", "blue", "star", "heart", "space", "wolf", "glowing", "plasma"]):
+        return "plasma", -0.5, 0.0, "circle"
+    
     # Base shapes
     shape_type = "circle"
     if any(w in p for w in ["square", "box", "cube", "block", "rectangle"]): shape_type = "square"
@@ -541,7 +545,6 @@ def generate_julia_set(width, height, c_x, c_y, zoom=1.0, max_iter=100, cmap_nam
 
     return apply_simple_colormap(smooth_norm.astype(np.float32), cmap_name)
 
-
 def generate_mandelbrot_set(
     width,
     height,
@@ -618,7 +621,6 @@ def generate_mandelbrot_set(
 
     return apply_simple_colormap(smooth_norm.astype(np.float32), cmap_name)
 
-
 def _compute_julia_smooth_norm(width, height, c_x, c_y, zoom=1.0, max_iter=100):
     if not np:
         return None
@@ -650,7 +652,6 @@ def _compute_julia_smooth_norm(width, height, c_x, c_y, zoom=1.0, max_iter=100):
     maxv = float(np.max(smooth))
     smooth_norm = (smooth / maxv) if maxv > 0 else smooth
     return smooth_norm.astype(np.float32)
-
 
 def _compute_mandelbrot_smooth_norm(width, height, center_x=-0.5, center_y=0.0, zoom=1.0, max_iter=100):
     if not np:
@@ -688,7 +689,6 @@ def _compute_mandelbrot_smooth_norm(width, height, center_x=-0.5, center_y=0.0, 
     smooth_norm = (smooth / maxv) if maxv > 0 else smooth
     return smooth_norm.astype(np.float32)
 
-
 def _apply_colormap_01(vals_01: "np.ndarray", cmap_name: str) -> "np.ndarray":
     vals_01 = np.clip(vals_01.astype(np.float32), 0.0, 1.0)
 
@@ -713,7 +713,6 @@ def _apply_colormap_01(vals_01: "np.ndarray", cmap_name: str) -> "np.ndarray":
     t = (x - i0).astype(np.float32)[..., None]
     rgb = (1.0 - t) * stops_np[i0] + t * stops_np[i1]
     return (np.clip(rgb, 0.0, 1.0) * 255.0).astype(np.uint8)
-
 
 def _pseudo_quantum_probs(seed_context: str, num_states: int) -> "np.ndarray":
     n = int(num_states)
