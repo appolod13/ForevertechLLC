@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import fs from "fs";
 import path from "path";
 
-// The Render fusion-service can take ~30s to render fractal art; raise the
+// #The Render fusion-service can take ~30s to render fractal art; raise the
 // serverless function limit so the deployed site doesn't kill the request early.
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
