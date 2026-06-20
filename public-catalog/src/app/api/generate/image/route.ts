@@ -144,16 +144,15 @@ export async function POST(req: NextRequest) {
 
     // 2. Fallback
     if (!result) {
-      try {
-        result = await generateImageForPlatform(
-          prompt,
-          body.platform || "linkedin",
-          body.provider || "quantum"
-        );
-      } catch (fallbackErr) {
-        logError("fallback.generate.failed", fallbackErr);
-      }
-    }
+      // Fixed version
+try {
+  const platform = (body.platform || "linkedin") as any;
+  const provider = (body.provider || "quantum") as any;
+
+  result = await generateImageForPlatform(prompt, platform, provider);
+} catch (fallbackErr) {
+  logError("fallback.generate.failed", fallbackErr);
+}
 
     if (!result || !result.image_url) {
       return NextResponse.json({ 
