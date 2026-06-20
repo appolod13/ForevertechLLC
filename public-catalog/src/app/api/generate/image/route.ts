@@ -142,18 +142,20 @@ export async function POST(req: NextRequest) {
       logError("quantum.hybrid.failed", quantumErr);
     }
 
-    // 2. Fallback
+    // 2. Fallback (fixed type issue)
     if (!result) {
       try {
-        const platform = (body.platform || "linkedin") as any;
-        const provider = (body.provider || "quantum") as any;
-        result = await generateImageForPlatform(prompt, platform, provider);
+        result = await generateImageForPlatform(
+          prompt,
+          (body.platform || "linkedin") as any,
+          (body.provider || "quantum") as any
+        );
       } catch (fallbackErr) {
         logError("fallback.generate.failed", fallbackErr);
       }
     }
 
-    // 3. Final safety check + fallback image
+    // 3. Final safety check
     if (!result) {
       return NextResponse.json({ 
         success: false, 
@@ -162,7 +164,6 @@ export async function POST(req: NextRequest) {
     }
 
     if (!result.image_url) {
-      // Use a placeholder if no image was generated
       result.image_url = "/api/images/placeholder.png";
     }
 
