@@ -251,6 +251,25 @@ export async function generateNeonFractalPng(
   applyDimensionalDepth(rgb, field, w, h, seedFromText(`${prompt}|${salt || ""}|depth`));
   applyNeonFinish(rgb, w, h, seedFromText(`${prompt}|${salt || ""}|finish`));
 
+  // Final contrast + saturation boost so the indigo body stays deep and the
+  // neon filaments pop on a white tee, even for sparse dendrite constants.
+  const CONTRAST = 1.42;
+  const SATURATION = 1.32;
+  for (let i = 0; i < rgb.length; i += 3) {
+    // Contrast around mid-grey.
+    let r = (rgb[i] - 0.5) * CONTRAST + 0.5;
+    let g = (rgb[i + 1] - 0.5) * CONTRAST + 0.5;
+    let b = (rgb[i + 2] - 0.5) * CONTRAST + 0.5;
+    // Saturation around luminance.
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    r = lum + (r - lum) * SATURATION;
+    g = lum + (g - lum) * SATURATION;
+    b = lum + (b - lum) * SATURATION;
+    rgb[i] = r;
+    rgb[i + 1] = g;
+    rgb[i + 2] = b;
+  }
+
   // Float -> 8-bit
   const out = Buffer.allocUnsafe(w * h * 3);
   for (let i = 0; i < rgb.length; i++) {
