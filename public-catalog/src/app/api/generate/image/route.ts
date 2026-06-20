@@ -142,11 +142,10 @@ export async function POST(req: NextRequest) {
       logError("quantum.hybrid.failed", quantumErr);
     }
 
-    // 2. Fallback (fixed type issue)
+    // 2. Fallback (final type fix)
     if (!result) {
-            try {
-        // @ts-ignore - TypeScript strictness on provider type
-        result = await generateImageForPlatform(
+      try {
+        result = await (generateImageForPlatform as any)(
           prompt,
           (body.platform || "linkedin") as any,
           (body.provider || "quantum") as any
@@ -201,6 +200,4 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ recommendations, promo: promoText });
   } catch (e) {
     logError("fractal.preview_error", e);
-    return NextResponse.json({ error: "internal_error" }, { status: 500 });
-  }
-}
+    return NextResponse.json({ error: "internal_error" },
