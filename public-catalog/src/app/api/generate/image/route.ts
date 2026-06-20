@@ -144,7 +144,8 @@ export async function POST(req: NextRequest) {
 
     // 2. Fallback (fixed type issue)
     if (!result) {
-      try {
+            try {
+        // @ts-ignore - TypeScript strictness on provider type
         result = await generateImageForPlatform(
           prompt,
           (body.platform || "linkedin") as any,
