@@ -16,24 +16,55 @@ import { getAiGeneratorsConfig } from "@/lib/aiGeneratorsConfig";
 import { createHash } from "crypto";
 import { processFractalPromo, recommendFractalSettings, previewPromoRecommendations } from "./fractal-fusion";
 
-// ... (all your helper functions remain unchanged) ...
+// Keep all your existing helper functions here (isLocalHostUrl, isRecord, latestRealQuantumImage, cache functions, tryQuantumHybridGenerate, etc.)
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    // ... your existing validation and logic ...
+    const body = await req.json().catch(() => ({}));
 
-    // Example of safe handling (adapt to your full code)
+    // Basic validation
     if (!body.prompt) {
       return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
     }
 
-    // Your quantum hybrid, fusion, etc. calls...
+    const prompt = body.prompt;
+    const platform = body.platform || "linkedin";
+    const provider = body.provider || "quantum";
+    const useFractalFusion = body.use_fractal_fusion !== false;
 
-    const result = await tryQuantumHybridGenerate(...) || /* fallback */;
+    // Call your generation logic
+    let result;
+    try {
+      result = await tryQuantumHybridGenerate(
+        prompt,
+        body.width || 1024,
+        body.height || 1024,
+        body.negative_prompt,
+        45000,
+        useFractalFusion
+      );
+    } catch (genError) {
+      logError("quantum.generate.failed", genError);
+      result = null;
+    }
 
+    // Fallback if quantum fails
     if (!result) {
-      return NextResponse.json({ error: "Generation failed" }, { status: 500 });
+      result = await generateImageForPlatform(prompt, platform, provider);
+    }
+
+    if (!result || !result.image_url) {
+      return NextResponse.json({ error: "Image generation failed" }, { status: 500 });
+    }
+
+    // Optional IPFS upload
+    if (body.ipfs_upload) {
+      try {
+        const ipfsResult = await uploadToIpfs(result.image_url);
+        result.ipfs = ipfsResult;
+      } catch (ipfsErr) {
+        logError("ipfs.upload.failed", ipfsErr);
+      }
     }
 
     return NextResponse.json({ success: true, ...result });
