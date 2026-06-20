@@ -32,7 +32,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
 
-// === CACHE (basic version) ===
+// === CACHE ===
 const cache = new Map<string, any>();
 const CACHE_TTL_MS = 10 * 60 * 1000;
 
@@ -54,7 +54,7 @@ function setCache(key: string, value: any) {
   cache.set(key, { ...value, createdAt: Date.now() });
 }
 
-// === QUANTUM HYBRID GENERATOR (working version) ===
+// === QUANTUM HYBRID GENERATOR ===
 async function tryQuantumHybridGenerate(
   prompt: string,
   width: number,
@@ -144,15 +144,14 @@ export async function POST(req: NextRequest) {
 
     // 2. Fallback
     if (!result) {
-      // Fixed version
-try {
-  const platform = (body.platform || "linkedin") as any;
-  const provider = (body.provider || "quantum") as any;
-
-  result = await generateImageForPlatform(prompt, platform, provider);
-} catch (fallbackErr) {
-  logError("fallback.generate.failed", fallbackErr);
-}
+      try {
+        const platform = (body.platform || "linkedin") as any;
+        const provider = (body.provider || "quantum") as any;
+        result = await generateImageForPlatform(prompt, platform, provider);
+      } catch (fallbackErr) {
+        logError("fallback.generate.failed", fallbackErr);
+      }
+    }
 
     if (!result || !result.image_url) {
       return NextResponse.json({ 
