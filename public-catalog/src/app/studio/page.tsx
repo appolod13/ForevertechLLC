@@ -232,12 +232,16 @@ function StudioPageInner() {
                 </Link>
 
                 <button
-                  onClick={() => prompt && generateImage()}
-                  disabled={isGenerating || !prompt}
-                  className="flex h-14 items-center justify-center rounded-2xl border border-gray-700 text-base font-semibold transition-all hover:bg-gray-900 active:scale-[0.985] disabled:opacity-60"
-                >
-                  Regenerate
-                </button>
+                  onClick={() => {
+                   if (prompt) {
+                    generateImage();
+                   }
+                 }}
+                disabled={isGenerating || !prompt}
+                className="flex h-14 items-center justify-center rounded-2xl border border-gray-700 text-base font-semibold transition-all hover:bg-gray-900 active:scale-[0.985] disabled:opacity-60"
+               >
+                Regenerate
+               </button>
               </div>
             </div>
           </div>
