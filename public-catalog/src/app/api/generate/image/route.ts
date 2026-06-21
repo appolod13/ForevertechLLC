@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
 
 // === IMPORTS ===
 import { getApiKey, validateApiKey } from "@/lib/api/auth";
-import { rateLimitKey, consume } from "@/lib/api/response";
+import { rateLimitKey, consume } from "@/lib/api/rate-limit";
+import { ok, fail } from "@/lib/api/response";
 import { logInfo, logError } from "@/lib/api/logger";
 import { generateImageForPlatform } from "@/lib/contentFactory/image";
 import { uploadToIpfs } from "@/lib/ipfs/upload";
