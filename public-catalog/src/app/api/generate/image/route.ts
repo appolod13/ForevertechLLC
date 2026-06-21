@@ -9,14 +9,14 @@ export const dynamic = "force-dynamic";
 
 // === IMPORTS ===
 import { getApiKey, validateApiKey } from "@/lib/api/auth";
-import { rateLimitKey, consume } from "@/lib/api/rate-limit";
-import { ok, fail } from "@/lib/api/response";
+import { rateLimitKey, consume } from "@/lib/api/response";
 import { logInfo, logError } from "@/lib/api/logger";
 import { generateImageForPlatform } from "@/lib/contentFactory/image";
 import { uploadToIpfs } from "@/lib/ipfs/upload";
 import { getAiGeneratorsConfig } from "@/lib/aiGeneratorsConfig";
 import { processFractalPromo, recommendFractalSettings, previewPromoRecommendations } from "./fractal-fusion";
 import { getQuantumSeed } from "@/lib/quantum-seed";
+import { calculateFractalDimension } from "@/lib/fractal-dimension";
 
 // === HELPERS ===
 function isLocalHostUrl(value: string): boolean {
@@ -178,7 +178,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. Final safety check
+    // 4. Add Fractal Dimension (NEW)
+    if (result) {
+      const dim = calculateFractalDimension(prompt);
+      result.fractal_dimension = {
+        value: parseFloat(dim.value.toFixed(4)),
+        method: dim.method,
+        label: dim.label
+      };
+    }
+
+    // 5. Final safety check
     if (!result) {
       return NextResponse.json({ 
         success: false, 
