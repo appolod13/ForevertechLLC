@@ -6,7 +6,6 @@ import { useSearchParams } from 'next/navigation';
 import { Header } from '../../components/Header';
 import { DataDashboardButton } from '../../components/DataDashboardButton';
 import { FusionAI } from '../../components/FusionAI';
-import { LatestAIImage } from '../../components/LatestAIImage';
 import { Send, Sparkles } from 'lucide-react';
 import styles from './page.module.css';
 
@@ -680,49 +679,123 @@ function StudioPageInner() {
         params: meta,
       });
 
-      try {
-        localStorage.setItem(
-          'foreverteck.studio.lastImage',
-          JSON.stringify({ imageUrl, meta, prompt, quantumMode }),
-        );
-      } catch {}
-      
-      setLastGenTimestamp(Date.now());
+                  {/* === IMPROVED LATEST BUILD PREVIEW (with stronger glow + download) === */}
+            <div className="mt-8 border-t border-gray-700 pt-8">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-purple-400">
+                    Latest Build Preview
+                  </h3>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Your most recent quantum-seeded fractal
+                  </p>
+                </div>
 
-      // Trigger the automated build pipeline
-      if (process.env.NODE_ENV !== 'production') {
-        try {
-          addLog('Triggering automated build pipeline...', 'info', 'I_BUILD_TRIGGER');
-          await fetch('/api/build', { method: 'POST' });
-          addLog('Build pipeline triggered successfully', 'success', 'I_BUILD_SUCCESS');
-        } catch (buildErr: unknown) {
-          addLog('Failed to trigger build pipeline: ' + ((buildErr as Error).message || String(buildErr)), 'warn', 'E_BUILD_FAILED');
-        }
-      }
+                {/* Fractal Dimension */}
+                {generationMetadata?.fractal_dimension && (
+                  <div className="text-right">
+                    <div className="text-[10px] text-gray-500 tracking-widest">FRACTAL DIMENSION</div>
+                    <div className="font-mono text-2xl text-purple-400 font-semibold tracking-tighter">
+                      {generationMetadata.fractal_dimension.value}
+                    </div>
+                  </div>
+                )}
+              </div>
 
-    } catch (e: unknown) {
-      console.error(e);
-      const finalErr =
-        (typeof e === 'object' && e !== null && 'message' in e && typeof (e as { message?: unknown }).message === 'string')
-          ? (e as { message: string }).message
-          : (e instanceof Error ? e.message : 'Failed to connect to generation service');
-      setGenerationError(finalErr);
-      addLog(`Final failure: ${finalErr}`, 'error', 'E_FINAL');
-      setPipelineStage('Failed');
-    } finally {
-      setIsGenerating(false);
-    }
-  };
+              {/* Premium Image Card — Stronger Neon Glow */}
+              <div className="relative group rounded-3xl overflow-hidden border border-gray-800 bg-black shadow-[0_0_60px_rgba(168,85,247,0.25)]">
+                <div className="aspect-video relative bg-zinc-950">
+                  {generatedImage ? (
+                    <>
+                      <img
+                        src={generatedImage}
+                        alt="Your Generated Fractal"
+                        className="absolute inset-0 w-full h-full object-cover transition-all duration-700 group-hover:scale-[1.02]"
+                      />
+                      
+                      {/* Stronger Neon Glow Layers */}
+                      <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 via-transparent to-cyan-400/20 pointer-events-none" />
+                      <div className="absolute inset-0 bg-[radial-gradient(#a855f710_0.8px,transparent_1px)] bg-[length:3px_3px] pointer-events-none" />
+                      <div className="absolute inset-0 shadow-[inset_0_0_80px_rgba(168,85,247,0.15)] pointer-events-none" />
 
-  const postContentAction = async () => {
-    if (!postContent) return;
-    setIsPosting(true);
-    setPostingStatus(null);
-    try {
-      const mediaToPost = posterAttachedImage || generatedImage;
-      if (mediaToPost) {
-        await validatePosterImage(mediaToPost);
-      }
+                      {/* Quantum Seeded Badge */}
+                      {generationMetadata?.quantum_provenance && (
+                        <div className="absolute top-4 right-4 flex items-center gap-2 rounded-full bg-black/75 backdrop-blur px-3.5 py-1.5 border border-cyan-500/50 shadow-lg">
+                          <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                          <span className="text-cyan-400 text-xs font-semibold tracking-[1.5px]">QUANTUM SEEDED</span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-8">
+                      <div className="text-5xl mb-4 opacity-30">✦</div>
+                      <p className="text-gray-400 text-lg">Your fractal will appear here</p>
+                      <p className="text-xs text-gray-600 mt-2">Generate something extraordinary</p>
+                    </div>
+                  )}
+
+                  {/* Loading State */}
+                  {isGenerating && (
+                    <div className="absolute inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-10">
+                      <div className="text-center">
+                        <div className="mx-auto mb-4 h-9 w-9 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
+                        <p className="text-purple-400 font-medium">Crafting your quantum fractal...</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Bottom Info Bar + Download Button */}
+                {generatedImage && (
+                  <div className="bg-zinc-950/95 px-5 py-3 flex items-center justify-between text-sm border-t border-gray-800">
+                    <div className="text-gray-200 truncate pr-4 font-medium">
+                      {prompt || "Quantum Fractal"}
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="font-mono text-[10px] text-gray-500 tracking-widest">
+                        {generationMetadata?.quantumSeed?.slice(0, 8) || "—"}
+                      </div>
+
+                      {/* Download Button */}
+                      <button
+                        onClick={() => {
+                          const link = document.createElement("a");
+                          link.href = generatedImage;
+                          link.download = `quantum-fractal-${Date.now()}.png`;
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                        }}
+                        className="flex items-center gap-1.5 rounded-lg border border-gray-700 px-3 py-1 text-xs font-medium hover:bg-gray-900 transition"
+                      >
+                        ⬇ Download
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* CTA Buttons */}
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Link
+                  href={`/customize?imageUrl=${encodeURIComponent(latestDropImageUrl || generatedImage || '')}${
+                    prompt ? `&prompt=${encodeURIComponent(prompt)}` : ''
+                  }`}
+                  className="flex h-14 items-center justify-center rounded-2xl bg-white text-lg font-bold text-black transition-all hover:bg-zinc-100 active:scale-[0.985]"
+                >
+                  Customize Your Gear →
+                </Link>
+
+                <button
+                  onClick={() => prompt && generateImage()}
+                  disabled={isGenerating || !prompt}
+                  className="flex h-14 items-center justify-center rounded-2xl border border-gray-700 text-base font-semibold transition-all hover:bg-gray-900 active:scale-[0.985] disabled:opacity-60"
+                >
+                  Regenerate
+                </button>
+              </div>
+            </div>
       const platforms: string[] = [];
       if (socialAccounts.twitter?.authenticated) platforms.push('twitter');
       if (socialAccounts.telegram?.authenticated) platforms.push('telegram');
