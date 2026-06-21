@@ -16,6 +16,7 @@ import { generateImageForPlatform } from "@/lib/contentFactory/image";
 import { uploadToIpfs } from "@/lib/ipfs/upload";
 import { getAiGeneratorsConfig } from "@/lib/aiGeneratorsConfig";
 import { processFractalPromo, recommendFractalSettings, previewPromoRecommendations } from "./fractal-fusion";
+import { getQuantumSeed } from "@/lib/quantum-seed";
 
 // === HELPERS ===
 function isLocalHostUrl(value: string): boolean {
@@ -125,6 +126,8 @@ export async function POST(req: NextRequest) {
     const height: number = body.height || 1024;
     const negative_prompt: string | undefined = body.negative_prompt;
     const use_fractal_fusion: boolean = body.use_fractal_fusion !== false;
+    const useQuantumSeed: boolean = body.use_quantum_seed === true;
+    const orderId: string = body.orderId || `gen_${Date.now()}`;
 
     let result: any = null;
 
@@ -155,7 +158,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Final safety check
+    // 3. Attach Quantum Seed (IBM Quantum hardware) if requested
+    if (useQuantumSeed && result) {
+      try {
+        const seedResult = await getQuantumSeed(orderId, "fractal_generation");
+        if (seedResult.success && seedResult.data) {
+          result.quantum_provenance = {
+            provider: seedResult.data.provider,
+            jobId: seedResult.data.jobId,
+            backend: seedResult.data.backend,
+            seed: seedResult.data.seed,
+            shots: seedResult.data.shots,
+            createdAt: seedResult.data.createdAt,
+          };
+          result.quantumSeed = seedResult.data.seed;
+        }
+      } catch (seedErr) {
+        logError("quantum.seed.failed", seedErr);
+      }
+    }
+
+    // 4. Final safety check
     if (!result) {
       return NextResponse.json({ 
         success: false, 
@@ -200,4 +223,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ recommendations, promo: promoText });
   } catch (e) {
     logError("fractal.preview_error", e);
-    return NextResponse.json({ error: "internal_error" },
+    return NextResponse.json({ error: "internal_error" }, { status: 500 });
+  }
+}
