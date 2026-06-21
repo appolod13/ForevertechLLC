@@ -115,7 +115,13 @@ const JULIA_CS: Array<[number, number]> = [
   [-0.4, 0.6], // swirl filaments
 ];
 
+// Available fractal "engines". "julia" is the classic escape-time look; the
+// rest are single continuous-line (string) fractals drawn with one unbroken
+// stroke via L-systems.
+type FractalType = "julia" | "koch" | "sierpinski" | "dragon" | "hilbert";
+
 interface FractalParams {
+  fractalType: FractalType;
   paletteName: string;
   cx: number;
   cy: number;
@@ -123,6 +129,7 @@ interface FractalParams {
   rotation: number;
   centerX: number;
   centerY: number;
+  iterations: number; // L-system recursion depth for line fractals
 }
 
 function analyzePrompt(prompt: string, salt?: string): FractalParams {
@@ -159,6 +166,35 @@ function analyzePrompt(prompt: string, salt?: string): FractalParams {
     paletteName = roulette[Math.floor(rand() * roulette.length)];
   }
 
+  // Fractal type from theme words; otherwise a random "emotional" pick that is
+  // still deterministic per prompt.
+  let fractalType: FractalType;
+  if (has("snowflake", "crystal", "ice", "frost", "winter", "koch", "lace")) {
+    fractalType = "koch";
+  } else if (has("triangle", "pyramid", "sierpinski", "sacred", "ancient", "temple", "geometry", "rune")) {
+    fractalType = "sierpinski";
+  } else if (has("dragon", "serpent", "twist", "chaos", "flame", "snake")) {
+    fractalType = "dragon";
+  } else if (has("maze", "circuit", "grid", "path", "matrix", "city", "labyrinth", "weave")) {
+    fractalType = "hilbert";
+  } else if (has("spiral", "galaxy", "cosmic", "nebula", "swirl", "seahorse", "lightning")) {
+    fractalType = "julia";
+  } else {
+    // Random emotional fractal: weighted roulette (favor the painterly julia and
+    // the one-line string fractals for variety), seeded by the prompt.
+    const typeRoulette: FractalType[] = [
+      "julia",
+      "julia",
+      "koch",
+      "sierpinski",
+      "dragon",
+      "hilbert",
+      "julia",
+      "koch",
+    ];
+    fractalType = typeRoulette[Math.floor(rand() * typeRoulette.length)];
+  }
+
   // Julia constant chosen from the curated set, with a tiny deterministic jitter
   // so different prompts shift the shape but the same prompt is stable.
   const base = JULIA_CS[Math.floor(rand() * JULIA_CS.length)];
@@ -170,7 +206,156 @@ function analyzePrompt(prompt: string, salt?: string): FractalParams {
   const centerX = (rand() - 0.5) * 0.5;
   const centerY = (rand() - 0.5) * 0.5;
 
-  return { paletteName, cx, cy, zoom, rotation, centerX, centerY };
+  // L-system recursion depth, bounded per type for good detail + performance.
+  const depthByType: Record<FractalType, [number, number]> = {
+    julia: [0, 0],
+    koch: [4, 5],
+    sierpinski: [6, 8],
+    dragon: [11, 13],
+    hilbert: [6, 7],
+  };
+  const [dlo, dhi] = depthByType[fractalType];
+  const iterations = dlo + Math.floor(rand() * (dhi - dlo + 1));
+
+  return { fractalType, paletteName, cx, cy, zoom, rotation, centerX, centerY, iterations };
+}
+
+// ---- Single continuous-line (string) fractals via L-systems ------------------
+
+interface LSystem {
+  axiom: string;
+  rules: Record<string, string>;
+  angle: number; // degrees per +/- turn
+}
+
+const L_SYSTEMS: Record<Exclude<FractalType, "julia">, LSystem> = {
+  // Koch snowflake: one closed continuous stroke.
+  koch: { axiom: "F--F--F", rules: { F: "F+F--F+F" }, angle: 60 },
+  // Sierpinski arrowhead: draws the Sierpinski triangle as ONE unbroken line.
+  sierpinski: { axiom: "A", rules: { A: "B-A-B", B: "A+B+A" }, angle: 60 },
+  // Dragon curve: a single continuous self-avoiding stroke.
+  dragon: { axiom: "FX", rules: { X: "X+YF+", Y: "-FX-Y" }, angle: 90 },
+  // Hilbert space-filling curve: one continuous line that weaves the plane.
+  hilbert: { axiom: "A", rules: { A: "+BF-AFA-FB+", B: "-AF+BFB+FA-" }, angle: 90 },
+};
+
+/** Expand an L-system to its turtle string. */
+function expandLSystem(sys: LSystem, iterations: number): string {
+  let s = sys.axiom;
+  for (let i = 0; i < iterations; i++) {
+    let next = "";
+    for (const ch of s) next += sys.rules[ch] ?? ch;
+    s = next;
+  }
+  return s;
+}
+
+/** Walk a turtle string into a polyline of [x,y] points (drawing F or G). */
+function turtleToPoints(commands: string, angleDeg: number): Array<[number, number]> {
+  const pts: Array<[number, number]> = [];
+  let x = 0;
+  let y = 0;
+  let dir = 0; // radians
+  const step = 1;
+  const turn = (angleDeg * Math.PI) / 180;
+  pts.push([x, y]);
+  for (const ch of commands) {
+    if (ch === "F" || ch === "G") {
+      x += Math.cos(dir) * step;
+      y += Math.sin(dir) * step;
+      pts.push([x, y]);
+    } else if (ch === "+") {
+      dir += turn;
+    } else if (ch === "-") {
+      dir -= turn;
+    }
+  }
+  return pts;
+}
+
+/**
+ * Rasterize a single-line fractal into an escape-style field (0..1), where the
+ * stroke glows toward 1 and the background sits at a deep base value. The result
+ * is fed through the same neon colorize + depth + bloom pipeline as the Julia
+ * fractal, so the one-line fractals get the identical PixelQrypt neon look.
+ */
+function renderLineFractalField(p: FractalParams, w: number, h: number): Float32Array {
+  const sys = L_SYSTEMS[p.fractalType as Exclude<FractalType, "julia">];
+  const commands = expandLSystem(sys, p.iterations);
+  const raw = turtleToPoints(commands, sys.angle);
+
+  // Fit + rotate the polyline into the canvas with padding.
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const [px, py] of raw) {
+    if (px < minX) minX = px;
+    if (py < minY) minY = py;
+    if (px > maxX) maxX = px;
+    if (py > maxY) maxY = py;
+  }
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  const spanX = Math.max(1e-6, maxX - minX);
+  const spanY = Math.max(1e-6, maxY - minY);
+  const cosR = Math.cos(p.rotation);
+  const sinR = Math.sin(p.rotation);
+  const pad = 0.12;
+  const target = (1 - 2 * pad) * Math.min(w, h);
+  const fit = target / Math.max(spanX, spanY);
+
+  const pts: Array<[number, number]> = raw.map(([px, py]) => {
+    const dx = px - cx;
+    const dy = py - cy;
+    const rx = dx * cosR - dy * sinR;
+    const ry = dx * sinR + dy * cosR;
+    return [w / 2 + rx * fit, h / 2 + ry * fit];
+  });
+
+  const field = new Float32Array(w * h).fill(0.14); // deep body base
+  const sigma = Math.max(1.0, w / 300); // glow softness
+  const core = sigma * 0.9;
+  const reach = Math.ceil(sigma * 3 + 1);
+  const inv2s2 = 1 / (2 * sigma * sigma);
+
+  for (let i = 1; i < pts.length; i++) {
+    const [x0, y0] = pts[i - 1];
+    const [x1, y1] = pts[i];
+    const segMinX = Math.max(0, Math.floor(Math.min(x0, x1) - reach));
+    const segMaxX = Math.min(w - 1, Math.ceil(Math.max(x0, x1) + reach));
+    const segMinY = Math.max(0, Math.floor(Math.min(y0, y1) - reach));
+    const segMaxY = Math.min(h - 1, Math.ceil(Math.max(y0, y1) + reach));
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const segLen2 = dx * dx + dy * dy || 1e-6;
+    for (let py = segMinY; py <= segMaxY; py++) {
+      for (let px = segMinX; px <= segMaxX; px++) {
+        let tSeg = ((px - x0) * dx + (py - y0) * dy) / segLen2;
+        tSeg = tSeg < 0 ? 0 : tSeg > 1 ? 1 : tSeg;
+        const qx = x0 + tSeg * dx;
+        const qy = y0 + tSeg * dy;
+        const d2 = (px - qx) * (px - qx) + (py - qy) * (py - qy);
+        const d = Math.sqrt(d2);
+        const glow = d <= core ? 1 : Math.exp(-(d - core) * (d - core) * inv2s2);
+        const idx = py * w + px;
+        const v = 0.14 + glow * 0.86;
+        if (v > field[idx]) field[idx] = v;
+      }
+    }
+  }
+  return field;
+}
+
+/** Map an escape/intensity field to neon palette RGB. */
+function colorizeField(field: Float32Array, rgb: Float32Array, stops: RGB[], w: number, h: number): void {
+  for (let i = 0; i < w * h; i++) {
+    const col = samplePalette(stops, field[i]);
+    const o = i * 3;
+    rgb[o] = col[0] / 255;
+    rgb[o + 1] = col[1] / 255;
+    rgb[o + 2] = col[2] / 255;
+  }
 }
 
 // ---- Core render -------------------------------------------------------------
@@ -195,7 +380,27 @@ export async function generateNeonFractalPng(
   // Float RGB working buffer.
   const rgb = new Float32Array(w * h * 3);
   // Escape field (for bloom / rim detection).
-  const field = new Float32Array(w * h);
+  let field = new Float32Array(w * h);
+
+  // Single continuous-line (string) fractals: Koch, Sierpinski, dragon, Hilbert.
+  if (p.fractalType !== "julia") {
+    field = renderLineFractalField(p, w, h);
+    colorizeField(field, rgb, stops, w, h);
+
+    applyDimensionalDepth(rgb, field, w, h, seedFromText(`${prompt}|${salt || ""}|depth`));
+    applyNeonFinish(rgb, w, h, seedFromText(`${prompt}|${salt || ""}|finish`));
+    applyContrastSaturation(rgb);
+
+    const outLine = Buffer.allocUnsafe(w * h * 3);
+    for (let i = 0; i < rgb.length; i++) {
+      let v = rgb[i];
+      v = v < 0 ? 0 : v > 1 ? 1 : v;
+      outLine[i] = (v * 255 + 0.5) | 0;
+    }
+    return sharp(outLine, { raw: { width: w, height: h, channels: 3 } })
+      .png({ compressionLevel: 9 })
+      .toBuffer();
+  }
 
   const cosR = Math.cos(p.rotation);
   const sinR = Math.sin(p.rotation);
@@ -250,25 +455,7 @@ export async function generateNeonFractalPng(
 
   applyDimensionalDepth(rgb, field, w, h, seedFromText(`${prompt}|${salt || ""}|depth`));
   applyNeonFinish(rgb, w, h, seedFromText(`${prompt}|${salt || ""}|finish`));
-
-  // Final contrast + saturation boost so the indigo body stays deep and the
-  // neon filaments pop on a white tee, even for sparse dendrite constants.
-  const CONTRAST = 1.42;
-  const SATURATION = 1.32;
-  for (let i = 0; i < rgb.length; i += 3) {
-    // Contrast around mid-grey.
-    let r = (rgb[i] - 0.5) * CONTRAST + 0.5;
-    let g = (rgb[i + 1] - 0.5) * CONTRAST + 0.5;
-    let b = (rgb[i + 2] - 0.5) * CONTRAST + 0.5;
-    // Saturation around luminance.
-    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-    r = lum + (r - lum) * SATURATION;
-    g = lum + (g - lum) * SATURATION;
-    b = lum + (b - lum) * SATURATION;
-    rgb[i] = r;
-    rgb[i + 1] = g;
-    rgb[i + 2] = b;
-  }
+  applyContrastSaturation(rgb);
 
   // Float -> 8-bit
   const out = Buffer.allocUnsafe(w * h * 3);
@@ -294,6 +481,27 @@ export async function generateNeonFractalDataUrl(
 }
 
 // ---- Post-processing ---------------------------------------------------------
+
+/**
+ * Final contrast + saturation boost so the indigo body stays deep and the neon
+ * filaments pop on a white tee, even for sparse constants and thin line strokes.
+ */
+function applyContrastSaturation(rgb: Float32Array): void {
+  const CONTRAST = 1.42;
+  const SATURATION = 1.32;
+  for (let i = 0; i < rgb.length; i += 3) {
+    let r = (rgb[i] - 0.5) * CONTRAST + 0.5;
+    let g = (rgb[i + 1] - 0.5) * CONTRAST + 0.5;
+    let b = (rgb[i + 2] - 0.5) * CONTRAST + 0.5;
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    r = lum + (r - lum) * SATURATION;
+    g = lum + (g - lum) * SATURATION;
+    b = lum + (b - lum) * SATURATION;
+    rgb[i] = r;
+    rgb[i + 1] = g;
+    rgb[i + 2] = b;
+  }
+}
 
 /** Relief lighting + iridescent shimmer for a 4D, alive feel. */
 function applyDimensionalDepth(
