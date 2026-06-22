@@ -26,12 +26,6 @@ function StudioPageInner() {
   const [quantumMode, setQuantumMode] = useState(false);
   const [ipfsEnabled, setIpfsEnabled] = useState(false);
 
-  // Build a simple preview while generating
-  const buildDraftPreview = (text: string) => {
-    // Simple colored placeholder (you can expand this later)
-    return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1024' height='1024'%3E%3Crect width='1024' height='1024' fill='%2311111a'/%3E%3Ctext x='50%25' y='50%25' fill='%23666' font-size='48' text-anchor='middle'%3EGenerating...%3C/text%3E%3C/svg%3E`;
-  };
-
   const generateImage = async () => {
     if (!prompt) return;
 
@@ -52,13 +46,25 @@ function StudioPageInner() {
 
       const data = await res.json();
 
-      if (!res.ok || !data.success) {
+      if (!res.ok || data.success === false) {
         throw new Error(data.error || 'Generation failed');
       }
 
-      const imageUrl = data.image_url || data.imageUrl || data.data?.image_url || '';
+      // Robust image URL extraction
+      let imageUrl = '';
 
-      if (!imageUrl) throw new Error('No image URL returned from server');
+      if (typeof data.image_url === 'string') imageUrl = data.image_url;
+      else if (typeof data.imageUrl === 'string') imageUrl = data.imageUrl;
+      else if (data.data && typeof data.data.image_url === 'string') imageUrl = data.data.image_url;
+      else if (data.data && typeof data.data.imageUrl === 'string') imageUrl = data.data.imageUrl;
+      else if (data.items && Array.isArray(data.items) && data.items[0]) {
+        imageUrl = data.items[0].image_url || data.items[0].imageUrl || '';
+      }
+
+      if (!imageUrl) {
+        console.error("Full API response:", data);
+        throw new Error('No image URL found in response');
+      }
 
       setGeneratedImage(imageUrl);
       setLatestDropImageUrl(imageUrl);
@@ -68,7 +74,9 @@ function StudioPageInner() {
         quantum_provenance: data.quantum_provenance,
         quantumSeed: data.quantumSeed,
       });
+
     } catch (error: any) {
+      console.error("Generation error:", error);
       alert(error.message || 'Something went wrong during generation');
     } finally {
       setIsGenerating(false);
@@ -83,7 +91,7 @@ function StudioPageInner() {
         <h1 className="text-4xl font-bold mb-8">Creator Studio</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* === LEFT COLUMN: Generator === */}
+          {/* Left Column */}
           <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-6 rounded-3xl border border-gray-700">
             <div className="flex items-center gap-3 mb-6">
               <Sparkles className="text-purple-400 w-6 h-6" />
@@ -163,7 +171,6 @@ function StudioPageInner() {
                         alt="Your Generated Fractal"
                         className="absolute inset-0 w-full h-full object-cover transition-all duration-700 group-hover:scale-[1.015]"
                       />
-                      {/* Strong Neon Glow Layers */}
                       <div className="absolute inset-0 bg-gradient-to-br from-purple-500/25 via-transparent to-cyan-400/25 pointer-events-none" />
                       <div className="absolute inset-0 bg-[radial-gradient(#a855f720_1px,transparent_1px)] bg-[length:3px_3px] pointer-events-none" />
 
@@ -181,7 +188,6 @@ function StudioPageInner() {
                     </div>
                   )}
 
-                  {/* Loading State */}
                   {isGenerating && (
                     <div className="absolute inset-0 bg-black/70 backdrop-blur flex items-center justify-center z-10">
                       <div className="text-center">
@@ -192,7 +198,6 @@ function StudioPageInner() {
                   )}
                 </div>
 
-                {/* Bottom Info + Download */}
                 {generatedImage && (
                   <div className="bg-zinc-950/95 px-5 py-3 flex items-center justify-between text-sm border-t border-gray-800">
                     <div className="text-gray-200 truncate pr-4 font-medium">
@@ -215,7 +220,6 @@ function StudioPageInner() {
                 )}
               </div>
 
-              {/* Action Buttons */}
               <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Link
                   href={`/customize?imageUrl=${encodeURIComponent(latestDropImageUrl || generatedImage || '')}${prompt ? `&prompt=${encodeURIComponent(prompt)}` : ''}`}
@@ -235,7 +239,7 @@ function StudioPageInner() {
             </div>
           </div>
 
-          {/* === RIGHT COLUMN === */}
+          {/* Right Column */}
           <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-6 rounded-3xl border border-gray-700">
             <h2 className="text-2xl font-bold mb-6">Multi-Channel Poster</h2>
             <div className="text-center text-gray-400 py-12">
