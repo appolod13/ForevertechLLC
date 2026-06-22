@@ -25,76 +25,80 @@ function StudioPageInner() {
   const [generationMetadata, setGenerationMetadata] = useState<any>(null);
   const [quantumMode, setQuantumMode] = useState(false);
   const [ipfsEnabled, setIpfsEnabled] = useState(false);
+  
+  // NEW: For debugging API response on screen
+  const [apiDebugResponse, setApiDebugResponse] = useState<any>(null);
 
   const generateImage = async () => {
     if (!prompt) return;
 
     setIsGenerating(true);
     setGeneratedImage('');
-    setGenerationMetadata(null);
+    setApiDebugResponse(null); // clear previous debug
 
     try {
-      const endpoint = '/api/generate/image';
-      const payload = {
-        prompt,
-        negative_prompt: "cartoon, anime, low poly, blurry, noisy, overexposed, washed out, flat lighting, distorted buildings, crooked horizons, text, watermark, logo, people, vehicles in close-up, messy composition, excessive neon everywhere, cyberpunk street scene",
-        width: 1024,
-        height: 1024,
-        quantum_mode: quantumMode,
-        ipfs_upload: ipfsEnabled,
-        use_quantum_seed: true
-      };
-
-      const res = await fetch(endpoint, {
+      const res = await fetch('/api/generate/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          prompt,
+          quantum_mode: quantumMode,
+          ipfs_upload: ipfsEnabled,
+          use_quantum_seed: true,
+        }),
       });
 
-      const raw: any = await res.json();
+      const rawData = await res.json();
 
-      if (!res.ok || raw.success !== true) {
-        throw new Error(raw.error || raw.details?.message || 'Generation failed');
+      // Show full response on screen for debugging
+      setApiDebugResponse(rawData);
+
+      if (!res.ok || rawData.success === false) {
+        throw new Error(rawData.error || 'Generation failed');
       }
 
-      // === ORIGINAL ROBUST IMAGE URL EXTRACTION (from your working version) ===
+      // Try to extract image URL
       let imageUrl = '';
 
-      if (typeof raw.image_url === 'string') imageUrl = raw.image_url;
-      else if (typeof raw.imageUrl === 'string') imageUrl = raw.imageUrl;
-      else if (raw.data && typeof raw.data === 'object') {
-        const d = raw.data;
-        if (typeof d.image_url === 'string') imageUrl = d.image_url;
-        else if (typeof d.imageUrl === 'string') imageUrl = d.imageUrl;
-        else if (d.data && typeof d.data === 'object') {
-          if (typeof d.data.image_url === 'string') imageUrl = d.data.image_url;
-          else if (typeof d.data.imageUrl === 'string') imageUrl = d.data.imageUrl;
+      const possiblePaths = [
+        rawData.image_url,
+        rawData.imageUrl,
+        rawData.url,
+        rawData.data?.image_url,
+        rawData.data?.imageUrl,
+        rawData.data?.url,
+        rawData.data?.data?.image_url,
+        rawData.data?.data?.imageUrl,
+        rawData.result?.image_url,
+        rawData.result?.imageUrl,
+        rawData.items?.[0]?.image_url,
+        rawData.items?.[0]?.imageUrl,
+      ];
+
+      for (const path of possiblePaths) {
+        if (typeof path === 'string' && path.length > 10) {
+          imageUrl = path;
+          break;
         }
       }
 
-      if (!imageUrl && raw.items && Array.isArray(raw.items) && raw.items.length > 0) {
-        imageUrl = raw.items[0].image_url || raw.items[0].imageUrl || '';
-      }
-
       if (!imageUrl) {
-        console.error("Could not extract image URL. Full response:", raw);
-        throw new Error('Generation succeeded but no image URL was found');
+        // Show raw response on screen instead of alert
+        throw new Error('No image URL found in response. See debug box below.');
       }
 
       setGeneratedImage(imageUrl);
       setLatestDropImageUrl(imageUrl);
 
-      // Save metadata
       setGenerationMetadata({
-        fractal_dimension: raw.fractal_dimension,
-        quantum_provenance: raw.quantum_provenance,
-        quantumSeed: raw.quantumSeed,
-        meta: raw.meta || raw.data?.meta
+        fractal_dimension: rawData.fractal_dimension,
+        quantum_provenance: rawData.quantum_provenance,
+        quantumSeed: rawData.quantumSeed,
       });
 
-    } catch (e: any) {
-      console.error(e);
-      alert(e.message || 'Generation failed');
+    } catch (error: any) {
+      console.error("Generation Error:", error);
+      // Error is already shown via apiDebugResponse on screen
     } finally {
       setIsGenerating(false);
     }
@@ -142,7 +146,7 @@ function StudioPageInner() {
 
             <FusionAI prompt={prompt} baseImageUrl={generatedImage} onImageGenerated={setGeneratedImage} />
 
-            {/* === LATEST BUILD PREVIEW (Improved) === */}
+            {/* === LATEST BUILD PREVIEW === */}
             <div className="mt-8 border-t border-gray-700 pt-8">
               <div className="flex justify-between items-start mb-4">
                 <div>
@@ -231,6 +235,16 @@ function StudioPageInner() {
                 </button>
               </div>
             </div>
+
+            {/* === ON-SCREEN API DEBUG BOX === */}
+            {apiDebugResponse && (
+              <div className="mt-6 p-4 bg-black rounded-2xl border border-red-500/40">
+                <div className="text-red-400 font-bold mb-2">API Response Debug</div>
+                <pre className="text-xs text-gray-300 overflow-auto max-h-64 whitespace-pre-wrap">
+                  {JSON.stringify(apiDebugResponse, null, 2)}
+                </pre>
+              </div>
+            )}
           </div>
 
           {/* Right Column */}
