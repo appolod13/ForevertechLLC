@@ -27,19 +27,18 @@ function StudioPageInner() {
 
     setIsGenerating(true);
     setGeneratedImage('');
-    setDebugInfo('Starting generation...');
+    setDebugInfo('Starting...');
 
     try {
       const res = await fetch('/api/generate/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, quantum_mode: true }),
+        body: JSON.stringify({ prompt }),
       });
 
       const data = await res.json();
       setDebugInfo(`Response received. Success: ${data.success}`);
 
-      // Try every possible Base64 field
       let imageUrl = '';
 
       if (data.image_data_url) imageUrl = data.image_data_url;
@@ -49,23 +48,23 @@ function StudioPageInner() {
 
       if (imageUrl) {
         setGeneratedImage(imageUrl);
-        setDebugInfo('Image URL set successfully! Length: ' + imageUrl.length);
+        setDebugInfo(`✅ Image set! Length: ${imageUrl.length}`);
       } else {
-        setDebugInfo('No image URL found. Full response: ' + JSON.stringify(data).substring(0, 300));
+        setDebugInfo(`❌ No image URL. Full response: ${JSON.stringify(data).slice(0, 300)}`);
       }
     } catch (error: any) {
-      setDebugInfo('Error: ' + error.message);
+      setDebugInfo(`Error: ${error.message}`);
     } finally {
       setIsGenerating(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-4">
-      <h1 className="text-3xl font-bold mb-6">Creator Studio - Debug Mode</h1>
+    <div className="min-h-screen bg-gray-900 text-white p-6">
+      <h1 className="text-3xl font-bold mb-6">Creator Studio - Debug</h1>
 
       <textarea
-        className="w-full bg-gray-800 border border-gray-600 rounded-xl p-4 h-24 mb-4"
+        className="w-full bg-gray-800 border border-gray-600 rounded-xl p-4 h-28 mb-4"
         placeholder="Describe your fractal..."
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
@@ -81,18 +80,18 @@ function StudioPageInner() {
 
       {/* Debug Info */}
       {debugInfo && (
-        <div className="bg-black p-4 rounded-xl text-xs text-gray-300 mb-6 overflow-auto max-h-40">
+        <div className="bg-black p-4 rounded-xl text-xs text-gray-300 mb-6 whitespace-pre-wrap">
           {debugInfo}
         </div>
       )}
 
-      {/* Image Preview */}
+      {/* Image Display */}
       <div className="relative rounded-3xl overflow-hidden border border-gray-700 bg-black aspect-video">
         {generatedImage ? (
           <img 
             src={generatedImage} 
             alt="Generated Fractal" 
-            className="w-full h-full object-cover"
+            className="w-full h-full object-contain"
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-gray-500">
@@ -109,7 +108,7 @@ function StudioPageInner() {
             link.download = "fractal.png";
             link.click();
           }}
-          className="mt-4 w-full py-3 bg-green-600 rounded-xl font-bold"
+          className="mt-6 w-full py-3 bg-green-600 rounded-xl font-bold"
         >
           Download Image
         </button>
