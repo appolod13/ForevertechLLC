@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 import json
 import random
 import glob
+from base64 import b64encode
 
 try:
     from PIL import Image
@@ -259,9 +260,13 @@ def interference_hue(phase: float) -> float:
 
 class MockTrainer:
     device = "mock_cpu"
-    def generate(self, pipe, prompt, strength, steps, seed):
+    def brain_generate(self, prompt, seed, steps, mode, randomize, realism):
         if Image is None: raise RuntimeError("pillow_missing")
-        return Image.new("RGB", (512, 512), (160, 180, 220))
+        return Image.new("RGB", (512, 512), (160, 180, 220)), {"mode": mode, "seed": seed}
+
+    def brain_img2img(self, init_image, prompt, negative_prompt, seed, steps, strength, guidance_scale, size, realism):
+        if Image is None: raise RuntimeError("pillow_missing")
+        return Image.new("RGB", (size, size), (160, 180, 220)), {"mode": "img2img", "seed": seed}
 
 class MockProcessor:
     async def process_uploads(self, file_paths): return []
@@ -298,6 +303,14 @@ class GenerateRequest(BaseModel):
     center_x: float = -0.15
     center_y: float = 0.0
 
+class BrainRequest(BaseModel):
+    prompt: Optional[str] = None
+    steps: int = 8
+    seed: int = -1
+    mode: Literal["procedural", "diffusion", "auto"] = "procedural"
+    randomize: bool = True
+    realism: Literal["none", "photo"] = "none"
+
 @app.post("/generate")
 async def generate_image(payload: GenerateRequest):
     REQUESTS.labels(endpoint="/generate").inc()
@@ -317,24 +330,206 @@ async def generate_image(payload: GenerateRequest):
         rgb = procedural_rgb(width, height, payload.prompt, seed)
         provider = "fusion-service-procedural"
 
-    os.makedirs("uploads", exist_ok=True)
-    filename = f"gen_{job_id}_{width}x{height}.png"
-    out_path = os.path.join("uploads", filename)
-    write_png_rgb(out_path, width, height, rgb)
-
-    base_url = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000").rstrip("/")
-    image_url = f"{base_url}/uploads/{filename}"
+    image_base64 = b64encode(rgb).decode('utf-8')
+    data_url = f"data:image/png;base64,{image_base64}"
 
     latency = time.time() - start_time
     LATENCY.labels(device="mock_cpu").observe(latency)
 
     return {
         "success": True,
-        "imageUrl": image_url,
-        "image_url": image_url,
+        "image_base64": image_base64,
+        "image_data_url": data_url,
+        "imageUrl": data_url,
+        "image_url": data_url,
         "meta": {"provider": provider, "latency": latency, "seed": seed, "width": width, "height": height},
         "fractal_dimension": {"value": round(random.uniform(1.4, 1.7), 2), "method": "estimate", "label": "Hybrid L-System Estimate"}
     }
+
+@app.post("/brain/roulette")
+async def brain_roulette(payload: Dict[str, Any] = Body(default={})):
+
+    REQUESTS.labels(endpoint="/brain/roulette").inc()
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {"status": "roulette_start", "progress": 0, "result": None, "error": None}
+    start_time = time.time()
+
+    try:
+        size = int(payload.get("size") or 512)
+        size = max(64, min(1024, size))
+        size, _ = _cap_render_dims(size, size)
+
+        prompt = str(payload.get("prompt") or "quantum fusion roulette julia mandelbrot art")
+        provided_seed = payload.get("seed")
+        seed = int(provided_seed) if isinstance(provided_seed, int) and provided_seed != -1 else random.randint(0, 2**31 - 1)
+
+        jobs[job_id]["status"] = "roulette_generate"
+        jobs[job_id]["progress"] = 0.55
+
+        try:
+            rgb = fractal_fusion_rgb(size, size, prompt, seed)
+            provider = "fusion-julia-mandelbrot-3d"
+        except Exception as e:
+            print(f"[fusion] roulette fractal failed, falling back to procedural: {e}")
+            rgb = procedural_rgb(size, size, prompt, seed)
+            provider = "fusion-service-procedural"
+
+        jobs[job_id]["status"] = "roulette_render"
+        jobs[job_id]["progress"] = 0.85
+
+        image_base64 = b64encode(rgb).decode('utf-8')
+        data_url = f"data:image/png;base64,{image_base64}"
+
+        meta = {"mode": "roulette", "provider": provider, "seed": seed, "prompt": prompt, "size": size}
+
+        jobs[job_id]["status"] = "done"
+        jobs[job_id]["progress"] = 1.0
+        jobs[job_id]["result"] = data_url
+        jobs[job_id]["meta"] = meta
+
+        latency = time.time() - start_time
+        LATENCY.labels(device=trainer.device).observe(latency)
+
+        headers = {
+            "X-Job-Id": job_id,
+            "X-Image-Url": data_url,
+            "X-Seed": str(seed),
+            "X-Mode": "roulette",
+            "X-Prompt": prompt,
+            "X-Provider": provider,
+        }
+
+        buf = BytesIO(rgb)
+        return Response(content=buf.getvalue(), media_type="image/png", headers=headers)
+
+    except Exception as e:
+        jobs[job_id]["status"] = "error"
+        jobs[job_id]["error"] = str(e)
+        raise
+
+@app.post("/brain")
+async def brain_generate(payload: BrainRequest):
+    REQUESTS.labels(endpoint="/brain").inc()
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {"status": "brain_start", "progress": 0, "result": None, "error": None}
+    start_time = time.time()
+
+    try:
+        jobs[job_id]["status"] = "brain_generate"
+        jobs[job_id]["progress"] = 0.3
+
+        design, meta = trainer.brain_generate(
+            prompt=payload.prompt,
+            seed=payload.seed,
+            steps=payload.steps,
+            mode=payload.mode,
+            randomize=payload.randomize,
+            realism=payload.realism,
+        )
+
+        jobs[job_id]["status"] = "brain_mockup"
+        jobs[job_id]["progress"] = 0.7
+        mockup = processor.create_tshirt_mockup(design)
+
+        buf = BytesIO()
+        mockup.save(buf, format="PNG")
+        image_base64 = b64encode(buf.getvalue()).decode('utf-8')
+        data_url = f"data:image/png;base64,{image_base64}"
+
+        jobs[job_id]["status"] = "done"
+        jobs[job_id]["progress"] = 1.0
+        jobs[job_id]["result"] = data_url
+        jobs[job_id]["meta"] = meta
+
+        latency = time.time() - start_time
+        LATENCY.labels(device=trainer.device).observe(latency)
+
+        headers = {
+            "X-Job-Id": job_id,
+            "X-Image-Url": data_url,
+            "X-Emotion": str(meta.get("emotion", "")),
+            "X-Seed": str(meta.get("seed", "")),
+        }
+
+        return Response(content=buf.getvalue(), media_type="image/png", headers=headers)
+
+    except Exception as e:
+        jobs[job_id]["status"] = "error"
+        jobs[job_id]["error"] = str(e)
+        raise
+
+@app.post("/brain/img2img")
+async def brain_img2img(
+    prompt: str = Form(...),
+    negative_prompt: str = Form(""),
+    file: UploadFile = File(...),
+    seed: int = Form(-1),
+    steps: int = Form(12),
+    strength: float = Form(0.55),
+    guidance_scale: float = Form(7.0),
+    size: int = Form(512),
+    realism: Literal["none", "photo"] = Form("photo"),
+):
+    REQUESTS.labels(endpoint="/brain/img2img").inc()
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {"status": "img2img_start", "progress": 0, "result": None, "error": None}
+    start_time = time.time()
+
+    try:
+        jobs[job_id]["status"] = "img2img_decode"
+        jobs[job_id]["progress"] = 0.15
+
+        raw = await file.read()
+        try:
+            init_image = Image.open(BytesIO(raw)).convert("RGB")
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid image upload")
+
+        jobs[job_id]["status"] = "img2img_generate"
+        jobs[job_id]["progress"] = 0.55
+
+        design, meta = trainer.brain_img2img(
+            init_image=init_image,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            seed=seed,
+            steps=steps,
+            strength=strength,
+            guidance_scale=guidance_scale,
+            size=size,
+            realism=realism,
+        )
+
+        jobs[job_id]["status"] = "img2img_mockup"
+        jobs[job_id]["progress"] = 0.85
+        mockup = processor.create_tshirt_mockup(design)
+
+        buf = BytesIO()
+        mockup.save(buf, format="PNG")
+        image_base64 = b64encode(buf.getvalue()).decode('utf-8')
+        data_url = f"data:image/png;base64,{image_base64}"
+
+        jobs[job_id]["status"] = "done"
+        jobs[job_id]["progress"] = 1.0
+        jobs[job_id]["result"] = data_url
+        jobs[job_id]["meta"] = meta
+
+        latency = time.time() - start_time
+        LATENCY.labels(device=trainer.device).observe(latency)
+
+        headers = {
+            "X-Job-Id": job_id,
+            "X-Image-Url": data_url,
+            "X-Seed": str(meta.get("seed", "")),
+            "X-Mode": str(meta.get("mode", "")),
+        }
+
+        return Response(content=buf.getvalue(), media_type="image/png", headers=headers)
+
+    except Exception as e:
+        jobs[job_id]["status"] = "error"
+        jobs[job_id]["error"] = str(e)
+        raise
 
 @app.get("/health")
 async def health():
