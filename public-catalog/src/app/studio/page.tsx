@@ -50,17 +50,22 @@ function StudioPageInner() {
         throw new Error(data.error || 'Generation failed');
       }
 
-      // Support Base64 from the new backend
+      // === VERY ROBUST BASE64 HANDLING ===
       let imageUrl = '';
 
-      if (data.image_data_url) imageUrl = data.image_data_url;
-      else if (data.image_base64) imageUrl = `data:image/png;base64,${data.image_base64}`;
-      else if (data.imageUrl) imageUrl = data.imageUrl;
-      else if (data.image_url) imageUrl = data.image_url;
+      if (data.image_data_url && typeof data.image_data_url === 'string') {
+        imageUrl = data.image_data_url;
+      } else if (data.image_base64 && typeof data.image_base64 === 'string') {
+        imageUrl = `data:image/png;base64,${data.image_base64}`;
+      } else if (data.imageUrl && typeof data.imageUrl === 'string') {
+        imageUrl = data.imageUrl;
+      } else if (data.image_url && typeof data.image_url === 'string') {
+        imageUrl = data.image_url;
+      }
 
       if (!imageUrl) {
-        console.error("Full API response:", data);
-        throw new Error('No image data returned from server');
+        console.error("Full API response received:", data);
+        throw new Error('No valid image data returned from server');
       }
 
       setGeneratedImage(imageUrl);
@@ -75,7 +80,7 @@ function StudioPageInner() {
 
     } catch (error: any) {
       console.error("Generation error:", error);
-      alert(error.message || 'Generation failed. Please check Render logs.');
+      alert(error.message || 'Generation failed. Check console for details.');
     } finally {
       setIsGenerating(false);
     }
@@ -88,7 +93,7 @@ function StudioPageInner() {
         <h1 className="text-4xl font-bold mb-8">Creator Studio</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column - Generator */}
+          {/* Left Column */}
           <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-6 rounded-3xl border border-gray-700">
             <div className="flex items-center gap-3 mb-6">
               <Sparkles className="text-purple-400 w-6 h-6" />
@@ -97,7 +102,7 @@ function StudioPageInner() {
 
             <textarea
               className="w-full bg-gray-900 border border-gray-600 rounded-2xl p-4 h-32 mb-4 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="Describe your quantum fractal in detail..."
+              placeholder="Describe your quantum fractal..."
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
             />
@@ -146,22 +151,11 @@ function StudioPageInner() {
               <div className="relative group rounded-3xl overflow-hidden border border-gray-800 bg-black shadow-[0_0_80px_rgba(168,85,247,0.35)]">
                 <div className="aspect-video relative bg-zinc-950">
                   {generatedImage ? (
-                    <>
-                      <img
-                        src={generatedImage}
-                        alt="Your Generated Fractal"
-                        className="absolute inset-0 w-full h-full object-cover transition-all duration-700 group-hover:scale-[1.015]"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-br from-purple-500/25 via-transparent to-cyan-400/25 pointer-events-none" />
-                      <div className="absolute inset-0 bg-[radial-gradient(#a855f720_1px,transparent_1px)] bg-[length:3px_3px] pointer-events-none" />
-
-                      {generationMetadata?.quantum_provenance && (
-                        <div className="absolute top-4 right-4 flex items-center gap-2 bg-black/70 backdrop-blur px-3 py-1.5 rounded-full text-xs border border-cyan-500/40">
-                          <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse" />
-                          <span className="text-cyan-400 font-medium tracking-wider">QUANTUM SEEDED</span>
-                        </div>
-                      )}
-                    </>
+                    <img
+                      src={generatedImage}
+                      alt="Your Generated Fractal"
+                      className="absolute inset-0 w-full h-full object-cover transition-all duration-700 group-hover:scale-[1.015]"
+                    />
                   ) : (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-8">
                       <div className="text-7xl mb-4 opacity-30">✦</div>
