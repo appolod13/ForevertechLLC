@@ -50,12 +50,20 @@ function StudioPageInner() {
         throw new Error(data.error || 'Generation failed');
       }
 
-      // Clean extraction - works with new backend returning full URLs
-      const imageUrl = data.imageUrl || data.image_url || data.data?.imageUrl || data.data?.image_url || '';
+      // Support Base64 from the new backend
+      let imageUrl = '';
+
+      if (data.image_data_url) {
+        imageUrl = data.image_data_url;
+      } else if (data.image_base64) {
+        imageUrl = `data:image/png;base64,${data.image_base64}`;
+      } else if (data.imageUrl || data.image_url) {
+        imageUrl = data.imageUrl || data.image_url;
+      }
 
       if (!imageUrl) {
         console.error("Full API response:", data);
-        throw new Error('No image URL returned from server');
+        throw new Error('No image data returned');
       }
 
       setGeneratedImage(imageUrl);
@@ -70,7 +78,7 @@ function StudioPageInner() {
 
     } catch (error: any) {
       console.error("Generation error:", error);
-      alert(error.message || 'Generation failed. Please try again.');
+      alert(error.message || 'Generation failed');
     } finally {
       setIsGenerating(false);
     }
@@ -83,7 +91,6 @@ function StudioPageInner() {
         <h1 className="text-4xl font-bold mb-8">Creator Studio</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column - Generator */}
           <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-6 rounded-3xl border border-gray-700">
             <div className="flex items-center gap-3 mb-6">
               <Sparkles className="text-purple-400 w-6 h-6" />
@@ -92,28 +99,18 @@ function StudioPageInner() {
 
             <textarea
               className="w-full bg-gray-900 border border-gray-600 rounded-2xl p-4 h-32 mb-4 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="Describe your quantum fractal in detail..."
+              placeholder="Describe your quantum fractal..."
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
             />
 
             <div className="flex flex-wrap gap-4 mb-6 text-sm">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={quantumMode}
-                  onChange={(e) => setQuantumMode(e.target.checked)}
-                  className="accent-purple-500"
-                />
+                <input type="checkbox" checked={quantumMode} onChange={(e) => setQuantumMode(e.target.checked)} className="accent-purple-500" />
                 <span>Quantum Mode (IBM)</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={ipfsEnabled}
-                  onChange={(e) => setIpfsEnabled(e.target.checked)}
-                  className="accent-green-500"
-                />
+                <input type="checkbox" checked={ipfsEnabled} onChange={(e) => setIpfsEnabled(e.target.checked)} className="accent-green-500" />
                 <span>Public Link Upload</span>
               </label>
             </div>
@@ -123,16 +120,12 @@ function StudioPageInner() {
               disabled={isGenerating || !prompt}
               className="w-full py-4 rounded-2xl font-bold text-lg bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 transition-all active:scale-[0.985]"
             >
-              {isGenerating ? 'Generating your fractal...' : 'Generate Asset & Content'}
+              {isGenerating ? 'Generating...' : 'Generate Asset & Content'}
             </button>
 
-            <FusionAI 
-              prompt={prompt} 
-              baseImageUrl={generatedImage} 
-              onImageGenerated={setGeneratedImage} 
-            />
+            <FusionAI prompt={prompt} baseImageUrl={generatedImage} onImageGenerated={setGeneratedImage} />
 
-            {/* === LATEST BUILD PREVIEW (Improved) === */}
+            {/* Latest Build Preview */}
             <div className="mt-8 border-t border-gray-700 pt-8">
               <div className="flex justify-between items-start mb-4">
                 <div>
@@ -152,26 +145,14 @@ function StudioPageInner() {
                 )}
               </div>
 
-              {/* Image Card with Strong Neon Glow */}
               <div className="relative group rounded-3xl overflow-hidden border border-gray-800 bg-black shadow-[0_0_80px_rgba(168,85,247,0.35)]">
                 <div className="aspect-video relative bg-zinc-950">
                   {generatedImage ? (
-                    <>
-                      <img
-                        src={generatedImage}
-                        alt="Your Generated Fractal"
-                        className="absolute inset-0 w-full h-full object-cover transition-all duration-700 group-hover:scale-[1.015]"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-br from-purple-500/25 via-transparent to-cyan-400/25 pointer-events-none" />
-                      <div className="absolute inset-0 bg-[radial-gradient(#a855f720_1px,transparent_1px)] bg-[length:3px_3px] pointer-events-none" />
-
-                      {generationMetadata?.quantum_provenance && (
-                        <div className="absolute top-4 right-4 flex items-center gap-2 bg-black/70 backdrop-blur px-3 py-1.5 rounded-full text-xs border border-cyan-500/40">
-                          <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse" />
-                          <span className="text-cyan-400 font-medium tracking-wider">QUANTUM SEEDED</span>
-                        </div>
-                      )}
-                    </>
+                    <img
+                      src={generatedImage}
+                      alt="Your Generated Fractal"
+                      className="absolute inset-0 w-full h-full object-cover transition-all duration-700 group-hover:scale-[1.015]"
+                    />
                   ) : (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-8">
                       <div className="text-7xl mb-4 opacity-30">✦</div>
@@ -179,24 +160,19 @@ function StudioPageInner() {
                     </div>
                   )}
 
-                  {/* Improved Loading State */}
                   {isGenerating && (
                     <div className="absolute inset-0 bg-black/70 backdrop-blur flex items-center justify-center z-10">
                       <div className="text-center">
                         <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                         <p className="text-purple-400 text-lg">Crafting your quantum fractal...</p>
-                        <p className="text-xs text-gray-400 mt-1">This can take 10–30 seconds</p>
                       </div>
                     </div>
                   )}
                 </div>
 
-                {/* Bottom Bar + Download Button */}
                 {generatedImage && (
                   <div className="bg-zinc-950/95 px-5 py-3 flex items-center justify-between text-sm border-t border-gray-800">
-                    <div className="text-gray-200 truncate pr-4 font-medium">
-                      {prompt || "Quantum Fractal"}
-                    </div>
+                    <div className="text-gray-200 truncate pr-4 font-medium">{prompt || "Quantum Fractal"}</div>
                     <button
                       onClick={() => {
                         const link = document.createElement("a");
@@ -213,32 +189,13 @@ function StudioPageInner() {
                   </div>
                 )}
               </div>
-
-              {/* Action Buttons */}
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Link
-                  href={`/customize?imageUrl=${encodeURIComponent(latestDropImageUrl || generatedImage || '')}${prompt ? `&prompt=${encodeURIComponent(prompt)}` : ''}`}
-                  className="flex h-14 items-center justify-center rounded-2xl bg-white text-lg font-bold text-black active:scale-[0.985] transition-all"
-                >
-                  Customize Your Gear →
-                </Link>
-
-                <button
-                  onClick={() => prompt && generateImage()}
-                  disabled={isGenerating || !prompt}
-                  className="flex h-14 items-center justify-center rounded-2xl border border-gray-700 text-base font-semibold active:scale-[0.985] transition-all disabled:opacity-60"
-                >
-                  Regenerate
-                </button>
-              </div>
             </div>
           </div>
 
-          {/* Right Column */}
           <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-6 rounded-3xl border border-gray-700">
             <h2 className="text-2xl font-bold mb-6">Multi-Channel Poster</h2>
             <div className="text-center text-gray-400 py-12">
-              Your posting tools and calendar will appear here
+              Your posting tools will appear here
             </div>
           </div>
         </div>
