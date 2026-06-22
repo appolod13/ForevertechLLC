@@ -44,40 +44,60 @@ function StudioPageInner() {
         }),
       });
 
-      const data = await res.json();
+      const rawData = await res.json();
 
-      if (!res.ok || data.success === false) {
-        throw new Error(data.error || 'Generation failed');
+      // === DEBUG: Log full response ===
+      console.log("=== FULL API RESPONSE ===", rawData);
+
+      if (!res.ok || rawData.success === false) {
+        throw new Error(rawData.error || 'Generation failed');
       }
 
-      // Robust image URL extraction
+      // Try many possible paths for the image URL
       let imageUrl = '';
 
-      if (typeof data.image_url === 'string') imageUrl = data.image_url;
-      else if (typeof data.imageUrl === 'string') imageUrl = data.imageUrl;
-      else if (data.data && typeof data.data.image_url === 'string') imageUrl = data.data.image_url;
-      else if (data.data && typeof data.data.imageUrl === 'string') imageUrl = data.data.imageUrl;
-      else if (data.items && Array.isArray(data.items) && data.items[0]) {
-        imageUrl = data.items[0].image_url || data.items[0].imageUrl || '';
+      const possiblePaths = [
+        rawData.image_url,
+        rawData.imageUrl,
+        rawData.url,
+        rawData.data?.image_url,
+        rawData.data?.imageUrl,
+        rawData.data?.url,
+        rawData.data?.data?.image_url,
+        rawData.data?.data?.imageUrl,
+        rawData.result?.image_url,
+        rawData.result?.imageUrl,
+        rawData.items?.[0]?.image_url,
+        rawData.items?.[0]?.imageUrl,
+        rawData.output?.image_url,
+        rawData.output?.imageUrl,
+      ];
+
+      for (const path of possiblePaths) {
+        if (typeof path === 'string' && path.length > 10) {
+          imageUrl = path;
+          break;
+        }
       }
 
       if (!imageUrl) {
-        console.error("Full API response:", data);
-        throw new Error('No image URL found in response');
+        alert("No image URL found. Response keys: " + Object.keys(rawData).join(", "));
+        console.error("Full response for debugging:", rawData);
+        throw new Error('Could not find image URL in API response');
       }
 
       setGeneratedImage(imageUrl);
       setLatestDropImageUrl(imageUrl);
 
       setGenerationMetadata({
-        fractal_dimension: data.fractal_dimension,
-        quantum_provenance: data.quantum_provenance,
-        quantumSeed: data.quantumSeed,
+        fractal_dimension: rawData.fractal_dimension,
+        quantum_provenance: rawData.quantum_provenance,
+        quantumSeed: rawData.quantumSeed,
       });
 
     } catch (error: any) {
-      console.error("Generation error:", error);
-      alert(error.message || 'Something went wrong during generation');
+      console.error("Generation Error:", error);
+      alert(error.message || 'Generation failed');
     } finally {
       setIsGenerating(false);
     }
