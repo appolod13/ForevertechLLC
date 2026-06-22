@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Header } from '../../components/Header';
@@ -21,6 +21,8 @@ function StudioPageInner() {
   const [generatedImage, setGeneratedImage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [debugInfo, setDebugInfo] = useState('');
+  const [imageKey, setImageKey] = useState(0);
+  const imgRef = useRef<HTMLImageElement>(null);
 
   const generateImage = async () => {
     if (!prompt) return;
@@ -48,6 +50,7 @@ function StudioPageInner() {
 
       if (imageUrl) {
         setGeneratedImage(imageUrl);
+        setImageKey(Date.now()); // Force re-render
         setDebugInfo(`✅ Image set! Length: ${imageUrl.length}`);
       } else {
         setDebugInfo(`❌ No image data. Response: ${JSON.stringify(data).slice(0, 300)}`);
@@ -58,6 +61,13 @@ function StudioPageInner() {
       setIsGenerating(false);
     }
   };
+
+  // Force image reload when URL changes
+  useEffect(() => {
+    if (generatedImage && imgRef.current) {
+      imgRef.current.src = generatedImage;
+    }
+  }, [generatedImage]);
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
@@ -84,10 +94,12 @@ function StudioPageInner() {
         </div>
       )}
 
-      {/* FORCE IMAGE DISPLAY */}
+      {/* Optimized Image Display */}
       <div className="relative rounded-3xl overflow-hidden border border-gray-700 bg-black aspect-video">
         {generatedImage ? (
           <img 
+            ref={imgRef}
+            key={imageKey}
             src={generatedImage} 
             alt="Generated Fractal" 
             className="w-full h-full object-contain"
