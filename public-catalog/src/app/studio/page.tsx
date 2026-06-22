@@ -31,73 +31,70 @@ function StudioPageInner() {
 
     setIsGenerating(true);
     setGeneratedImage('');
+    setGenerationMetadata(null);
 
     try {
-      const res = await fetch('/api/generate/image', {
+      const endpoint = '/api/generate/image';
+      const payload = {
+        prompt,
+        negative_prompt: "cartoon, anime, low poly, blurry, noisy, overexposed, washed out, flat lighting, distorted buildings, crooked horizons, text, watermark, logo, people, vehicles in close-up, messy composition, excessive neon everywhere, cyberpunk street scene",
+        width: 1024,
+        height: 1024,
+        quantum_mode: quantumMode,
+        ipfs_upload: ipfsEnabled,
+        use_quantum_seed: true
+      };
+
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt,
-          quantum_mode: quantumMode,
-          ipfs_upload: ipfsEnabled,
-          use_quantum_seed: true,
-        }),
+        body: JSON.stringify(payload)
       });
 
-      const rawData = await res.json();
+      const raw: any = await res.json();
 
-      // === DEBUG: Log full response ===
-      console.log("=== FULL API RESPONSE ===", rawData);
-
-      if (!res.ok || rawData.success === false) {
-        throw new Error(rawData.error || 'Generation failed');
+      if (!res.ok || raw.success !== true) {
+        throw new Error(raw.error || raw.details?.message || 'Generation failed');
       }
 
-      // Try many possible paths for the image URL
+      // === ORIGINAL ROBUST IMAGE URL EXTRACTION (from your working version) ===
       let imageUrl = '';
 
-      const possiblePaths = [
-        rawData.image_url,
-        rawData.imageUrl,
-        rawData.url,
-        rawData.data?.image_url,
-        rawData.data?.imageUrl,
-        rawData.data?.url,
-        rawData.data?.data?.image_url,
-        rawData.data?.data?.imageUrl,
-        rawData.result?.image_url,
-        rawData.result?.imageUrl,
-        rawData.items?.[0]?.image_url,
-        rawData.items?.[0]?.imageUrl,
-        rawData.output?.image_url,
-        rawData.output?.imageUrl,
-      ];
-
-      for (const path of possiblePaths) {
-        if (typeof path === 'string' && path.length > 10) {
-          imageUrl = path;
-          break;
+      if (typeof raw.image_url === 'string') imageUrl = raw.image_url;
+      else if (typeof raw.imageUrl === 'string') imageUrl = raw.imageUrl;
+      else if (raw.data && typeof raw.data === 'object') {
+        const d = raw.data;
+        if (typeof d.image_url === 'string') imageUrl = d.image_url;
+        else if (typeof d.imageUrl === 'string') imageUrl = d.imageUrl;
+        else if (d.data && typeof d.data === 'object') {
+          if (typeof d.data.image_url === 'string') imageUrl = d.data.image_url;
+          else if (typeof d.data.imageUrl === 'string') imageUrl = d.data.imageUrl;
         }
       }
 
+      if (!imageUrl && raw.items && Array.isArray(raw.items) && raw.items.length > 0) {
+        imageUrl = raw.items[0].image_url || raw.items[0].imageUrl || '';
+      }
+
       if (!imageUrl) {
-        alert("No image URL found. Response keys: " + Object.keys(rawData).join(", "));
-        console.error("Full response for debugging:", rawData);
-        throw new Error('Could not find image URL in API response');
+        console.error("Could not extract image URL. Full response:", raw);
+        throw new Error('Generation succeeded but no image URL was found');
       }
 
       setGeneratedImage(imageUrl);
       setLatestDropImageUrl(imageUrl);
 
+      // Save metadata
       setGenerationMetadata({
-        fractal_dimension: rawData.fractal_dimension,
-        quantum_provenance: rawData.quantum_provenance,
-        quantumSeed: rawData.quantumSeed,
+        fractal_dimension: raw.fractal_dimension,
+        quantum_provenance: raw.quantum_provenance,
+        quantumSeed: raw.quantumSeed,
+        meta: raw.meta || raw.data?.meta
       });
 
-    } catch (error: any) {
-      console.error("Generation Error:", error);
-      alert(error.message || 'Generation failed');
+    } catch (e: any) {
+      console.error(e);
+      alert(e.message || 'Generation failed');
     } finally {
       setIsGenerating(false);
     }
@@ -106,7 +103,6 @@ function StudioPageInner() {
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <Header />
-
       <main className="max-w-6xl mx-auto p-4 sm:p-6 md:p-8">
         <h1 className="text-4xl font-bold mb-8">Creator Studio</h1>
 
@@ -120,29 +116,18 @@ function StudioPageInner() {
 
             <textarea
               className="w-full bg-gray-900 border border-gray-600 rounded-2xl p-4 h-32 mb-4 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="Describe your quantum fractal in detail..."
+              placeholder="Describe your quantum fractal..."
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
             />
 
             <div className="flex flex-wrap gap-4 mb-6 text-sm">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={quantumMode}
-                  onChange={(e) => setQuantumMode(e.target.checked)}
-                  className="accent-purple-500"
-                />
+                <input type="checkbox" checked={quantumMode} onChange={(e) => setQuantumMode(e.target.checked)} className="accent-purple-500" />
                 <span>Quantum Mode (IBM)</span>
               </label>
-
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={ipfsEnabled}
-                  onChange={(e) => setIpfsEnabled(e.target.checked)}
-                  className="accent-green-500"
-                />
+                <input type="checkbox" checked={ipfsEnabled} onChange={(e) => setIpfsEnabled(e.target.checked)} className="accent-green-500" />
                 <span>Public Link Upload</span>
               </label>
             </div>
@@ -152,16 +137,12 @@ function StudioPageInner() {
               disabled={isGenerating || !prompt}
               className="w-full py-4 rounded-2xl font-bold text-lg bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 transition-all active:scale-[0.985]"
             >
-              {isGenerating ? 'Generating your fractal...' : 'Generate Asset & Content'}
+              {isGenerating ? 'Generating...' : 'Generate Asset & Content'}
             </button>
 
-            <FusionAI 
-              prompt={prompt} 
-              baseImageUrl={generatedImage} 
-              onImageGenerated={setGeneratedImage} 
-            />
+            <FusionAI prompt={prompt} baseImageUrl={generatedImage} onImageGenerated={setGeneratedImage} />
 
-            {/* === IMPROVED LATEST BUILD PREVIEW === */}
+            {/* === LATEST BUILD PREVIEW (Improved) === */}
             <div className="mt-8 border-t border-gray-700 pt-8">
               <div className="flex justify-between items-start mb-4">
                 <div>
@@ -181,16 +162,11 @@ function StudioPageInner() {
                 )}
               </div>
 
-              {/* Image Card with Strong Neon Glow */}
               <div className="relative group rounded-3xl overflow-hidden border border-gray-800 bg-black shadow-[0_0_80px_rgba(168,85,247,0.35)]">
                 <div className="aspect-video relative bg-zinc-950">
                   {generatedImage ? (
                     <>
-                      <img
-                        src={generatedImage}
-                        alt="Your Generated Fractal"
-                        className="absolute inset-0 w-full h-full object-cover transition-all duration-700 group-hover:scale-[1.015]"
-                      />
+                      <img src={generatedImage} alt="Your Generated Fractal" className="absolute inset-0 w-full h-full object-cover transition-all duration-700 group-hover:scale-[1.015]" />
                       <div className="absolute inset-0 bg-gradient-to-br from-purple-500/25 via-transparent to-cyan-400/25 pointer-events-none" />
                       <div className="absolute inset-0 bg-[radial-gradient(#a855f720_1px,transparent_1px)] bg-[length:3px_3px] pointer-events-none" />
 
@@ -220,9 +196,7 @@ function StudioPageInner() {
 
                 {generatedImage && (
                   <div className="bg-zinc-950/95 px-5 py-3 flex items-center justify-between text-sm border-t border-gray-800">
-                    <div className="text-gray-200 truncate pr-4 font-medium">
-                      {prompt || "Quantum Fractal"}
-                    </div>
+                    <div className="text-gray-200 truncate pr-4 font-medium">{prompt || "Quantum Fractal"}</div>
                     <button
                       onClick={() => {
                         const link = document.createElement("a");
