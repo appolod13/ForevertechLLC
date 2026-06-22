@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Header } from '../../components/Header';
@@ -27,7 +27,7 @@ function StudioPageInner() {
 
     setIsGenerating(true);
     setGeneratedImage('');
-    setDebugInfo('Starting...');
+    setDebugInfo('Starting generation...');
 
     try {
       const res = await fetch('/api/generate/image', {
@@ -50,7 +50,7 @@ function StudioPageInner() {
         setGeneratedImage(imageUrl);
         setDebugInfo(`✅ Image set! Length: ${imageUrl.length}`);
       } else {
-        setDebugInfo(`❌ No image URL. Full response: ${JSON.stringify(data).slice(0, 300)}`);
+        setDebugInfo(`❌ No image data. Full response: ${JSON.stringify(data).slice(0, 400)}`);
       }
     } catch (error: any) {
       setDebugInfo(`Error: ${error.message}`);
@@ -78,24 +78,26 @@ function StudioPageInner() {
         {isGenerating ? 'Generating...' : 'Generate Fractal'}
       </button>
 
-      {/* Debug Info */}
       {debugInfo && (
         <div className="bg-black p-4 rounded-xl text-xs text-gray-300 mb-6 whitespace-pre-wrap">
           {debugInfo}
         </div>
       )}
 
-      {/* Image Display */}
+      {/* FORCE IMAGE DISPLAY */}
       <div className="relative rounded-3xl overflow-hidden border border-gray-700 bg-black aspect-video">
         {generatedImage ? (
           <img 
+            key={generatedImage}   // Force re-render
             src={generatedImage} 
             alt="Generated Fractal" 
             className="w-full h-full object-contain"
+            onLoad={() => setDebugInfo('Image loaded successfully in browser')}
+            onError={() => setDebugInfo('Image failed to load in browser')}
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-            Image will appear here
+            Image will appear here after generation
           </div>
         )}
       </div>
@@ -105,7 +107,7 @@ function StudioPageInner() {
           onClick={() => {
             const link = document.createElement("a");
             link.href = generatedImage;
-            link.download = "fractal.png";
+            link.download = "quantum-fractal.png";
             link.click();
           }}
           className="mt-6 w-full py-3 bg-green-600 rounded-xl font-bold"
