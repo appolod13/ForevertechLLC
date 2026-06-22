@@ -21,6 +21,7 @@ function StudioPageInner() {
   const [generatedImage, setGeneratedImage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [debugInfo, setDebugInfo] = useState('');
+  const [imageKey, setImageKey] = useState(0); // Force re-render
 
   const generateImage = async () => {
     if (!prompt) return;
@@ -48,9 +49,10 @@ function StudioPageInner() {
 
       if (imageUrl) {
         setGeneratedImage(imageUrl);
+        setImageKey(Date.now()); // Force re-render
         setDebugInfo(`✅ Image set! Length: ${imageUrl.length}`);
       } else {
-        setDebugInfo(`❌ No image data. Full response: ${JSON.stringify(data).slice(0, 400)}`);
+        setDebugInfo(`❌ No image data. Response: ${JSON.stringify(data).slice(0, 300)}`);
       }
     } catch (error: any) {
       setDebugInfo(`Error: ${error.message}`);
@@ -84,20 +86,20 @@ function StudioPageInner() {
         </div>
       )}
 
-      {/* FORCE IMAGE DISPLAY */}
+      {/* FORCE IMAGE RENDER */}
       <div className="relative rounded-3xl overflow-hidden border border-gray-700 bg-black aspect-video">
         {generatedImage ? (
           <img 
-            key={generatedImage}   // Force re-render
+            key={imageKey} 
             src={generatedImage} 
             alt="Generated Fractal" 
             className="w-full h-full object-contain"
-            onLoad={() => setDebugInfo('Image loaded successfully in browser')}
-            onError={() => setDebugInfo('Image failed to load in browser')}
+            onLoad={() => setDebugInfo('✅ Image loaded successfully in browser')}
+            onError={() => setDebugInfo('❌ Image failed to load')}
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-            Image will appear here after generation
+            Image will appear here
           </div>
         )}
       </div>
