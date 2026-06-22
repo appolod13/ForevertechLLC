@@ -1,12 +1,6 @@
-import os
-import time
-import uuid
-import random
-from io import BytesIO
-from base64 import b64encode
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from starlette.responses import RedirectResponse
 import random
 from base64 import b64encode
@@ -34,7 +28,7 @@ def fractal_fusion_rgb(width: int, height: int, prompt: str, seed: int) -> bytes
         for x in range(width):
             i = (y * width + x) * 3
             val = math.sin((x + seed) * 0.02) * math.cos((y + seed) * 0.02)
-            buf[i]     = int((val + 1) * 127) % 256
+            buf[i] = int((val + 1) * 127) % 256
             buf[i + 1] = int((val * 1.3 + 1) * 127) % 256
             buf[i + 2] = int((val * 0.7 + 1) * 127) % 256
     return bytes(buf)
@@ -57,7 +51,7 @@ async def health():
 @app.post("/generate")
 async def generate_image(payload: GenerateRequest):
     seed = payload.seed if payload.seed != -1 else abs(hash(payload.prompt)) % (2**31)
-    
+
     try:
         rgb = fractal_fusion_rgb(payload.width, payload.height, payload.prompt, seed)
     except Exception:
@@ -83,4 +77,4 @@ async def generate_image(payload: GenerateRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
