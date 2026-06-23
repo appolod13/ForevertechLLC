@@ -26,7 +26,7 @@ function StudioPageInner() {
     if (!prompt) return;
 
     setIsGenerating(true);
-    setGeneratedImage(''); // Clear any old image
+    setGeneratedImage(''); // Clear old image
 
     try {
       const res = await fetch('/api/generate/image', {
@@ -41,7 +41,7 @@ function StudioPageInner() {
         throw new Error(data.error || 'Generation failed');
       }
 
-      // Extract Base64 image
+      // Extract real image (Base64 or URL)
       let imageUrl = '';
 
       if (data.image_data_url) imageUrl = data.image_data_url;
@@ -51,11 +51,9 @@ function StudioPageInner() {
 
       if (imageUrl) {
         setGeneratedImage(imageUrl);
-        setGenerationMetadata({
-          fractal_dimension: data.fractal_dimension,
-        });
+        setGenerationMetadata(data);
       } else {
-        alert('No image returned from server');
+        alert('No image data returned from server');
       }
     } catch (error: any) {
       alert(error.message || 'Generation failed');
@@ -93,7 +91,7 @@ function StudioPageInner() {
               {isGenerating ? 'Generating...' : 'Generate Asset & Content'}
             </button>
 
-            {/* Latest Build Preview - No Fallback */}
+            {/* Latest Build Preview - Real Image Only */}
             <div className="mt-8 border-t border-gray-700 pt-8">
               <div className="flex justify-between items-start mb-4">
                 <div>
