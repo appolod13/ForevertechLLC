@@ -26,7 +26,7 @@ function StudioPageInner() {
     if (!prompt) return;
 
     setIsGenerating(true);
-    setGeneratedImage('');
+    setGeneratedImage(''); // Clear previous image
     setDebugInfo('Starting generation...');
 
     try {
@@ -50,7 +50,7 @@ function StudioPageInner() {
         setGeneratedImage(imageUrl);
         setDebugInfo(`✅ Image set! Length: ${imageUrl.length}`);
       } else {
-        setDebugInfo(`❌ No image data. Full response: ${JSON.stringify(data).slice(0, 400)}`);
+        setDebugInfo(`❌ No image data. Response: ${JSON.stringify(data).slice(0, 300)}`);
       }
     } catch (error: any) {
       setDebugInfo(`Error: ${error.message}`);
@@ -61,7 +61,7 @@ function StudioPageInner() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
-      <h1 className="text-3xl font-bold mb-6">Creator Studio - Debug Mode</h1>
+      <h1 className="text-3xl font-bold mb-6">Creator Studio</h1>
 
       <textarea
         className="w-full bg-gray-800 border border-gray-600 rounded-xl p-4 h-28 mb-4"
@@ -79,12 +79,12 @@ function StudioPageInner() {
       </button>
 
       {debugInfo && (
-        <div className="bg-black p-4 rounded-xl text-xs text-gray-300 mb-6 whitespace-pre-wrap overflow-auto max-h-48">
+        <div className="bg-black p-4 rounded-xl text-xs text-gray-300 mb-6 whitespace-pre-wrap">
           {debugInfo}
         </div>
       )}
 
-      {/* Image Display */}
+      {/* Main Image Preview */}
       <div className="relative rounded-3xl overflow-hidden border border-gray-700 bg-black aspect-video">
         {generatedImage ? (
           <img 
