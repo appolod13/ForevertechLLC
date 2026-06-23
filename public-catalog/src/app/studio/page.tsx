@@ -26,7 +26,7 @@ function StudioPageInner() {
     if (!prompt) return;
 
     setIsGenerating(true);
-    setGeneratedImage(''); // Clear old image
+    setGeneratedImage(''); // Clear previous image completely
 
     try {
       const res = await fetch('/api/generate/image', {
@@ -41,7 +41,7 @@ function StudioPageInner() {
         throw new Error(data.error || 'Generation failed');
       }
 
-      // Extract real image (Base64 or URL)
+      // Extract real image (Base64)
       let imageUrl = '';
 
       if (data.image_data_url) imageUrl = data.image_data_url;
