@@ -26,7 +26,7 @@ function StudioPageInner() {
     if (!prompt) return;
 
     setIsGenerating(true);
-    setGeneratedImage(''); // Clear old image completely
+    setGeneratedImage(''); // Clear old image
 
     try {
       const res = await fetch('/api/generate/image', {
@@ -41,6 +41,7 @@ function StudioPageInner() {
         throw new Error(data.error || 'Generation failed');
       }
 
+      // Extract real image (Base64 or URL)
       let imageUrl = '';
 
       if (data.image_data_url) imageUrl = data.image_data_url;
@@ -52,7 +53,7 @@ function StudioPageInner() {
         setGeneratedImage(imageUrl);
         setGenerationMetadata(data);
       } else {
-        alert('No image data returned');
+        alert('No image data returned from server');
       }
     } catch (error: any) {
       alert(error.message || 'Generation failed');
@@ -118,7 +119,7 @@ function StudioPageInner() {
                     className="w-full h-full object-contain"
                   />
                 ) : (
-                  <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-center px-8">
+                  <div className="absolute inset-0 flex items-center justify-center text-gray-500">
                     Generate something to see your fractal here
                   </div>
                 )}
