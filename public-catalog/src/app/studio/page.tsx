@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Header } from '../../components/Header';
 import { DataDashboardButton } from '../../components/DataDashboardButton';
+import { FusionAI } from '../../components/FusionAI';
 import { Sparkles } from 'lucide-react';
 
 export default function StudioPage() {
@@ -19,20 +20,28 @@ function StudioPageInner() {
   const searchParams = useSearchParams();
   const [prompt, setPrompt] = useState('');
   const [generatedImage, setGeneratedImage] = useState('');
+  const [latestDropImageUrl, setLatestDropImageUrl] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationMetadata, setGenerationMetadata] = useState<any>(null);
+  const [quantumMode, setQuantumMode] = useState(false);
+  const [ipfsEnabled, setIpfsEnabled] = useState(false);
 
   const generateImage = async () => {
     if (!prompt) return;
 
     setIsGenerating(true);
-    setGeneratedImage(''); // Clear any old image
+    setGeneratedImage(''); // Clear old image
 
     try {
       const res = await fetch('/api/generate/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({
+          prompt,
+          quantum_mode: quantumMode,
+          ipfs_upload: ipfsEnabled,
+          use_quantum_seed: true,
+        }),
       });
 
       const data = await res.json();
@@ -41,7 +50,7 @@ function StudioPageInner() {
         throw new Error(data.error || 'Generation failed');
       }
 
-      // Extract Base64 image
+      // Extract real generated image
       let imageUrl = '';
 
       if (data.image_data_url) imageUrl = data.image_data_url;
@@ -51,11 +60,10 @@ function StudioPageInner() {
 
       if (imageUrl) {
         setGeneratedImage(imageUrl);
-        setGenerationMetadata({
-          fractal_dimension: data.fractal_dimension,
-        });
+        setLatestDropImageUrl(imageUrl);
+        setGenerationMetadata(data);
       } else {
-        alert('No image returned from server');
+        alert('No image data returned from server');
       }
     } catch (error: any) {
       alert(error.message || 'Generation failed');
@@ -71,7 +79,7 @@ function StudioPageInner() {
         <h1 className="text-4xl font-bold mb-8">Creator Studio</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column */}
+          {/* Left Column - Generator */}
           <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-6 rounded-3xl border border-gray-700">
             <div className="flex items-center gap-3 mb-6">
               <Sparkles className="text-purple-400 w-6 h-6" />
@@ -85,6 +93,17 @@ function StudioPageInner() {
               onChange={(e) => setPrompt(e.target.value)}
             />
 
+            <div className="flex flex-wrap gap-4 mb-6 text-sm">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={quantumMode} onChange={(e) => setQuantumMode(e.target.checked)} className="accent-purple-500" />
+                <span>Quantum Mode (IBM)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={ipfsEnabled} onChange={(e) => setIpfsEnabled(e.target.checked)} className="accent-green-500" />
+                <span>Public Link Upload</span>
+              </label>
+            </div>
+
             <button
               onClick={generateImage}
               disabled={isGenerating || !prompt}
@@ -93,7 +112,9 @@ function StudioPageInner() {
               {isGenerating ? 'Generating...' : 'Generate Asset & Content'}
             </button>
 
-            {/* Latest Build Preview - No Fallback */}
+            <FusionAI prompt={prompt} baseImageUrl={generatedImage} onImageGenerated={setGeneratedImage} />
+
+            {/* Latest Build Preview - Real Generated Image Only */}
             <div className="mt-8 border-t border-gray-700 pt-8">
               <div className="flex justify-between items-start mb-4">
                 <div>
@@ -161,7 +182,7 @@ function StudioPageInner() {
           <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-6 rounded-3xl border border-gray-700">
             <h2 className="text-2xl font-bold mb-6">Multi-Channel Poster</h2>
             <div className="text-center text-gray-400 py-12">
-              Your posting tools will appear here
+              Your posting tools and calendar will appear here
             </div>
           </div>
         </div>
