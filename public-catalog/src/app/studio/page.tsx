@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Header } from '../../components/Header';
 import { DataDashboardButton } from '../../components/DataDashboardButton';
-import { FusionAI } from '../../components/FusionAI';
 import { Sparkles } from 'lucide-react';
 
 export default function StudioPage() {
@@ -20,7 +19,6 @@ function StudioPageInner() {
   const searchParams = useSearchParams();
   const [prompt, setPrompt] = useState('');
   const [generatedImage, setGeneratedImage] = useState('');
-  const [latestDropImageUrl, setLatestDropImageUrl] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationMetadata, setGenerationMetadata] = useState<any>(null);
   const [quantumMode, setQuantumMode] = useState(false);
@@ -59,8 +57,9 @@ function StudioPageInner() {
 
       if (imageUrl) {
         setGeneratedImage(imageUrl);
-        setLatestDropImageUrl(imageUrl);
         setGenerationMetadata(data);
+      } else {
+        alert('No image data returned from server');
       }
     } catch (error: any) {
       alert(error.message || 'Generation failed');
@@ -92,11 +91,21 @@ function StudioPageInner() {
 
             <div className="flex flex-wrap gap-4 mb-6 text-sm">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={quantumMode} onChange={(e) => setQuantumMode(e.target.checked)} className="accent-purple-500" />
+                <input 
+                  type="checkbox" 
+                  checked={quantumMode} 
+                  onChange={(e) => setQuantumMode(e.target.checked)} 
+                  className="accent-purple-500" 
+                />
                 <span>Quantum Mode (IBM)</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={ipfsEnabled} onChange={(e) => setIpfsEnabled(e.target.checked)} className="accent-green-500" />
+                <input 
+                  type="checkbox" 
+                  checked={ipfsEnabled} 
+                  onChange={(e) => setIpfsEnabled(e.target.checked)} 
+                  className="accent-green-500" 
+                />
                 <span>Public Link Upload</span>
               </label>
             </div>
@@ -109,76 +118,75 @@ function StudioPageInner() {
               {isGenerating ? 'Generating...' : 'Generate Asset & Content'}
             </button>
 
-            <FusionAI prompt={prompt} baseImageUrl={generatedImage} onImageGenerated={setGeneratedImage} />
+            {/* Latest Build Preview */}
+            <div className="mt-8 border-t border-gray-700 pt-8">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h3 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-500">
+                    Latest Build Preview
+                  </h3>
+                  <p className="text-sm text-gray-400">Your most recent quantum-seeded fractal</p>
+                </div>
 
-{/* Latest Build Preview - Enhanced */}
-<div className="mt-8 border-t border-gray-700 pt-8">
-  <div className="flex justify-between items-start mb-4">
-    <div>
-      <h3 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-500">
-        Latest Build Preview
-      </h3>
-      <p className="text-sm text-gray-400">Your most recent quantum-seeded fractal</p>
-    </div>
+                {generationMetadata?.fractal_dimension && (
+                  <div className="text-right">
+                    <div className="text-xs text-gray-500 tracking-widest">FRACTAL DIMENSION</div>
+                    <div className="font-mono text-4xl text-purple-400 font-bold tracking-tighter">
+                      {generationMetadata.fractal_dimension.value}
+                    </div>
+                  </div>
+                )}
+              </div>
 
-    {generationMetadata?.fractal_dimension && (
-      <div className="text-right">
-        <div className="text-xs text-gray-500 tracking-widest">FRACTAL DIMENSION</div>
-        <div className="font-mono text-4xl text-purple-400 font-bold tracking-tighter">
-          {generationMetadata.fractal_dimension.value}
-        </div>
-      </div>
-    )}
-  </div>
+              <div className="relative rounded-3xl overflow-hidden border border-gray-800 bg-black shadow-[0_0_80px_rgba(168,85,247,0.35)] aspect-video">
+                {generatedImage ? (
+                  <img
+                    src={generatedImage}
+                    alt="Generated Fractal"
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center text-gray-500">
+                    Generate something to see your fractal here
+                  </div>
+                )}
 
-  <div className="relative rounded-3xl overflow-hidden border border-gray-800 bg-black shadow-[0_0_80px_rgba(168,85,247,0.45)] aspect-video">
-    {generatedImage ? (
-      <img
-        src={generatedImage}
-        alt="Generated Fractal"
-        className="w-full h-full object-contain"
-      />
-    ) : (
-      <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-        Generate something to see your fractal here
-      </div>
-    )}
+                {isGenerating && (
+                  <div className="absolute inset-0 bg-black/70 backdrop-blur flex items-center justify-center z-10">
+                    <div className="text-center">
+                      <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                      <p className="text-purple-400 text-lg">Crafting your quantum fractal...</p>
+                    </div>
+                  </div>
+                )}
+              </div>
 
-    {isGenerating && (
-      <div className="absolute inset-0 bg-black/70 backdrop-blur flex items-center justify-center z-10">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-purple-400 text-lg">Crafting your quantum fractal...</p>
-        </div>
-      </div>
-    )}
-  </div>
+              {generatedImage && (
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Link
+                    href={`/customize?imageUrl=${encodeURIComponent(generatedImage)}`}
+                    className="flex h-14 items-center justify-center rounded-2xl bg-white text-lg font-bold text-black active:scale-[0.985] transition-all"
+                  >
+                    Customize Your Gear →
+                  </Link>
 
-  {generatedImage && (
-    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <Link
-        href={`/customize?imageUrl=${encodeURIComponent(generatedImage)}`}
-        className="flex h-14 items-center justify-center rounded-2xl bg-white text-lg font-bold text-black active:scale-[0.985] transition-all"
-      >
-        Customize Your Gear →
-      </Link>
-
-      <button
-        onClick={() => prompt && generateImage()}
-        disabled={isGenerating}
-        className="flex h-14 items-center justify-center rounded-2xl border border-gray-700 text-base font-semibold active:scale-[0.985] transition-all disabled:opacity-60"
-      >
-        Regenerate
-      </button>
-    </div>
-  )}
-</div>
+                  <button
+                    onClick={() => prompt && generateImage()}
+                    disabled={isGenerating}
+                    className="flex h-14 items-center justify-center rounded-2xl border border-gray-700 text-base font-semibold active:scale-[0.985] transition-all disabled:opacity-60"
+                  >
+                    Regenerate
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Right Column */}
           <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-6 rounded-3xl border border-gray-700">
             <h2 className="text-2xl font-bold mb-6">Multi-Channel Poster</h2>
             <div className="text-center text-gray-400 py-12">
-              Your posting tools and calendar will appear here
+              Your posting tools will appear here
             </div>
           </div>
         </div>
