@@ -118,7 +118,15 @@ const JULIA_CS: Array<[number, number]> = [
 // Available fractal "engines". "julia" is the classic escape-time look; the
 // rest are single continuous-line (string) fractals drawn with one unbroken
 // stroke via L-systems.
-type FractalType = "julia" | "koch" | "sierpinski" | "dragon" | "hilbert";
+type FractalType =
+  | "julia"
+  | "koch"
+  | "sierpinski"
+  | "dragon"
+  | "hilbert"
+  | "levy"
+  | "gosper"
+  | "peano";
 
 interface FractalParams {
   fractalType: FractalType;
@@ -177,6 +185,12 @@ function analyzePrompt(prompt: string, salt?: string): FractalParams {
     fractalType = "dragon";
   } else if (has("maze", "circuit", "grid", "path", "matrix", "city", "labyrinth", "weave")) {
     fractalType = "hilbert";
+  } else if (has("wave", "curl", "curve", "ribbon", "fold", "scroll", "levy")) {
+    fractalType = "levy";
+  } else if (has("honeycomb", "hex", "bee", "flow", "snake river", "gosper", "organic", "leaf")) {
+    fractalType = "gosper";
+  } else if (has("maze field", "carpet", "tile", "fill", "tapestry", "peano", "weave plane")) {
+    fractalType = "peano";
   } else if (has("spiral", "galaxy", "cosmic", "nebula", "swirl", "seahorse", "lightning")) {
     fractalType = "julia";
   } else {
@@ -189,6 +203,9 @@ function analyzePrompt(prompt: string, salt?: string): FractalParams {
       "sierpinski",
       "dragon",
       "hilbert",
+      "levy",
+      "gosper",
+      "peano",
       "julia",
       "koch",
     ];
@@ -213,6 +230,9 @@ function analyzePrompt(prompt: string, salt?: string): FractalParams {
     sierpinski: [6, 8],
     dragon: [11, 13],
     hilbert: [6, 7],
+    levy: [12, 14],
+    gosper: [3, 4],
+    peano: [3, 4],
   };
   const [dlo, dhi] = depthByType[fractalType];
   const iterations = dlo + Math.floor(rand() * (dhi - dlo + 1));
@@ -237,6 +257,12 @@ const L_SYSTEMS: Record<Exclude<FractalType, "julia">, LSystem> = {
   dragon: { axiom: "FX", rules: { X: "X+YF+", Y: "-FX-Y" }, angle: 90 },
   // Hilbert space-filling curve: one continuous line that weaves the plane.
   hilbert: { axiom: "A", rules: { A: "+BF-AFA-FB+", B: "-AF+BFB+FA-" }, angle: 90 },
+  // Lévy C curve: a single flowing ribbon-like stroke.
+  levy: { axiom: "F", rules: { F: "+F--F+" }, angle: 45 },
+  // Gosper flowsnake: one continuous organic, honeycomb-filling line (F and G both draw).
+  gosper: { axiom: "F", rules: { F: "F-G--G+F++FF+G-", G: "+F-GG--G-F++F+G" }, angle: 60 },
+  // Peano curve: a single continuous space-filling stroke (a woven tapestry).
+  peano: { axiom: "F", rules: { F: "F+F-F-F-F+F+F+F-F" }, angle: 90 },
 };
 
 /** Expand an L-system to its turtle string. */
