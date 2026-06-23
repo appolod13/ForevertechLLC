@@ -7,11 +7,11 @@ def fractal_fusion_rgb(width: int, height: int, prompt: str, seed: int) -> bytes
     rng = random.Random(seed)
     phash = abs(hash(prompt or str(seed)))
 
-    # Parameters for richer variety
+    # Enhanced parameters for more fractal variety
     base_hue = (phash % 360) / 360.0
-    zoom = 1.5 + (phash % 120) / 200.0
-    iterations = 120 + (phash % 120)
-    blend = (phash % 100) / 100.0  # Controls mixing of different fractals
+    zoom = 1.4 + (phash % 180) / 250.0
+    iterations = 140 + (phash % 140)
+    blend = (phash % 100) / 100.0
 
     buf = bytearray(width * height * 3)
 
@@ -22,35 +22,47 @@ def fractal_fusion_rgb(width: int, height: int, prompt: str, seed: int) -> bytes
             cx = (x - width * 0.5) / (width * 0.42) * zoom
             cy = (y - height * 0.5) / (height * 0.42) * zoom
 
-            # Multi-fractal hybrid
-            # Mandelbrot base + Julia perturbation + Sierpinski/Koch influence
+            # Multi-Fractal Hybrid System
             zx, zy = cx, cy
-            jx, jy = cx * 0.7 + math.sin(phash), cy * 0.7 + math.cos(phash)
+            # Julia seed influenced by prompt
+            jx = cx * 0.6 + math.sin(phash * 0.7)
+            jy = cy * 0.6 + math.cos(phash * 0.7)
 
             iter_count = 0
-            while iter_count < iterations and (zx*zx + zy*zy) < 4.0:
-                # Mandelbrot iteration
-                zx_new = zx*zx - zy*zy + cx
-                zy = 2*zx*zy + cy
+            while iter_count < iterations and (zx * zx + zy * zy) < 4.0:
+                # Core Mandelbrot iteration
+                zx_new = zx * zx - zy * zy + cx
+                zy = 2 * zx * zy + cy
                 zx = zx_new
 
-                # Add Julia influence for complexity
-                if iter_count % 3 == 0:
-                    zx += jx * 0.08 * blend
-                    zy += jy * 0.08 * blend
+                # Julia perturbation (adds swirling complexity)
+                if iter_count % 4 == 0:
+                    zx += jx * 0.12 * blend
+                    zy += jy * 0.12 * blend
+
+                # Sierpinski-like folding for more intricate patterns
+                if iter_count % 7 == 0:
+                    zx = abs(zx) * 0.85
+                    zy = abs(zy) * 0.85
+
+                # Koch curve style angular perturbation
+                if iter_count % 11 == 0:
+                    angle = math.sin(iter_count * 0.3) * 0.4
+                    zx += math.cos(angle) * 0.06
+                    zy += math.sin(angle) * 0.06
 
                 iter_count += 1
 
-            # Smooth coloring
+            # Smooth escape time coloring
             if iter_count < iterations:
                 smooth = iter_count + 1 - math.log(math.log(math.sqrt(zx*zx + zy*zy))) / math.log(2)
             else:
                 smooth = iterations
 
-            # Dynamic color with more fractal-like patterns
-            hue = (base_hue + smooth * 0.12 + math.sin(smooth * 0.4) * 0.3) % 1.0
-            sat = 0.75 + 0.25 * math.sin(smooth * 0.6)
-            val = 0.55 + 0.45 * (smooth / iterations) ** 0.6
+            # Rich, dynamic coloring with more fractal detail
+            hue = (base_hue + smooth * 0.15 + math.sin(smooth * 0.35) * 0.4) % 1.0
+            sat = 0.8 + 0.2 * math.sin(smooth * 0.55)
+            val = 0.5 + 0.5 * (smooth / iterations) ** 0.65
 
             r, g, b = _hsv_to_rgb(hue, sat, val)
 
@@ -58,10 +70,10 @@ def fractal_fusion_rgb(width: int, height: int, prompt: str, seed: int) -> bytes
             buf[i + 1] = g
             buf[i + 2] = b
 
-    # Convert to PNG for better quality
+    # Convert to high-quality PNG
     img = Image.frombytes('RGB', (width, height), bytes(buf))
     output = BytesIO()
-    img.save(output, format='PNG', optimize=True)
+    img.save(output, format='PNG', optimize=True, quality=95)
     return output.getvalue()
 
 
