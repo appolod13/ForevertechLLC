@@ -30,7 +30,7 @@ function StudioPageInner() {
     if (!prompt) return;
 
     setIsGenerating(true);
-    setGeneratedImage(''); // Clear old image
+    setGeneratedImage('');
 
     try {
       const res = await fetch('/api/generate/image', {
@@ -50,7 +50,6 @@ function StudioPageInner() {
         throw new Error(data.error || 'Generation failed');
       }
 
-      // Extract real generated image
       let imageUrl = '';
 
       if (data.image_data_url) imageUrl = data.image_data_url;
@@ -62,8 +61,6 @@ function StudioPageInner() {
         setGeneratedImage(imageUrl);
         setLatestDropImageUrl(imageUrl);
         setGenerationMetadata(data);
-      } else {
-        alert('No image data returned from server');
       }
     } catch (error: any) {
       alert(error.message || 'Generation failed');
@@ -79,7 +76,7 @@ function StudioPageInner() {
         <h1 className="text-4xl font-bold mb-8">Creator Studio</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column - Generator */}
+          {/* Left Column */}
           <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-6 rounded-3xl border border-gray-700">
             <div className="flex items-center gap-3 mb-6">
               <Sparkles className="text-purple-400 w-6 h-6" />
@@ -114,7 +111,7 @@ function StudioPageInner() {
 
             <FusionAI prompt={prompt} baseImageUrl={generatedImage} onImageGenerated={setGeneratedImage} />
 
-            {/* Latest Build Preview - Real Generated Image Only */}
+            {/* Latest Build Preview */}
             <div className="mt-8 border-t border-gray-700 pt-8">
               <div className="flex justify-between items-start mb-4">
                 <div>
