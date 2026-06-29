@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-import { createHash } from "crypto";
+import { createHash, randomInt } from "crypto";
 
 // Serverless limits
 export const maxDuration = 60;
@@ -18,6 +18,7 @@ import { getAiGeneratorsConfig } from "@/lib/aiGeneratorsConfig";
 import { processFractalPromo, recommendFractalSettings, previewPromoRecommendations } from "./fractal-fusion";
 import { getQuantumSeed } from "@/lib/quantum-seed";
 import { calculateFractalDimension } from "@/lib/fractal-dimension";
+import { paletteProfileFromPrompt } from "@/lib/paletteProfile";
 
 // === HELPERS ===
 function isLocalHostUrl(value: string): boolean {
@@ -56,6 +57,10 @@ function setCache(key: string, value: any) {
   cache.set(key, { ...value, createdAt: Date.now() });
 }
 
+function generateSeed(): number {
+  return randomInt(0, 0x7fffffff);
+}
+
 // === QUANTUM HYBRID GENERATOR ===
 async function tryQuantumHybridGenerate(
   prompt: string,
@@ -63,7 +68,9 @@ async function tryQuantumHybridGenerate(
   height: number,
   negative_prompt: string | undefined,
   timeoutMs: number,
-  use_fractal_fusion: boolean = true
+  use_fractal_fusion: boolean = true,
+  palette_profile?: string,
+  seed?: number,
 ) {
   const cfg = getAiGeneratorsConfig();
   const base = cfg.quantum?.internalBaseUrl?.trim().replace(/\/$/, "");
@@ -84,6 +91,8 @@ async function tryQuantumHybridGenerate(
         height,
         negative_prompt: negative_prompt || "",
         use_fractal_fusion,
+        palette_profile,
+        seed,
       }),
       cache: "no-store",
       signal: controller.signal,
@@ -113,6 +122,65 @@ async function tryQuantumHybridGenerate(
   }
 }
 
+async function tryFusionGenerate(
+  prompt: string,
+  width: number,
+  height: number,
+  negative_prompt: string | undefined,
+  timeoutMs: number,
+  palette_profile: string,
+  seed: number,
+) {
+  const cfg = getAiGeneratorsConfig();
+  const base = cfg.fusion?.internalBaseUrl?.trim().replace(/\/$/, "");
+  if (!base) return null;
+  if (process.env.NODE_ENV === "production" && isLocalHostUrl(base)) return null;
+
+  const url = base + "/generate";
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(1000, timeoutMs));
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        prompt,
+        width,
+        height,
+        negative_prompt: negative_prompt || "",
+        seed,
+        palette_profile,
+        quality: 2,
+      }),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+
+    if (!res.ok) return null;
+
+    const data: any = await res.json();
+
+    if (data.success === true && typeof data.imageUrl === "string") {
+      const raw = data.imageUrl.trim();
+      const imageUrl = raw.startsWith("/") && cfg.fusion.publicBaseUrl.trim()
+        ? `${cfg.fusion.publicBaseUrl.trim().replace(/\/$/, "")}${raw}`
+        : raw;
+
+      return {
+        image_url: imageUrl,
+        meta: isRecord(data.meta) ? data.meta : { provider: "fusion" },
+      };
+    }
+    return null;
+  } catch (e) {
+    console.error("Fusion Generate Error:", e);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // === MAIN POST HANDLER ===
 export async function POST(req: NextRequest) {
   try {
@@ -129,37 +197,65 @@ export async function POST(req: NextRequest) {
     const use_fractal_fusion: boolean = body.use_fractal_fusion !== false;
     const useQuantumSeed: boolean = body.use_quantum_seed === true;
     const orderId: string = body.orderId || `gen_${Date.now()}`;
+    const platform = (body.platform || "linkedin") as any;
+    const provider = (body.provider || "") as string;
+    const palette_profile = paletteProfileFromPrompt(prompt);
+    const seed: number = typeof body.seed === "number" ? body.seed : generateSeed();
 
     let result: any = null;
 
-    // 1. Try Quantum Hybrid
+    if (provider === "mock") {
+      const mock = await (generateImageForPlatform as any)("mock", prompt, platform);
+      return NextResponse.json({ success: true, ...mock });
+    }
+
+    // 1. Try Fusion (Multi-Fractal Wormhole)
     try {
-      result = await tryQuantumHybridGenerate(
+      result = await tryFusionGenerate(
         prompt,
         width,
         height,
         negative_prompt,
         45000,
-        use_fractal_fusion
+        palette_profile,
+        seed
       );
     } catch (quantumErr) {
       logError("quantum.hybrid.failed", quantumErr);
     }
 
-    // 2. Fallback (final type fix)
+    // 2. Try Quantum Hybrid
     if (!result) {
       try {
-        result = await (generateImageForPlatform as any)(
+        result = await tryQuantumHybridGenerate(
           prompt,
-          (body.platform || "linkedin") as any,
-          (body.provider || "quantum") as any
+          width,
+          height,
+          negative_prompt,
+          45000,
+          use_fractal_fusion,
+          palette_profile,
+          seed
         );
       } catch (fallbackErr) {
         logError("fallback.generate.failed", fallbackErr);
       }
     }
 
-    // 3. Attach Quantum Seed (IBM Quantum hardware) if requested
+    // 3. Fallback (final type fix)
+    if (!result) {
+      try {
+        result = await (generateImageForPlatform as any)(
+          provider || "mock",
+          prompt,
+          platform
+        );
+      } catch (fallbackErr) {
+        logError("fallback.generate.failed", fallbackErr);
+      }
+    }
+
+    // 4. Attach Quantum Seed (IBM Quantum hardware) if requested
     if (useQuantumSeed && result) {
       try {
         const seedResult = await getQuantumSeed(orderId, "fractal_generation");
@@ -179,7 +275,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. Add Fractal Dimension (NEW)
+    // 5. Add Fractal Dimension (NEW)
     if (result) {
       const dim = calculateFractalDimension(prompt);
       result.fractal_dimension = {
@@ -189,7 +285,7 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    // 5. Final safety check
+    // 6. Final safety check
     if (!result) {
       return NextResponse.json({ 
         success: false, 

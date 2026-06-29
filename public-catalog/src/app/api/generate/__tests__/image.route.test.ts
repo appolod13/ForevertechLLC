@@ -20,6 +20,6 @@ describe("image route", () => {
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.success).toBe(true);
-    expect(data.data.image_url).toContain("data:image/svg+xml");
+    expect(data.image_url).toContain("data:image/svg+xml");
   });
 });

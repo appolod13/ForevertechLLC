@@ -1,28 +1,52 @@
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, ValidationError, Field
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
-from starlette.responses import Response, RedirectResponse
-from fastapi.staticfiles import StaticFiles
+import binascii
 import json
-try:
-    from PIL import Image  # type: ignore
-except Exception:
-    Image = None  # type: ignore
-
-# --- Mocked AI Generation for compatibility with Python 3.14 ---
-# Removed torch, diffusers, etc. to allow the service to run locally.
-
-app = FastAPI(title="Fusion Service (Mocked)")
-
+import math
+import os
 import random
-import glob
+import struct
+import time
+import uuid
+import zlib
+from io import BytesIO
+from typing import Literal, Optional
 
-PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field, ValidationError
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+from starlette.responses import RedirectResponse, Response
+
+try:
+    from PIL import Image, ImageDraw, ImageFilter
+except Exception:  # pragma: no cover
+    Image = None  # type: ignore
+    ImageDraw = None  # type: ignore
+    ImageFilter = None  # type: ignore
+
 DEFAULT_FRACTAL_ITERATIONS = 130
-MIN_QUALITY = 1
-MAX_QUALITY = 3
 DEFAULT_ZOOM_LEVEL = 1.45
+MAX_QUALITY = 3
+MIN_QUALITY = 1
 MIN_ZOOM_LEVEL = 0.05
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+
+REQUESTS = Counter("fusion_requests_total", "Fusion requests", ["endpoint"])
+LATENCY = Histogram("fusion_latency_seconds", "Fusion latency", ["device"])
+
+os.makedirs("uploads", exist_ok=True)
+
+app = FastAPI(title="Fusion Service")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+jobs: dict[str, dict] = {}
 
 
 def _png_chunk(tag: bytes, data: bytes) -> bytes:
@@ -30,83 +54,22 @@ def _png_chunk(tag: bytes, data: bytes) -> bytes:
     return struct.pack("!I", len(data)) + chunk + struct.pack("!I", binascii.crc32(chunk) & 0xFFFFFFFF)
 
 
-def write_png_rgb(path: str, width: int, height: int, rgb: bytes) -> None:
+def write_png_rgb(file_path: str, width: int, height: int, rgb: bytes) -> None:
     if len(rgb) != width * height * 3:
         raise ValueError("invalid_rgb_buffer")
-    rows = []
+    rows: list[bytes] = []
     stride = width * 3
     for y in range(height):
-        rows.append(b"\x00" + rgb[y * stride : (y + 1) *     raw = b"".join(rows)
+        rows.append(b"\x00" + rgb[y * stride : (y + 1) * stride])
+    raw = b"".join(rows)
     compressed = zlib.compress(raw, level=6)
     ihdr = struct.pack("!IIBBBBB", width, height, 8, 2, 0, 0, 0)
     png = PNG_SIGNATURE + _png_chunk(b"IHDR", ihdr) + _png_chunk(b"IDAT", compressed) + _png_chunk(b"IEND", b"")
-    with open(path, "wb") as f:
+    with open(file_path, "wb") as f:
         f.write(png)
 
 
-def _blend_channel(dst: int, src: int, a: int) -> int:
-    return (dst * (255 - a) + src * a + 127) // 255
-
-
-def procedural_rgb(width: int, height: int, prompt: str, seed: int) -> bytes:
-    rng = random.Random(seed)
-    buf = bytearray(width * height * 3)
-
-    top = (rng.randint(5, 40), rng.randint(10, 60), rng.randint(30, 90))
-    bottom = (rng.randint(90, 180), rng.randint(90, 180), rng.randint(130, 220))
-        for y in range(height):
-        t = y / max(1, height - 1)
-        r = int(top[0] * (1 - t) + bottom[0] * t)
-        g = int(top[1] * (1 - t) + bottom[1] * t)
-        b = int(top[2] * (1 - t) + bottom[2] * t)
-        row_start = y * width * 3
-        for x in range(width):
-            i = row_start + x * 3
-            buf[i] = r
-            buf[i + 1] = g
-            buf[i + 2] = b
-
-    shape_count = max(12, min(80, (width * height) // 25000))
-    for _ in range(shape_count):
-        x0 = rng.randint(-width // 10, width)
-        y0 = rng.randint(-height // 10, height)
-        x1 = x0 + rng.randint(max(8, width // 40), max(12, width // 3))
-        y1 = y0 + rng.randint(max(8, height // 40), max(12, height // 3))
-        r = rng.randint(40, 255)
-        g = rng.randint(40, 255)
-        b = rng.randint(40, 255)
-        a = rng.randint(25, 110)
-        x_min = max(0, min(x0, x1))
-        x_max = min(width - 1, max(x0, x1))
-        y_min = max(0, min(y0, y1))
-        y_max = min(height - 1, max(y0, y1))
-
-        if rng.random() < 0.55:
-            cx = (x_min + x_max) / 2.0
-            cy = (y_min + y_max) / 2.0
-            rx = max(1.0, (x_max - x_min) / 2.0)
-            ry = max(1.0, (y_max - y_min) / 2.0)
-            inv_rx2 = 1.0 / (rx * rx)
-            inv_ry2 = 1.0 / (ry * ry)
-            for yy in range(y_min, y_max + 1):
-                dy = yy - cy
-                dy2 = (dy * dy) * inv_ry2
-                row_start = yy * width * 3
-                for xx in range(x_min, x_max + 1):
-                                        buf[i + 1] = _blend_channel(buf[i + 1], g, a)
-                        buf[i + 2] = _blend_channel(buf[i + 2], b, a)
-        else:
-            for yy in range(y_min, y_max + 1):
-                row_start = yy * width * 3
-                for xx in range(x_min, x_max + 1):
-                    i = row_start + xx * 3
-                    buf[i] = _blend_channel(buf[i], r, a)
-                    buf[i + 1] = _blend_channel(buf[i + 1], g, a)
-                    buf[i + 2] = _blend_channel(buf[i + 2], b, a)
-
-    return bytes(buf)
-    def _hsv_to_rgb(h: float, s: float, v: float):
-    # h in [0,1), s,v in [0,1] -> (r,g,b) 0..255
+def _hsv_to_rgb(h: float, s: float, v: float) -> tuple[int, int, int]:
     h = h - int(h)
     i = int(h * 6.0)
     f = h * 6.0 - i
@@ -129,14 +92,71 @@ def procedural_rgb(width: int, height: int, prompt: str, seed: int) -> bytes:
     return int(r * 255), int(g * 255), int(b * 255)
 
 
-def _cap_render_dims(width: int, height: int, max_side: int = 448):
-    """Cap the longest side to keep the pure-Python render under the request
-    timeout on Render's CPU, preserving aspect ratio."""
+def _cap_render_dims(width: int, height: int, max_side: int = 448) -> tuple[int, int]:
     long_side = max(width, height)
     if long_side <= max_side:
         return width, height
     scale = max_side / long_side
     return max(64, int(round(width * scale))), max(64, int(round(height * scale)))
+
+
+def _wormhole_warp(
+    x: float,
+    y: float,
+    center_x: float,
+    center_y: float,
+    strength: float,
+    swirl: float,
+) -> tuple[float, float]:
+    dx = x - center_x
+    dy = y - center_y
+    r = math.sqrt(dx * dx + dy * dy) + 1e-9
+    theta = math.atan2(dy, dx)
+    falloff = math.exp(-r * 1.35)
+    theta2 = theta + swirl * falloff + (strength * 0.15) / (r + 0.18)
+    r2 = r * (1.0 + strength * 0.22 * falloff)
+    return center_x + r2 * math.cos(theta2), center_y + r2 * math.sin(theta2)
+
+
+def _palette_params(profile: Optional[str], phash: int) -> dict[str, float]:
+    p = (profile or "").strip().lower()
+    if p in {"peaceful", "serene", "tranquil", "meditative", "calm"}:
+        return {"base": 0.56, "span": 0.28, "sat": 0.72, "val_bias": 0.02, "gamma": 1.0 / 1.12}
+    if p in {"angry", "rage", "ominous"}:
+        return {"base": 0.98, "span": 0.22, "sat": 0.82, "val_bias": -0.02, "gamma": 1.0 / 1.22}
+    if p in {"joyful", "joy", "radiant"}:
+        return {"base": 0.10, "span": 0.34, "sat": 0.80, "val_bias": 0.05, "gamma": 1.0 / 1.08}
+    if p in {"void", "dark", "shadow", "abyss"}:
+        return {"base": 0.70, "span": 0.18, "sat": 0.62, "val_bias": -0.06, "gamma": 1.0 / 1.35}
+    if p in {"cosmic", "nebula", "mysterious"}:
+        return {"base": 0.80, "span": 0.30, "sat": 0.78, "val_bias": 0.00, "gamma": 1.0 / 1.18}
+    if p in {"ethereal", "dreamlike"}:
+        return {"base": 0.76, "span": 0.26, "sat": 0.74, "val_bias": 0.02, "gamma": 1.0 / 1.12}
+    if p in {"quantum", "crystalline", "fractured"}:
+        return {"base": 0.72, "span": 0.32, "sat": 0.80, "val_bias": 0.02, "gamma": 1.0 / 1.16}
+    base = ((phash % 360) / 360.0 + 0.74) % 1.0
+    return {"base": base, "span": 0.28, "sat": 0.80, "val_bias": 0.02, "gamma": 1.0 / 1.16}
+
+
+def _sierpinski_mask(nx: float, ny: float, scale: int = 1024) -> float:
+    xi = int((nx + 0.5) * scale)
+    yi = int((ny + 0.5) * scale)
+    return 1.0 if (xi & yi) == 0 else 0.0
+
+
+def _koch_like_mask(nx: float, ny: float, freq: float = 22.0) -> float:
+    r = math.sqrt(nx * nx + ny * ny) + 1e-9
+    t = math.atan2(ny, nx)
+    tri = abs(((t / math.pi) * freq) % 2.0 - 1.0)
+    rings = abs((r * (freq * 0.65)) % 1.0 - 0.5) * 2.0
+    m = tri * 0.65 + rings * 0.35
+    return 1.0 - min(1.0, m)
+
+
+def _quantum_grid(nx: float, ny: float, freq: float, phase: float) -> float:
+    a = math.sin((nx + ny) * freq * math.pi + phase)
+    b = math.sin((nx - ny) * (freq * 0.85) * math.pi + phase * 1.23)
+    return 0.5 + 0.5 * (a * b)
 
 
 def fractal_fusion_rgb(
@@ -151,27 +171,33 @@ def fractal_fusion_rgb(
     zoom_level: float = DEFAULT_ZOOM_LEVEL,
     center_x: float = -0.15,
     center_y: float = 0.0,
+    palette_profile: Optional[str] = None,
+    wormhole_strength: Optional[float] = None,
+    wormhole_swirl: Optional[float] = None,
+    wormhole_center_x: Optional[float] = None,
+    wormhole_center_y: Optional[float] = None,
+    sierpinski_weight: float = 0.10,
+    koch_weight: float = 0.08,
+    grid_weight: float = 0.12,
 ) -> bytes:
-    """Pure-Python Julia + Mandelbrot fusion with quantum-style interference
-    quality scales the iteration budget (1..3) and therefore render detail and
-    compute cost; iterations can override the default bailout iteration count."""
-    import math
-
     rng = random.Random(seed)
-
-    # Julia constant orbits a circle in the complex plane, seeded for variety.
     angle = (seed % 100000) / 100000.0 * 2.0 * math.pi
     radius = 0.7885 + (rng.random() - 0.5) * 0.08
     cr = radius * math.cos(angle)
     ci = radius * math.sin(angle)
 
-    # Quantum interference parameters derived from the prompt for determinism.
     phash = abs(hash(prompt)) if prompt else seed
     q_freq = 2.0 + (phash % 7)
     q_phase = ((phash >> 3) % 360) * math.pi / 180.0
-    base_hue = (phash % 360) / 360.0
+
     palette_shift = (int(palette_index) % 24) / 24.0
-    base_hue = (base_hue + palette_shift) % 1.0
+    pal = _palette_params(palette_profile, phash)
+    base_hue = (pal["base"] + palette_shift) % 1.0
+    hue_span = pal["span"]
+    sat_base = pal["sat"]
+    gamma = pal["gamma"]
+    val_bias = pal["val_bias"]
+
     quality = max(MIN_QUALITY, min(MAX_QUALITY, int(quality)))
     zoom = max(MIN_ZOOM_LEVEL, float(zoom_level))
     aspect = width / max(1, height)
@@ -182,15 +208,17 @@ def fractal_fusion_rgb(
     rot_cos = math.cos(rot_rad)
     rot_sin = math.sin(rot_rad)
 
+    w_strength = wormhole_strength if wormhole_strength is not None else (0.32 + rng.random() * 0.22)
+    w_swirl = wormhole_swirl if wormhole_swirl is not None else (0.85 + rng.random() * 0.55)
+    w_cx = wormhole_center_x if wormhole_center_x is not None else (cx_center + (rng.random() - 0.5) * 0.25)
+    w_cy = wormhole_center_y if wormhole_center_y is not None else (cy_center + (rng.random() - 0.5) * 0.25)
+
     log2 = math.log(2.0)
     bailout = 16.0
 
-    # Performance: the escape-time loops are the bottleneck, so compute the
-    # fused field on a capped low-res grid, then bilinearly upscale into the
-    # full-resolution shading/color pass. Keeps the look, ~10x faster on Render.
-    MAX_FIELD_DIM = 320
+    max_field_dim = 320
     long_side = max(width, height)
-    scale = 1.0 if long_side <= MAX_FIELD_DIM else MAX_FIELD_DIM / long_side
+    scale = 1.0 if long_side <= max_field_dim else max_field_dim / long_side
     fw = max(2, min(width, int(round(width * scale))))
     fh = max(2, min(height, int(round(height * scale))))
     max_iter = DEFAULT_FRACTAL_ITERATIONS if fw * fh <= 200 * 200 else 90
@@ -199,10 +227,10 @@ def fractal_fusion_rgb(
         max_iter = user_iterations
     max_iter *= quality
 
-    # Pass 1: compute the fused smooth-escape field on the low-res grid.
     field = [0.0] * (fw * fh)
     inv_fw = 1.0 / max(1, fw - 1)
     inv_fh = 1.0 / max(1, fh - 1)
+
     for y in range(fh):
         base_y = (y * inv_fh - 0.5) * span_y
         row = y * fw
@@ -210,10 +238,10 @@ def fractal_fusion_rgb(
             base_x = (x * inv_fw - 0.5) * span_x
             rot_x = base_x * rot_cos - base_y * rot_sin
             rot_y = base_x * rot_sin + base_y * rot_cos
-            ix = cx_center + rot_x
-            iy = cy_center + rot_y
+            wx, wy = _wormhole_warp(rot_x, rot_y, w_cx, w_cy, w_strength, w_swirl)
+            ix = cx_center + wx
+            iy = cy_center + wy
 
-            # Julia: fixed c, varying z.
             zr, zi = ix, iy
             j_iter = 0
             while j_iter < max_iter:
@@ -227,11 +255,10 @@ def fractal_fusion_rgb(
             if j_iter < max_iter:
                 mag = math.sqrt(zr * zr + zi * zi) + 1e-9
                 j_val = j_iter + 1.0 - math.log(math.log(mag) / log2 + 1e-9) / log2
-                else:
+            else:
                 j_val = max_iter
             j_norm = j_val / max_iter
 
-            # Mandelbrot: c = pixel, z starts at 0.
             mr, mi = 0.0, 0.0
             m_iter = 0
             while m_iter < max_iter:
@@ -245,18 +272,14 @@ def fractal_fusion_rgb(
             if m_iter < max_iter:
                 mag = math.sqrt(mr * mr + mi * mi) + 1e-9
                 m_val = m_iter + 1.0 - math.log(math.log(mag) / log2 + 1e-9) / log2
-                
             else:
                 m_val = max_iter
             m_norm = m_val / max_iter
 
-            # Quantum-style interference (the extra "dimension").
             interference = 0.5 + 0.5 * math.sin(q_freq * (ix + iy) * math.pi + q_phase)
-
-            fused = (j_norm * 0.62 + m_norm * 0.38) * (0.75 + 0.25 * interference)
+            fused = (j_norm * 0.62 + m_norm * 0.38) * (0.74 + 0.26 * interference)
             field[row + x] = fused
 
-    # Bilinearly sample the low-res field at full resolution.
     def sample(fx: float, fy: float) -> float:
         if fx < 0.0:
             fx = 0.0
@@ -270,6 +293,8 @@ def fractal_fusion_rgb(
         y0 = int(fy)
         x1 = x0 + 1 if x0 < fw - 1 else x0
         y1 = y0 + 1 if y0 < fh - 1 else y0
+        tx = fx - x0
+        ty = fy - y0
         a = field[y0 * fw + x0]
         b = field[y0 * fw + x1]
         c = field[y1 * fw + x0]
@@ -281,27 +306,12 @@ def fractal_fusion_rgb(
     sx = (fw - 1) / max(1, width - 1)
     sy = (fh - 1) / max(1, height - 1)
 
-    # Pass 2: cinematic, radiant pseudo-3D shading -> "heavenly / god's eye" look.
-    # We add a strong key light + specular highlights for sculpted 3D relief, a
-    # divine central glow (god rays / heaven's door), bloom on bright crests, a
-    # vivid saturated palette, and a gamma lift so everything reads brighter.
     pixels = width * height
     buf = bytearray(pixels * 3)
 
-    # Key light (sculpts the 3D form) - steep angle for dramatic relief.
-    light_x, light_y, light_z = -0.55, -0.65, 0.52
-    lnorm = math.sqrt(light_x * light_x + light_y * light_y + light_z * light_z)
-    light_x, light_y, light_z = light_x / lnorm, light_y / lnorm, light_z / lnorm
-    # Rim/fill light from the opposite side for extra dimensional pop.
-    rim_x, rim_y, rim_z = 0.6, 0.45, 0.3
-    rnorm = math.sqrt(rim_x * rim_x + rim_y * rim_y + rim_z * rim_z)
-    rim_x, rim_y, rim_z = rim_x / rnorm, rim_y / rnorm, rim_z / rnorm
-    # View direction (toward camera) for specular reflection.
-    view_z = 1.0
-    relief = 9.5  # stronger normal displacement = deeper 3D
-        inv_w = 1.0 / max(1, width - 1)
+    inv_w = 1.0 / max(1, width - 1)
     inv_h = 1.0 / max(1, height - 1)
-    gamma = 1.0 / 1.18  # <1 brightens midtones (gentle lift)
+    relief = 9.2
 
     for y in range(height):
         fy = y * sy
@@ -311,63 +321,33 @@ def fractal_fusion_rgb(
             fx = x * sx
             v = sample(fx, fy)
 
-            # Surface normal from the field gradient.
             dx = (sample(fx - 1.0, fy) - sample(fx + 1.0, fy)) * relief
             dy = (sample(fx, fy - 1.0) - sample(fx, fy + 1.0)) * relief
-            nz = 1.0
-            nlen = math.sqrt(dx * dx + dy * dy + nz * nz)
-            nx, ny_n, nz_n = dx / nlen, dy / nlen, nz / nlen
-                        # Specular highlight (Blinn-ish) -> glossy 3D crests.
-            hx, hy, hz = light_x, light_y, light_z + view_z
-            hl = math.sqrt(hx * hx + hy * hy + hz * hz) + 1e-9
-            spec_dot = max(0.0, (nx * hx + ny_n * hy + nz_n * hz) / hl)
-            spec = spec_dot ** 28
+            edge = min(1.0, math.sqrt(dx * dx + dy * dy) * 0.52)
 
-            shade = 0.30 + 0.85 * diffuse + 0.25 * rim
+            nx = (x * inv_w - 0.5)
+            s_mask = _sierpinski_mask(nx, ny)
+            k_mask = _koch_like_mask(nx, ny)
+            grid = _quantum_grid(nx, ny, freq=7.0 + (phash % 7), phase=q_phase)
+            geo = (s_mask * sierpinski_weight + k_mask * koch_weight + grid * grid_weight) * edge
 
-            # Divine central glow: a soft luminous core like light through
-            # heaven's doors / a glowing iris. Kept subtle so the fractal
-            # structure stays crisp and vivid rather than blown out.
-            nx_c = (x * inv_w - 0.5)
-            dist2 = nx_c * nx_c + ny * ny
-            glow = math.exp(-dist2 * 14.0) * 0.40   # tight, gentle core
-            halo = math.exp(-dist2 * 4.0) * 0.16    # wide soft halo
-                        # Vivid, ethereal palette: gold/amber core easing into deep azure
-            # and magenta in the depths, cycling for fractal richness.
-            hue = (base_hue + v * 2.4 + 0.08 * interference_hue(q_phase)) % 1.0
-            sat = 0.78 + 0.22 * (1.0 - v)
-            val = (0.28 + 0.85 * v) * shade
+            hue = (base_hue + v * hue_span * 2.2 + geo * 0.08) % 1.0
+            sat = min(1.0, sat_base + 0.22 * (1.0 - v) + geo * 0.10)
+            val = min(1.0, max(0.0, (0.26 + 0.86 * v + val_bias) * (0.92 + 0.18 * geo)))
 
-            r, g, b = _hsv_to_rgb(hue, min(1.0, sat), min(1.0, val))
+            r, g, b = _hsv_to_rgb(hue, sat, val)
             rf, gf, bf = r / 255.0, g / 255.0, b / 255.0
 
-            # Add the warm divine glow (golden-white). Modulated by the field
-            # value so the glow illuminates the fractal structure instead of
-            # washing the center into flat white.
-            glow_mod = glow * (0.45 + 0.55 * v)
-            halo_mod = halo * (0.4 + 0.6 * v)
-            rf += glow_mod * 0.85 + halo_mod * 0.30
-            gf += glow_mod * 0.72 + halo_mod * 0.26
-            bf += glow_mod * 0.48 + halo_mod * 0.32
-                        # Specular adds a near-white sparkle on crests.
-            rf += spec * 0.85
-            gf += spec * 0.85
-            bf += spec * 0.95
+            glow = (0.10 + 0.42 * geo) * (0.35 + 0.65 * v)
+            rf += glow * 0.62
+            gf += glow * 0.44
+            bf += glow * 0.88
 
-            # Bloom: let very bright crests bleed a little for a radiant feel.
-            luma = 0.299 * rf + 0.587 * gf + 0.114 * bf
-            if luma > 0.85:
-                bloom = (luma - 0.85) * 0.5
-                rf += bloom
-                gf += bloom
-                bf += bloom
+            rf = min(1.0, rf) ** gamma
+            gf = min(1.0, gf) ** gamma
+            bf = min(1.0, bf) ** gamma
 
-            # Gamma lift for overall brightness, then tone-map / clamp.
-            rf = rf ** gamma
-            gf = gf ** gamma
-            bf = bf ** gamma
-
-buf[i3] = 255 if rf >= 1.0 else int(rf * 255)
+            buf[i3] = 255 if rf >= 1.0 else int(rf * 255)
             buf[i3 + 1] = 255 if gf >= 1.0 else int(gf * 255)
             buf[i3 + 2] = 255 if bf >= 1.0 else int(bf * 255)
             i3 += 3
@@ -375,100 +355,12 @@ buf[i3] = 255 if rf >= 1.0 else int(rf * 255)
     return bytes(buf)
 
 
-def interference_hue(phase: float) -> float:
-    """Small deterministic hue shimmer derived from the quantum phase so the
-    palette feels alive without breaking determinism."""
-    import math
-    return 0.5 + 0.5 * math.sin(phase)
-
-
-class MockTrainer:
-    device = "mock_cpu"
-    style_memory = None
-    style_memory_path = "mock_path"
-    shape_memory = None
-    shape_memory_path = "mock_path"
-    async def train(self, tensors, prompt, job_callback=None):
-        if job_callback:
-            await job_callback("training", 0.5)
-        return "mock_pipe"
-
-    def generate(self, pipe, prompt, strength, steps, seed):
-        if Image is None:
-            raise RuntimeError("pillow_missing")
-        return Image.new("RGB", (512, 512), (160, 180, 220))
-
-    def brain_roulette(self, dataset_path, steps, size):
-        images = []
-        if os.path.exists(dataset_path):
-            for ext in ('*.png', '*.jpg', '*.jpeg', '*.webp'):
-                images.extend(glob.glob(os.path.join(dataset_path, ext)))
-                        if images:
-            if Image is None:
-                raise RuntimeError("pillow_missing")
-            base_img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-            for i, img_path in enumerate(images):
-                try:
-                    with Image.open(img_path) as im:
-                        img = im.convert("RGBA").resize((size, size))
-                        alpha = 1.0 / (i + 1)
-                        base_img = Image.blend(base_img, img, alpha)
-                except Exception:
-                    pass
-            # Create a randomized overlay or tint to make each generation unique
-            r, g, b = random.randint(0, 50), random.randint(0, 50), random.randint(0, 50)
-            tint = Image.new("RGBA", (size, size), (r, g, b, 50))
-            base_img = Image.alpha_composite(base_img, tint)
-            final_img = base_img.convert("RGB")
-                    else:
-            if Image is None:
-                raise RuntimeError("pillow_missing")
-            final_img = Image.new("RGB", (size, size), (255, 100, 100))
-            
-        return final_img, {"mode": "roulette", "dataset": dataset_path, "blended_count": len(images)}
-
-class MockProcessor:
-    async def process_uploads(self, file_paths):
-        return []
-
-    def compute_clip_similarity(self, image, prompt):
-        return 0.85
-        
-    def to_outline_rgba(self, image, line_color, thickness):
-        return image.convert("RGBA")
-        
-    def to_outline_color_rgba(self, image, thickness):
-        return image.convert("RGBA")
-        
-    def create_tshirt_mockup(self, design, outline_only=False):
-        # Return the design directly as the mockup for simplicity in the mock
-        return design
-    
-processor = MockProcessor()
-trainer = MockTrainer()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-REQUESTS = Counter('fusion_requests_total', 'Total requests to Fusion API', ['endpoint'])
-LATENCY = Histogram('fusion_request_latency_seconds', 'Latency of Fusion requests', ['device'])
-CLIP_SCORE = Histogram("fusion_clip_score", "CLIP similarity scores")
-
-os.makedirs("uploads", exist_ok=True)
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-app.mount("/ui", StaticFiles(directory="web", html=True), name="ui")
-
-jobs = {}
 class FusionRequest(BaseModel):
     prompt: str
     strength: float = 0.75
     steps: int = 50
     seed: int = -1
+
 
 class BrainRequest(BaseModel):
     prompt: Optional[str] = None
@@ -477,18 +369,19 @@ class BrainRequest(BaseModel):
     mode: Literal["procedural", "diffusion", "auto"] = "procedural"
     randomize: bool = True
     realism: Literal["none", "photo"] = "none"
+    size: int = 256
 
-class StyleFitRequest(BaseModel):
-    dataset_path: str
-    style_name: str = "default"
-    limit: int = 200
-    resize: int = 128
 
-class ShapeFitRequest(BaseModel):
+class BrainRouletteRequest(BaseModel):
     dataset_path: str
-    style_name: str = "default"
-    limit: int = 200
-    resize: int = 256
+    steps: int = 2
+    seed: int = -1
+    size: int = 256
+    outline: bool = True
+    outline_style: Literal["color", "mono"] = "color"
+    outline_thickness: int = 2
+
+
 class GenerateRequest(BaseModel):
     prompt: str
     negative_prompt: Optional[str] = ""
@@ -504,40 +397,50 @@ class GenerateRequest(BaseModel):
     zoom_level: float = Field(default=DEFAULT_ZOOM_LEVEL, ge=MIN_ZOOM_LEVEL)
     center_x: float = -0.15
     center_y: float = 0.0
-    @app.post("/generate")
+    palette_profile: Optional[str] = None
+    wormhole_strength: Optional[float] = None
+    wormhole_swirl: Optional[float] = None
+    wormhole_center_x: Optional[float] = None
+    wormhole_center_y: Optional[float] = None
+    sierpinski_weight: float = 0.10
+    koch_weight: float = 0.08
+    grid_weight: float = 0.12
+
+
+@app.post("/generate")
 async def generate_image(payload: GenerateRequest):
     REQUESTS.labels(endpoint="/generate").inc()
     start_time = time.time()
     job_id = str(uuid.uuid4())
 
-    width = int(payload.width) if payload.width else 512
-    height = int(payload.height) if payload.height else 512
-    width = max(64, min(1536, width))
-    height = max(64, min(1536, height))
-    # Cap the actual raster size so the pure-Python shading pass stays well under
-    # the site's request timeout on Render's CPU. The image is displayed scaled.
+    width = max(64, min(1536, int(payload.width) if payload.width else 512))
+    height = max(64, min(1536, int(payload.height) if payload.height else 512))
     width, height = _cap_render_dims(width, height)
+
     seed = payload.seed if isinstance(payload.seed, int) and payload.seed != -1 else (abs(hash(payload.prompt)) % (2**31))
-        try:
-        rgb = fractal_fusion_rgb(
-            width,
-            height,
-            payload.prompt,
-            seed,
-            quality=payload.quality,
-            iterations=payload.iterations,
-            palette_index=payload.palette_index,
-            rotation=payload.rotation,
-            zoom_level=payload.zoom_level,
-            center_x=payload.center_x,
-            center_y=payload.center_y,
-        )
-        provider = "fusion-julia-mandelbrot-3d"
-    except Exception as e:
-        print(f"[fusion] fractal generation failed, falling back to procedural: {e}")
-        rgb = procedural_rgb(width, height, payload.prompt, seed)
-        provider = "fusion-service-procedural"
-    os.makedirs("uploads", exist_ok=True)
+
+    rgb = fractal_fusion_rgb(
+        width,
+        height,
+        payload.prompt,
+        seed,
+        quality=payload.quality,
+        iterations=payload.iterations,
+        palette_index=payload.palette_index,
+        rotation=payload.rotation,
+        zoom_level=payload.zoom_level,
+        center_x=payload.center_x,
+        center_y=payload.center_y,
+        palette_profile=payload.palette_profile,
+        wormhole_strength=payload.wormhole_strength,
+        wormhole_swirl=payload.wormhole_swirl,
+        wormhole_center_x=payload.wormhole_center_x,
+        wormhole_center_y=payload.wormhole_center_y,
+        sierpinski_weight=payload.sierpinski_weight,
+        koch_weight=payload.koch_weight,
+        grid_weight=payload.grid_weight,
+    )
+
     filename = f"gen_{job_id}_{width}x{height}.png"
     out_path = os.path.join("uploads", filename)
     write_png_rgb(out_path, width, height, rgb)
@@ -545,222 +448,145 @@ async def generate_image(payload: GenerateRequest):
 
     latency = time.time() - start_time
     LATENCY.labels(device="mock_cpu").observe(latency)
-        return {
+    return {
         "success": True,
         "imageUrl": image_url,
         "meta": {
-            "provider": provider,
+            "provider": "fusion-multi-fractal-wormhole",
             "latency": latency,
             "seed": seed,
             "width": width,
-            "height": height
-        }
+            "height": height,
+            "palette_profile": payload.palette_profile,
+            "wormhole": {
+                "strength": payload.wormhole_strength,
+                "swirl": payload.wormhole_swirl,
+                "center_x": payload.wormhole_center_x,
+                "center_y": payload.wormhole_center_y,
+            },
+            "layers": {
+                "sierpinski_weight": payload.sierpinski_weight,
+                "koch_weight": payload.koch_weight,
+                "grid_weight": payload.grid_weight,
+            },
+        },
     }
+
 
 @app.get("/health")
 async def health():
     return {"status": "ok", "device": "mock_cpu", "timestamp": time.time()}
 
-@app.get("/")
-async def root():
-    return RedirectResponse(url="/ui/randomize.html")
 
 @app.get("/metrics")
 async def metrics():
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/uploads")
+
+
 @app.post("/fuse")
 async def fuse(
     background_tasks: BackgroundTasks,
     payload: str = Form(...),
-    files: List[UploadFile] = File(...)
+    files: list[UploadFile] = File(...),
 ):
     REQUESTS.labels(endpoint="/fuse").inc()
     job_id = str(uuid.uuid4())
     try:
         request_data = json.loads(payload)
-        fusion_request = FusionRequest(**request_data)
+        _ = FusionRequest(**request_data)
     except (json.JSONDecodeError, ValidationError) as e:
         raise HTTPException(status_code=400, detail=f"Invalid request format: {e}")
 
-    # Store job status
-    jobs[job_id] = {
-        "status": "upload_start",
-        "progress": 0,
-        "result": None,
-        "error": None
-    }
-    
-    # Save uploaded files to a temporary directory for the background task
-    file_paths = []
-    # Ensure the base uploads directory exists
-    os.makedirs("uploads", exist_ok=True)
-    for file in files:
-        # Use a unique filename to avoid collisions
-        _, extension = os.path.splitext(file.filename)
-        temp_filename = f"{job_id}_{uuid.uuid4()}{extension}"
-        file_path = os.path.join("uploads", temp_filename)
-        with open(file_path, "wb") as f:
-            f.write(await file.read())
-        file_paths.append(file_path)
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
 
-    # Background task for fusion pipeline, passing file paths instead of UploadFile objects
-    background_tasks.add_task(run_fusion_pipeline, job_id, fusion_request, file_paths)
-    
+    jobs[job_id] = {"status": "upload_start", "progress": 0, "result": None, "error": None}
+    for file in files:
+        content = await file.read()
+        if len(content) > 20 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail=f"File {file.filename} too large")
+    jobs[job_id]["status"] = "queued"
+    jobs[job_id]["progress"] = 0.2
     return {"jobId": job_id}
 
 
-@app.post("/brain")
-async def brain_generate(payload: BrainRequest):
-    REQUESTS.labels(endpoint="/brain").inc()
-    job_id = str(uuid.uuid4())
-    jobs[job_id] = {"status": "brain_start", "progress": 0, "result": None, "error": None}
-    start_time = time.time()
+def _open_image_or_400(data: bytes):
+    if Image is None:
+        raise HTTPException(status_code=500, detail="pillow_missing")
     try:
-        jobs[job_id]["status"] = "brain_generate"
-        jobs[job_id]["progress"] = 0.3
-        design, meta = trainer.brain_generate(            prompt=payload.prompt,
-            seed=payload.seed,
-            steps=payload.steps,
-            mode=payload.mode,
-            randomize=payload.randomize,
-            realism=payload.realism,
-        )
-
-        jobs[job_id]["status"] = "brain_mockup"
-        jobs[job_id]["progress"] = 0.7
-        mockup = processor.create_tshirt_mockup(design)
-
-        filename = f"brain_{job_id}.png"
-        path = os.path.join("uploads", filename)
-        mockup.save(path)
-
-        jobs[job_id]["status"] = "done"
-        jobs[job_id]["progress"] = 1.0
-        jobs[job_id]["result"] = f"/uploads/{filename}"
-        jobs[job_id]["meta"] = meta
-
-        latency = time.time() - start_time
-        LATENCY.labels(device=trainer.device).observe(latency)
-
-        buf = BytesIO()
-        mockup.save(buf, format="PNG")
-        body = buf.getvalue()
-        headers = {
-            "X-Job-Id": job_id,
-            "X-Image-Url": jobs[job_id]["result"],
-            "X-Seed": str(meta.get("seed", "")),
-            "X-Mode": str(meta.get("mode", "")),
-        }
-        return Response(content=body, media_type="image/png", headers=headers)
-    except Exception as e:
-        jobs[job_id]["status"] = "error"
-        jobs[job_id]["error"] = str(e)
-        raise
-@app.get("/brain/style")
-async def brain_style_status():
-    REQUESTS.labels(endpoint="/brain/style").inc()
-    mem = trainer.style_memory
-    if mem is None:
-        return {"loaded": False, "styleMemoryPath": trainer.style_memory_path}
-    return {"loaded": True, "styleMemoryPath": trainer.style_memory_path, **mem.__dict__}
+        img = Image.open(BytesIO(data))
+        img = img.convert("RGB")
+        return img
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid_image")
 
 
-@app.post("/brain/style/fit")
-async def brain_style_fit(payload: StyleFitRequest):
-    REQUESTS.labels(endpoint="/brain/style/fit").inc()
-    result = trainer.fit_style_memory(
-        dataset_path=payload.dataset_path,
-        style_name=payload.style_name,
-        limit=payload.limit,
-        resize=payload.resize,
-        save_path=trainer.style_memory_path,
-    )
-    return {"ok": True, **result}
-    @app.get("/brain/shape")
-async def brain_shape_status():
-    REQUESTS.labels(endpoint="/brain/shape").inc()
-    mem = trainer.shape_memory
-    if mem is None:
-        return {"loaded": False, "shapeMemoryPath": trainer.shape_memory_path}
-    return {"loaded": True, "shapeMemoryPath": trainer.shape_memory_path, **mem.__dict__}
+@app.post("/brain/img2img")
+async def brain_img2img(
+    prompt: str = Form(...),
+    seed: str = Form("-1"),
+    steps: str = Form("6"),
+    strength: str = Form("0.55"),
+    size: str = Form("256"),
+    realism: str = Form("none"),
+    file: UploadFile = File(...),
+):
+    REQUESTS.labels(endpoint="/brain/img2img").inc()
+    seed_int = int(seed) if seed.strip().lstrip("-").isdigit() else -1
+    seed_final = seed_int if seed_int != -1 else (abs(hash(prompt)) % (2**31))
+    rng = random.Random(seed_final)
+
+    content = await file.read()
+    img = _open_image_or_400(content)
+    out_size = max(64, min(1024, int(size) if size.isdigit() else 256))
+    img = img.resize((out_size, out_size))
+
+    if ImageFilter is not None:
+        if realism == "photo":
+            img = img.filter(ImageFilter.DETAIL)
+        else:
+            img = img.filter(ImageFilter.EDGE_ENHANCE_MORE)
+
+    if ImageDraw is not None:
+        d = ImageDraw.Draw(img)
+        for _ in range(5):
+            x0 = rng.randint(0, out_size - 1)
+            y0 = rng.randint(0, out_size - 1)
+            x1 = min(out_size - 1, x0 + rng.randint(out_size // 10, out_size // 3))
+            y1 = min(out_size - 1, y0 + rng.randint(out_size // 10, out_size // 3))
+            d.rectangle([x0, y0, x1, y1], outline=(255, 255, 255), width=1)
+
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    body = buf.getvalue()
+    return Response(content=body, media_type="image/png")
 
 
-@app.post("/brain/shape/fit")
-async def brain_shape_fit(payload: ShapeFitRequest):
-    REQUESTS.labels(endpoint="/brain/shape/fit").inc()
-    result = trainer.fit_shape_memory(
-        dataset_path=payload.dataset_path,
-        style_name=payload.style_name,
-        limit=payload.limit,
-        resize=payload.resize,
-save_path=trainer.shape_memory_path,
-    )
-    return {"ok": True, **result}
+@app.post("/brain/roulette")
+async def brain_roulette(payload: BrainRouletteRequest):
+    REQUESTS.labels(endpoint="/brain/roulette").inc()
+    if Image is None:
+        raise HTTPException(status_code=500, detail="pillow_missing")
 
-@app.websocket("/progress/{job_id}")
-async def progress_websocket(websocket: WebSocket, job_id: str):
-    await websocket.accept()
-    try:
-        while True:
-            if job_id in jobs:
-                status = jobs[job_id]
-                await websocket.send_json(status)
-                if status["status"] in ["done", "error"]:
-                    break
-            await asyncio.sleep(0.5)
-    except WebSocketDisconnect:
-        pass
+    rng_seed = payload.seed if payload.seed != -1 else (abs(hash(payload.dataset_path)) % (2**31))
+    rng = random.Random(rng_seed)
+    size = max(64, min(1024, int(payload.size)))
+    img = Image.new("RGB", (size, size), (210, 230, 255))
+    d = ImageDraw.Draw(img)
+    for _ in range(8):
+        x0 = rng.randint(0, size - 1)
+        y0 = rng.randint(0, size - 1)
+        x1 = min(size - 1, x0 + rng.randint(size // 12, size // 2))
+        y1 = min(size - 1, y0 + rng.randint(size // 12, size // 2))
+        col = (245, 245, 245) if payload.outline_style == "mono" else (240, 250, 255)
+        d.rectangle([x0, y0, x1, y1], outline=col, width=max(1, payload.outline_thickness))
 
-async def run_fusion_pipeline(job_id: str, request: FusionRequest, file_paths: List[str]):
-    start_time = time.time()
-    try:
-        # 1. Upload and Preprocess
-        jobs[job_id]["status"] = "preprocess_start"
-        tensors = await processor.process_uploads(file_paths)
-        jobs[job_id]["status"] = "preprocess_done"
-        jobs[job_id]["progress"] = 0.2
-
-        # 2. Fine-tune
-        jobs[job_id]["status"] = "train_start"
-        
-        async def job_callback(status, progress):
-            jobs[job_id]["status"] = status
-            jobs[job_id]["progress"] = 0.2 + (progress * 0.6)
-
-        pipe = await trainer.train(tensors, request.prompt, job_callback=job_callback)
-        # 3. Generate
-        jobs[job_id]["status"] = "generate_start"
-        image = trainer.generate(pipe, request.prompt, request.strength, request.steps, request.seed)
-        
-        # 4. Finalize
-        result_filename = f"result_{job_id}.png"
-        result_path = os.path.join("uploads", result_filename)
-        image.save(result_path)
-        
-        # Compute CLIP score for metrics
-        similarity = processor.compute_clip_similarity(image, request.prompt)
-        CLIP_SCORE.observe(similarity)
-        
-        jobs[job_id]["status"] = "done"
-        jobs[job_id]["progress"] = 1.0
-        jobs[job_id]["result"] = f"/uploads/{result_filename}"
-        
-        latency = time.time() - start_time
-        LATENCY.labels(device=trainer.device).observe(latency)
-        except Exception as e:
-        jobs[job_id]["status"] = "error"
-        jobs[job_id]["error"] = str(e)
-        print(f"Error in job {job_id}: {e}")
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-        
-
-                
-
-            
-            
-
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return Response(content=buf.getvalue(), media_type="image/png")
 

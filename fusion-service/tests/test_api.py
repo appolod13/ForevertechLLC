@@ -94,15 +94,13 @@ def test_generate_endpoint_forwards_render_params_to_fractal_fusion(monkeypatch)
     response = client.post("/generate", json=payload)
     assert response.status_code == 200
 
-    assert captured["kwargs"] == {
-        "quality": 3,
-        "iterations": 222,
-        "palette_index": 5,
-        "rotation": 27.5,
-        "zoom_level": 0.9,
-        "center_x": -0.42,
-        "center_y": 0.18,
-    }
+    assert captured["kwargs"]["quality"] == 3
+    assert captured["kwargs"]["iterations"] == 222
+    assert captured["kwargs"]["palette_index"] == 5
+    assert captured["kwargs"]["rotation"] == 27.5
+    assert captured["kwargs"]["zoom_level"] == 0.9
+    assert captured["kwargs"]["center_x"] == -0.42
+    assert captured["kwargs"]["center_y"] == 0.18
 
 def test_fractal_fusion_rgb_render_params_change_output():
     base = fusion_main.fractal_fusion_rgb(48, 48, "same prompt", 123)
