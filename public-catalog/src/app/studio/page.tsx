@@ -117,6 +117,9 @@ function StudioPageInner() {
             >
               {isGenerating ? 'Generating...' : 'Generate Asset & Content'}
             </button>
+            <div className="mt-2 text-center text-xs text-cyan-300/70">
+              Generate with a real quantum computer.
+            </div>
 
             {/* Latest Build Preview */}
             <div className="mt-8 border-t border-gray-700 pt-8">
