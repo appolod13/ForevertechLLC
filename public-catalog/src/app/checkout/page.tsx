@@ -36,12 +36,6 @@ export default function CheckoutPage() {
   const { items, total } = useCart();
   const { user, isLoading } = useAuth();
 
-  const quantumFeeUsd = Number(process.env.NEXT_PUBLIC_QUANTUM_VERIFIED_FEE_USD || 4.99);
-  const [quantumVerified, setQuantumVerified] = useState(false);
-  const quantumFee = quantumVerified ? (Number.isFinite(quantumFeeUsd) ? quantumFeeUsd : 4.99) : 0;
-  const [quantumAvailable, setQuantumAvailable] = useState<boolean>(true);
-  const [quantumUnavailableReason, setQuantumUnavailableReason] = useState<string>('');
-
   type ShippingOption = { id: string; label: string; amountUsd: number; eta?: string };
   const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
   const [shippingOptionId, setShippingOptionId] = useState<string>('');
@@ -53,7 +47,7 @@ export default function CheckoutPage() {
     return opt ? opt.amountUsd : 0;
   }, [shippingOptions, shippingOptionId]);
 
-  const grandTotal = total + quantumFee + shippingUsd;
+  const grandTotal = total + shippingUsd;
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
@@ -93,43 +87,6 @@ export default function CheckoutPage() {
   };
 
   const itemCount = useMemo(() => items.reduce((sum, it) => sum + (it.quantity || 1), 0), [items]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      try {
-        const res = await fetch('/api/quantum/status', { cache: 'no-store' });
-        const json: unknown = await res.json().catch(() => null);
-        const ok = isRecord(json) && json.success === true && isRecord(json.data);
-        if (!ok) {
-          if (!cancelled) {
-            setQuantumAvailable(false);
-            setQuantumUnavailableReason('temporarily_unavailable');
-            setQuantumVerified(false);
-          }
-          return;
-        }
-        const data = (json as Record<string, unknown>).data as Record<string, unknown>;
-        const available = data.available === true;
-        const reason = typeof data.reason === 'string' ? data.reason : '';
-        if (!cancelled) {
-          setQuantumAvailable(available);
-          setQuantumUnavailableReason(reason);
-          if (!available) setQuantumVerified(false);
-        }
-      } catch {
-        if (!cancelled) {
-          setQuantumAvailable(false);
-          setQuantumUnavailableReason('temporarily_unavailable');
-          setQuantumVerified(false);
-        }
-      }
-    };
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     const country = (formData.country || '').trim();
@@ -208,7 +165,6 @@ export default function CheckoutPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           items: items,
-          quantumVerified,
           shippingOptionId: shippingId,
           shippingCountry: formData.country,
           customerName: formData.name,
@@ -512,28 +468,6 @@ export default function CheckoutPage() {
               </div>
             ))}
 
-            <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
-              <label className="flex items-start justify-between gap-3 text-sm">
-                <span>
-                  <span className="block font-semibold text-white">Quantum Verified Premium</span>
-                  <span className="block text-xs text-zinc-400">
-                    Uses a real IBM Quantum hardware job to generate a verifiable quantum seed for this order.
-                    {!quantumAvailable ? ` Unavailable right now (${quantumUnavailableReason || 'offline'}).` : ''}
-                  </span>
-                </span>
-                <span className="flex items-center gap-3">
-                  <span className="text-white">+${(Number.isFinite(quantumFeeUsd) ? quantumFeeUsd : 4.99).toFixed(2)}</span>
-                  <input
-                    type="checkbox"
-                    checked={quantumVerified}
-                    onChange={(e) => setQuantumVerified(e.target.checked)}
-                    disabled={!quantumAvailable}
-                    className="h-4 w-4 accent-primary"
-                  />
-                </span>
-              </label>
-            </div>
-
             <div className="border-t border-zinc-800 pt-4 space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-zinc-400">Subtotal</span>
@@ -543,12 +477,6 @@ export default function CheckoutPage() {
                 <span className="text-zinc-400">Shipping</span>
                 <span className="text-white">${shippingUsd.toFixed(2)}</span>
               </div>
-              {quantumVerified ? (
-                <div className="flex justify-between">
-                  <span className="text-zinc-400">Quantum Verified</span>
-                  <span className="text-white">${quantumFee.toFixed(2)}</span>
-                </div>
-              ) : null}
               <div className="flex justify-between font-bold text-white pt-2">
                 <span>Total</span>
                 <span>${grandTotal.toFixed(2)}</span>

@@ -35,8 +35,8 @@ export default function FaqsPage() {
         <div className="rounded-2xl border border-gray-700 bg-gradient-to-b from-gray-800 to-gray-900 p-8">
           <h1 className="text-4xl font-bold">FAQs</h1>
           <p className="mt-4 text-gray-300 leading-relaxed max-w-3xl">
-            This page explains how ForeverTech Catalog works end-to-end: Studio → Customize → Cart → Checkout → Printify fulfillment, plus how optional
-            Quantum Verified Premium links a real IBM quantum job to your purchase.
+            This page explains how ForeverTech Catalog works end-to-end: Studio → Customize → Cart → Checkout → Printify fulfillment, plus how the studio now
+            offers a real quantum generation mode before you enter the merch flow.
           </p>
           <div className="mt-6 flex flex-wrap gap-3 text-sm">
             <Link href="/studio" className="rounded-lg border border-gray-700 bg-black/20 px-4 py-2 hover:bg-black/30">
@@ -132,16 +132,16 @@ export default function FaqsPage() {
             </p>
           </Card>
 
-          <Card title="What is “Quantum Verified Premium”?">
+          <Card title="What is Real Quantum Generation - $9.99?">
             <p>
-              Quantum Verified Premium is an optional add-on at checkout. If selected, we request a real quantum randomness proof from IBM and use that
-              quantum seed to deterministically regenerate the front artwork for your order.
+              Real Quantum Generation is a studio-first generation mode. Before the image runs, you unlock a real quantum-backed generation path and then
+              create the artwork with origin-record messaging tied to that generation.
             </p>
             <p className="font-semibold text-white">Benefits</p>
             <ul className="list-disc pl-6 space-y-2">
-              <li>Your printed front design is cryptographically tied to a real IBM quantum job (via a seed-derived salt used for generation).</li>
-              <li>You get proof metadata (IBM jobId + backend) plus a non-sensitive seed hash (qf_quantum_seed_hash) for verification.</li>
-              <li>The artwork becomes a verifiable edition of the prompt, rather than a generic re-render.</li>
+              <li>Your generation path is positioned as a premium creative choice made in Studio, not a late checkout add-on.</li>
+              <li>You receive origin-record messaging and downloadable proof scaffolding after a real quantum generation.</li>
+              <li>Checkout stays focused on merch, shipping, and Stripe payment for the physical product.</li>
             </ul>
           </Card>
 
@@ -170,10 +170,10 @@ export default function FaqsPage() {
           </Card>
 
           <Card title="How the “real IBM quantum + Wolfram + Qiskit + fractal” pipeline works">
-            <p className="font-semibold text-white">A) The “real IBM quantum” part (order-time)</p>
+            <p className="font-semibold text-white">A) The “real IBM quantum” part (studio-time)</p>
             <ol className="list-decimal pl-6 space-y-2">
-              <li>Customer checks Quantum Verified Premium at checkout.</li>
-              <li>After Stripe payment completes, our webhook requests an IBM quantum seed + proof metadata (jobId, backend).</li>
+              <li>Customer selects Real Quantum Generation in Studio.</li>
+              <li>After the generation unlock/payment step completes, the system can request a quantum-backed seed + proof metadata.</li>
             </ol>
 
             <p className="font-semibold text-white mt-4">B) The “Wolfram + Qiskit + fractal” part (image-time)</p>
@@ -213,8 +213,7 @@ export default function FaqsPage() {
               .
             </p>
             <p>
-              If the Quantum Verified step is temporarily unavailable, the system is designed to fall back safely (and may refund the premium portion where
-              applicable).
+              If the real quantum generation path is temporarily unavailable, the studio should fall back safely before merch checkout begins.
             </p>
           </Card>
 

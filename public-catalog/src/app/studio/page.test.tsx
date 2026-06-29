@@ -1,10 +1,27 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import StudioPage from './page';
 import { Providers } from '../../components/Providers';
 
 vi.mock('sonner', () => ({
   Toaster: () => null,
+}));
+
+vi.mock('../../components/Header', () => ({
+  Header: () => <div>Header</div>,
+}));
+
+vi.mock('../../components/DataDashboardButton', () => ({
+  DataDashboardButton: () => <button type="button">Dashboard</button>,
+}));
+
+vi.mock('../../components/FusionAI', () => ({
+  FusionAI: () => <div>FusionAI</div>,
+}));
+
+vi.mock('../../components/LatestAIImage', () => ({
+  LatestAIImage: () => <div>LatestAIImage</div>,
 }));
 
 vi.mock('next/navigation', async () => {
@@ -21,32 +38,86 @@ function renderWithProviders(ui: React.ReactElement) {
   return render(<Providers>{ui}</Providers>);
 }
 
+async function renderStudioPage() {
+  renderWithProviders(<StudioPage />);
+  await waitFor(() => {
+    expect(screen.getByText('AI Asset Generator')).toBeInTheDocument();
+  });
+}
+
+class EventSourceMock {
+  close() {}
+  addEventListener() {}
+}
+
 describe('StudioPage calendar date range', () => {
-  it('renders the asset generator UI', () => {
-    renderWithProviders(<StudioPage />);
+  beforeEach(() => {
+    vi.stubGlobal('EventSource', EventSourceMock);
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/api/auth/session')) {
+        return {
+          ok: true,
+          json: async () => ({
+            twitter: { authenticated: false },
+            telegram: { authenticated: false },
+            instagram: { authenticated: false },
+            tiktok: { authenticated: false },
+            youtube: { authenticated: false },
+          }),
+        } as Response;
+      }
+      if (url.includes('/api/chat/history')) {
+        return { ok: true, json: async () => ({ success: true, data: { messages: [] } }) } as Response;
+      }
+      if (url.includes('/api/catalog/posts')) {
+        return { ok: true, json: async () => ({ posts: [] }) } as Response;
+      }
+      return { ok: true, json: async () => ({ success: true }) } as Response;
+    }) as typeof fetch;
+  });
+
+  it('renders the asset generator UI', async () => {
+    await renderStudioPage();
     expect(screen.getByText('Creator Studio')).toBeDefined();
     expect(screen.getByText('AI Asset Generator')).toBeDefined();
     expect(screen.getByPlaceholderText('Describe the image and post content you want to generate...')).toBeDefined();
   });
 
-  it('disables generate button until prompt is entered', () => {
-    renderWithProviders(<StudioPage />);
-    const btn = screen.getByRole('button', { name: 'Generate Asset & Content' }) as HTMLButtonElement;
+  it('disables generate button until prompt is entered', async () => {
+    await renderStudioPage();
+    const btn = screen.getByRole('button', { name: 'Generate Standard Asset & Content' }) as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
     const textarea = screen.getByPlaceholderText('Describe the image and post content you want to generate...') as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: 'quantum wormhole fractal' } });
     expect(btn.disabled).toBe(false);
   });
 
-  it('toggles quantum mode and ipfs options', () => {
-    renderWithProviders(<StudioPage />);
-    const quantum = screen.getByLabelText('Quantum Mode (Wolfram + Qiskit)') as HTMLInputElement;
+  it('renders standard and real quantum generation modes', async () => {
+    await renderStudioPage();
+    expect(screen.getByLabelText('Standard Generation')).toBeInTheDocument();
+    expect(screen.getByLabelText('Real Quantum Generation - $9.99')).toBeInTheDocument();
+  });
+
+  it('switches to the paid unlock flow for real quantum generation', async () => {
+    await renderStudioPage();
+    const textarea = screen.getByPlaceholderText('Describe the image and post content you want to generate...') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'quantum wormhole fractal' } });
+
+    const standard = screen.getByLabelText('Standard Generation') as HTMLInputElement;
+    const quantum = screen.getByLabelText('Real Quantum Generation - $9.99') as HTMLInputElement;
     const ipfs = screen.getByLabelText('Public Link Upload') as HTMLInputElement;
+
+    expect(standard.checked).toBe(true);
     expect(quantum.checked).toBe(false);
     expect(ipfs.checked).toBe(false);
+
     fireEvent.click(quantum);
     fireEvent.click(ipfs);
+
+    expect(standard.checked).toBe(false);
     expect(quantum.checked).toBe(true);
     expect(ipfs.checked).toBe(true);
+    expect(screen.getByRole('button', { name: 'Unlock Real Quantum Generation - $9.99' })).toBeInTheDocument();
   });
 });

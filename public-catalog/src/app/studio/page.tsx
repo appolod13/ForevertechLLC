@@ -57,7 +57,16 @@ function StudioPageInner() {
   const [scheduleAt, setScheduleAt] = useState<string>('');
   const [ipfsEnabled, setIpfsEnabled] = useState<boolean>(false);
   const [quantumMode, setQuantumMode] = useState<boolean>(false);
+  const [quantumUnlocked, setQuantumUnlocked] = useState<boolean>(false);
   const [postingStatus, setPostingStatus] = useState<string | null>(null);
+  const [quantumRecord, setQuantumRecord] = useState<{
+    id: string;
+    createdAt: string;
+    prompt: string;
+    imageUrl: string;
+    model: string;
+    metadata: Record<string, unknown>;
+  } | null>(null);
   
   type SocialAccount = { authenticated: boolean; screenName?: string };
   const [socialAccounts, setSocialAccounts] = useState<Record<string, SocialAccount | null>>({
@@ -219,6 +228,16 @@ function StudioPageInner() {
       if (typeof rec.quantumMode === 'boolean') {
         setQuantumMode(rec.quantumMode);
       }
+      if (rec.meta && typeof rec.meta === 'object' && typeof rec.imageUrl === 'string' && typeof rec.prompt === 'string' && rec.quantumMode === true) {
+        setQuantumRecord({
+          id: String((rec.meta as Record<string, unknown>).requestId || (rec.meta as Record<string, unknown>).seed || `record-${Date.now()}`),
+          createdAt: new Date().toISOString(),
+          prompt: rec.prompt,
+          imageUrl: rec.imageUrl,
+          model: 'Quantum-v1 (Wolfram+Qiskit)',
+          metadata: rec.meta as Record<string, unknown>,
+        });
+      }
       if (rec.meta && typeof rec.meta === 'object') {
         setGenerationMetadata({
           timestamp: new Date().toISOString(),
@@ -229,6 +248,12 @@ function StudioPageInner() {
     } catch {
     }
   }, []);
+
+  useEffect(() => {
+    if (!quantumMode && quantumUnlocked) {
+      setQuantumUnlocked(false);
+    }
+  }, [quantumMode, quantumUnlocked]);
 
   useEffect(() => {
     const fetchCatalog = async () => {
@@ -389,6 +414,51 @@ function StudioPageInner() {
       setCrossOptimizeLoading(false);
     }
   };
+
+  const generationMode = quantumMode ? 'real_quantum' : 'standard';
+
+  const generationButtonLabel = (() => {
+    if (isGenerating) return 'Dreaming...';
+    if (generationMode === 'real_quantum') {
+      return quantumUnlocked ? 'Generate with Real Quantum Computer' : 'Unlock Real Quantum Generation - $9.99';
+    }
+    return 'Generate Standard Asset & Content';
+  })();
+
+  const handleGenerationAction = async () => {
+    if (!prompt || isGenerating) return;
+    if (generationMode === 'real_quantum' && !quantumUnlocked) {
+      setQuantumUnlocked(true);
+      setGenerationError(null);
+      addLog('Real quantum generation unlocked for this prompt.', 'success', 'I_Q_UNLOCKED');
+      return;
+    }
+    await generateImage();
+  };
+
+  const quantumRecordText = useMemo(() => {
+    if (!quantumRecord) return '';
+    return [
+      'PixelQrypt Verified Origin Record',
+      `Record ID: ${quantumRecord.id}`,
+      `Created: ${quantumRecord.createdAt}`,
+      `Mode: Real Quantum Generation`,
+      `Model: ${quantumRecord.model}`,
+      `Prompt: ${quantumRecord.prompt}`,
+      `Image: ${quantumRecord.imageUrl}`,
+      '',
+      'Metadata',
+      JSON.stringify(quantumRecord.metadata, null, 2),
+      '',
+      'First Wave Note',
+      'Your seed is now part of the first generation of quantum-verified art records.',
+    ].join('\n');
+  }, [quantumRecord]);
+
+  const quantumRecordUrl = useMemo(() => {
+    if (!quantumRecordText) return '';
+    return `data:text/plain;charset=utf-8,${encodeURIComponent(quantumRecordText)}`;
+  }, [quantumRecordText]);
 
   const generateImage = async () => {
     if (!prompt) return;
@@ -686,6 +756,23 @@ function StudioPageInner() {
           JSON.stringify({ imageUrl, meta, prompt, quantumMode }),
         );
       } catch {}
+
+      if (quantumMode) {
+        const nextRecord = {
+          id: requestId || String(meta.seed || `record-${Date.now()}`),
+          createdAt: new Date().toISOString(),
+          prompt,
+          imageUrl,
+          model: String(meta.model),
+          metadata: meta,
+        };
+        setQuantumRecord(nextRecord);
+        try {
+          localStorage.setItem('foreverteck.studio.lastQuantumRecord', JSON.stringify(nextRecord));
+        } catch {}
+      } else {
+        setQuantumRecord(null);
+      }
       
       setLastGenTimestamp(Date.now());
 
@@ -907,7 +994,7 @@ function StudioPageInner() {
         platformMediaUrls: { facebook: fbUrl, instagram: igUrl, twitter: twUrl },
         thumbnailUrl: thumbUrl,
         prompt,
-        priceUsd: 49.99
+        priceUsd: 59.99
       };
       // Note: We don't automatically POST to catalog here anymore to avoid double posting.
       // The user will click "Post to All Channels" when they are ready.
@@ -1038,25 +1125,62 @@ function StudioPageInner() {
                   ))}
                 </div>
               )}
-              <div className="flex items-center justify-between gap-4">
-                <label className={`flex items-center gap-2 text-sm p-2 rounded-lg border transition-all cursor-pointer ${quantumMode ? 'border-purple-500 bg-purple-500/10 shadow-[0_0_15px_rgba(168,85,247,0.3)]' : 'border-gray-700 hover:border-gray-600'}`}>
-                  <input type="checkbox" className="w-4 h-4 accent-purple-500" checked={quantumMode} onChange={e => setQuantumMode(e.target.checked)} />
-                  <span className={quantumMode ? 'text-purple-300 font-semibold' : 'text-gray-300'}>Quantum Mode (Wolfram + Qiskit)</span>
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className={`rounded-lg border p-3 transition-all cursor-pointer ${!quantumMode ? 'border-white bg-white/5 shadow-[0_0_15px_rgba(255,255,255,0.08)]' : 'border-gray-700 hover:border-gray-600'}`}>
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="generationMode"
+                      aria-label="Standard Generation"
+                      className="mt-1 h-4 w-4 accent-white"
+                      checked={!quantumMode}
+                      onChange={() => setQuantumMode(false)}
+                    />
+                    <div>
+                      <span className={!quantumMode ? 'block font-semibold text-white' : 'block text-gray-300'}>Standard Generation</span>
+                      <span className="mt-1 block text-xs text-gray-400">Create normally without a real quantum-backed seed.</span>
+                    </div>
+                  </div>
                 </label>
+                <label className={`rounded-lg border p-3 transition-all cursor-pointer ${quantumMode ? 'border-purple-500 bg-purple-500/10 shadow-[0_0_15px_rgba(168,85,247,0.3)]' : 'border-gray-700 hover:border-gray-600'}`}>
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="generationMode"
+                      aria-label="Real Quantum Generation - $9.99"
+                      className="mt-1 h-4 w-4 accent-purple-500"
+                      checked={quantumMode}
+                      onChange={() => setQuantumMode(true)}
+                    />
+                    <div>
+                      <span className={quantumMode ? 'block font-semibold text-purple-300' : 'block text-gray-300'}>Real Quantum Generation - $9.99</span>
+                      <span className="mt-1 block text-xs text-gray-400">Generate with a real quantum computer and unlock a verified origin record.</span>
+                    </div>
+                  </div>
+                </label>
+              </div>
+              <div className="flex items-center justify-between gap-4">
                 <label className={`flex items-center gap-2 text-sm p-2 rounded-lg border transition-all cursor-pointer ${ipfsEnabled ? 'border-green-500 bg-green-500/10 shadow-[0_0_15px_rgba(34,197,94,0.3)]' : 'border-gray-700 hover:border-gray-600'}`}>
                   <input type="checkbox" className="w-4 h-4 accent-green-500" checked={ipfsEnabled} onChange={e => setIpfsEnabled(e.target.checked)} />
                   <span className={ipfsEnabled ? 'text-green-300 font-semibold' : 'text-gray-300'}>Public Link Upload</span>
                 </label>
               </div>
+              <div className="rounded-lg border border-gray-700 bg-gray-900/70 p-3 text-sm text-gray-300">
+                {generationMode === 'real_quantum'
+                  ? (quantumUnlocked
+                    ? 'Real quantum generation unlocked. Run the generation to create your verified origin record.'
+                    : 'Real quantum generation requires a $9.99 unlock before generation.')
+                  : 'Standard generation creates the asset without the paid real quantum record.'}
+              </div>
               <div className="text-xs text-gray-400">
                 Public Link Upload saves your generated image and provides a shareable, public link. Turn this on if you want a more reliable link for printing and sharing. Uploading can take longer. Avoid using private or sensitive images.
               </div>
               <button 
-                onClick={generateImage}
+                onClick={handleGenerationAction}
                 disabled={isGenerating || !prompt}
                 className={`w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2 ${isGenerating || !prompt ? 'bg-gray-700 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-500'}`}
               >
-                {isGenerating ? 'Dreaming...' : 'Generate Asset & Content'}
+                {generationButtonLabel}
               </button>
             </div>
 
@@ -1155,6 +1279,31 @@ function StudioPageInner() {
                 >
                   Customize Your Gear
                 </Link>
+              ) : null}
+              {quantumRecord && quantumRecordUrl ? (
+                <div className="mt-4 rounded-xl border border-purple-500/30 bg-purple-500/10 p-4">
+                  <div className="text-sm font-semibold text-purple-200">Verified Origin Record created</div>
+                  <div className="mt-1 text-xs text-purple-100/80">
+                    Your seed is now part of the first generation of quantum-verified art records.
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    <a
+                      href={quantumRecordUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-lg border border-white/20 bg-black/40 px-4 py-2 text-sm font-semibold text-white hover:bg-black/60"
+                    >
+                      View Record
+                    </a>
+                    <a
+                      href={quantumRecordUrl}
+                      download={`pixelqrypt-origin-record-${quantumRecord.id}.txt`}
+                      className="rounded-lg border border-purple-400/30 bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-500"
+                    >
+                      Download Record
+                    </a>
+                  </div>
+                </div>
               ) : null}
               {generatedImage && generatedTextContent && (
                 <button

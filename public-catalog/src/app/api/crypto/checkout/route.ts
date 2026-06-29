@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { quoteShipping } from "@/lib/shippingConfig";
-import { getQuantumStatus } from "@/lib/quantumVerified";
 import { getCart, setCryptoCheckout, type CartItem, type CryptoCheckoutRecord } from "@/lib/cartStore";
 import { getCryptoConfig, type CryptoPaymentToken } from "@/lib/cryptoConfig";
 
@@ -56,7 +55,7 @@ function resolveUnitAmountCents(item: unknown): number | null {
   const rec = isRecord(item) ? item : {};
   const meta = isRecord(rec.metadata) ? (rec.metadata as Record<string, unknown>) : {};
   const productId = getString(meta.productId, 64) || getString(rec.productId, 64);
-  if (productId === "tee") return 4999;
+  if (productId === "tee") return 5999;
   return null;
 }
 
@@ -142,7 +141,6 @@ export async function POST(request: Request) {
 
     const deviceId = getString(b.deviceId, 128) || "anonymous";
     const userId = getString(b.userId, 128);
-    const quantumVerified = Boolean(b.quantumVerified);
     const tokenId = getString(b.tokenId, 128);
     const customerName = getString(b.customerName);
     const customerEmail = getString(b.customerEmail);
@@ -158,13 +156,6 @@ export async function POST(request: Request) {
     const cartItems = getCart(deviceId);
     if (!Array.isArray(cartItems) || cartItems.length === 0) {
       return NextResponse.json({ success: false, error: "cart_empty" }, { status: 400 });
-    }
-
-    if (quantumVerified) {
-      const status = getQuantumStatus();
-      if (!status.available) {
-        return NextResponse.json({ success: false, error: "quantum_unavailable" }, { status: 400 });
-      }
     }
 
     const cfg = getCryptoConfig();
@@ -206,11 +197,7 @@ export async function POST(request: Request) {
       return sum + (unitCents / 100) * q;
     }, 0);
 
-    const feeEnv = (process.env.QUANTUM_VERIFIED_FEE_CENTS || "").trim();
-    const feeCentsRaw = feeEnv ? Number(feeEnv) : 499;
-    const quantumFeeUsd = quantumVerified ? (Number.isFinite(feeCentsRaw) ? Math.max(0, Math.min(50_000, Math.trunc(feeCentsRaw))) : 499) / 100 : 0;
-
-    const amountUsd = Math.max(0, itemsUsd + (Number.isFinite(shippingUsd) ? shippingUsd : 0) + quantumFeeUsd);
+    const amountUsd = Math.max(0, itemsUsd + (Number.isFinite(shippingUsd) ? shippingUsd : 0));
 
     const isUsdPegged = token.coingeckoId === "usd-coin" || token.coingeckoId === "tether" || token.coingeckoId === "dai";
     let priceUsd = 1;

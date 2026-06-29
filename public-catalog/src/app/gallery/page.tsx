@@ -108,7 +108,7 @@ export default function GalleryPage() {
     await addToCart({
       id: `${item.id}-${size}`,
       title: `Quantum Asset ${String(item.id || '').slice(0, 8)} (Size: ${size})`,
-      price: 49.99,
+      price: 59.99,
       quantity: 1,
       currency: 'usd',
       size,

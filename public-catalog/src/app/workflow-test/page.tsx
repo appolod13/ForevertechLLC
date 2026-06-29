@@ -85,7 +85,7 @@ export default function WorkflowTestPage() {
       const cartRes = await fetch('/api/cart/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ item: { id: purchaseData.order.accountId, name: purchaseData.order.name, price: 49.99 } })
+        body: JSON.stringify({ item: { id: purchaseData.order.accountId, name: purchaseData.order.name, price: 59.99 } })
       });
       
       if (!cartRes.ok) throw new Error('Cart add failed');

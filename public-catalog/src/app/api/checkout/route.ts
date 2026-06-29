@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { quoteShipping } from '@/lib/shippingConfig';
-import { getQuantumStatus } from '@/lib/quantumVerified';
 import { getCart } from '@/lib/cartStore';
 import { getServiceSupabase } from '@/lib/supabase';
 
@@ -77,7 +76,7 @@ function resolveUnitAmountCents(item: unknown): number | null {
   }
 
   // Fallback for the legacy hardcoded tee product.
-  if (productId === 'tee') return 4999;
+  if (productId === 'tee') return 5999;
   return null;
 }
 
@@ -86,7 +85,6 @@ export async function POST(request: Request) {
     const stripe = getStripeClient();
     const body: unknown = await request.json().catch(() => ({} as unknown));
     const b = isRecord(body) ? body : {};
-    const quantumVerified = Boolean(b.quantumVerified);
     const customerEmail = getString(b.customerEmail);
     const customerName = getString(b.customerName);
     const deviceId = getString(b.deviceId, 128) || 'anonymous';
@@ -112,13 +110,6 @@ export async function POST(request: Request) {
 
     if (!Array.isArray(cartItems) || cartItems.length === 0) {
       return NextResponse.json({ error: 'Cart is empty' }, { status: 400 });
-    }
-
-    if (quantumVerified) {
-      const status = getQuantumStatus();
-      if (!status.available) {
-        return NextResponse.json({ error: 'Quantum Verified is temporarily unavailable' }, { status: 400 });
-      }
     }
 
     const itemCount = cartItems.reduce((sum: number, it: unknown) => {
@@ -197,24 +188,6 @@ export async function POST(request: Request) {
       });
     }
 
-    const feeEnv = (process.env.QUANTUM_VERIFIED_FEE_CENTS || '').trim();
-    const feeCentsRaw = feeEnv ? Number(feeEnv) : 499;
-    const quantumFeeCents = Number.isFinite(feeCentsRaw) ? Math.max(0, Math.min(50_000, Math.trunc(feeCentsRaw))) : 499;
-
-    if (quantumVerified && quantumFeeCents > 0) {
-      lineItems.push({
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: 'Quantum Verified Premium',
-            images: [],
-          },
-          unit_amount: quantumFeeCents,
-        },
-        quantity: 1,
-      });
-    }
-
     const totalAmountCents = lineItems.reduce((sum, li) => {
       const unitAmount = li?.price_data?.unit_amount;
       const qty = li?.quantity;
@@ -240,8 +213,8 @@ export async function POST(request: Request) {
         deviceId: String(deviceId || ''),
         userId: String(userId || ''),
         origin,
-        quantumVerified: quantumVerified ? '1' : '0',
-        quantumFeeCents: quantumVerified ? String(quantumFeeCents) : '0',
+        quantumVerified: '0',
+        quantumFeeCents: '0',
         shippingOptionId: selectedShip?.id || '',
         shippingCents: selectedShip ? String(Math.round(Number(selectedShip.amountUsd) * 100)) : '0',
         qrUrl: qrUrl || '',

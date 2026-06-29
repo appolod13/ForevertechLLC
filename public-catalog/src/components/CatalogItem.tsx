@@ -30,7 +30,7 @@ export function CatalogItem({
   metadata,
   priceUsd = ((): number => {
     const m = metadata as { priceUsd?: number } | undefined;
-    return typeof m?.priceUsd === 'number' ? m!.priceUsd! : 49.99;
+    return typeof m?.priceUsd === 'number' ? m!.priceUsd! : 59.99;
   })()
 }: CatalogItemProps) {
   const { addToCart } = useCart();

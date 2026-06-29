@@ -25,13 +25,13 @@ function seedOrder(key: string): OrderRecord {
     id,
     createdAt: new Date().toISOString(),
     status: 'submitted',
-    total: 49.99,
+    total: 59.99,
     items: [
       {
         id: 'seed-item-1',
         title: 'Demo Purchase (Size: L)',
         quantity: 1,
-        price: 49.99,
+        price: 59.99,
         imageUrl: '/placeholder-future-city.svg',
       },
     ],

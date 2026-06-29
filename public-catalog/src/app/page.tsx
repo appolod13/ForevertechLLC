@@ -54,7 +54,7 @@ async function getInitialPosts(): Promise<CatalogPost[]> {
         metadata: {
           title: `Quantum Asset ${file.substring(0, 8)}`,
           mediaUrl: `/api/images/${encodeURIComponent(file)}`,
-          priceUsd: 49.99,
+          priceUsd: 59.99,
           prompt: 'seeded',
         },
       } satisfies CatalogPost;
@@ -70,7 +70,7 @@ async function getInitialPosts(): Promise<CatalogPost[]> {
           metadata: {
             title: 'Quantum Asset Seed',
             mediaUrl: '/placeholder-future-city.svg',
-            priceUsd: 49.99,
+            priceUsd: 59.99,
             prompt: 'seeded',
           },
         },

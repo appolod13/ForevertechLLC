@@ -42,7 +42,7 @@ export async function GET() {
         metadata: {
           title: `Quantum Asset ${file.substring(0, 8)}`,
           mediaUrl: `/api/images/${file}`,
-          priceUsd: 49.99
+          priceUsd: 59.99
         }
       };
     });
@@ -61,7 +61,7 @@ export async function GET() {
             metadata: {
               title: 'Quantum Asset Seed',
               mediaUrl: '/placeholder-future-city.svg',
-              priceUsd: 49.99,
+              priceUsd: 59.99,
               prompt: 'seeded',
             },
           },
