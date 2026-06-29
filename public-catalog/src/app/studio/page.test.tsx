@@ -26,21 +26,21 @@ describe('StudioPage calendar date range', () => {
     renderWithProviders(<StudioPage />);
     expect(screen.getByText('Creator Studio')).toBeDefined();
     expect(screen.getByText('AI Asset Generator')).toBeDefined();
-    expect(screen.getByPlaceholderText('Describe your quantum fractal...')).toBeDefined();
+    expect(screen.getByPlaceholderText('Describe the image and post content you want to generate...')).toBeDefined();
   });
 
   it('disables generate button until prompt is entered', () => {
     renderWithProviders(<StudioPage />);
     const btn = screen.getByRole('button', { name: 'Generate Asset & Content' }) as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
-    const textarea = screen.getByPlaceholderText('Describe your quantum fractal...') as HTMLTextAreaElement;
+    const textarea = screen.getByPlaceholderText('Describe the image and post content you want to generate...') as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: 'quantum wormhole fractal' } });
     expect(btn.disabled).toBe(false);
   });
 
   it('toggles quantum mode and ipfs options', () => {
     renderWithProviders(<StudioPage />);
-    const quantum = screen.getByLabelText('Quantum Mode (IBM)') as HTMLInputElement;
+    const quantum = screen.getByLabelText('Quantum Mode (Wolfram + Qiskit)') as HTMLInputElement;
     const ipfs = screen.getByLabelText('Public Link Upload') as HTMLInputElement;
     expect(quantum.checked).toBe(false);
     expect(ipfs.checked).toBe(false);
