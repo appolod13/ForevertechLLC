@@ -758,8 +758,12 @@ function StudioPageInner() {
       } catch {}
 
       if (quantumMode) {
+        const recordSeed =
+          typeof metaObj.seed === 'string' || typeof metaObj.seed === 'number'
+            ? metaObj.seed
+            : '';
         const nextRecord = {
-          id: requestId || String(meta.seed || `record-${Date.now()}`),
+          id: requestId || String(recordSeed || `record-${Date.now()}`),
           createdAt: new Date().toISOString(),
           prompt,
           imageUrl,
