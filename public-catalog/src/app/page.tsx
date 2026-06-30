@@ -115,10 +115,10 @@ export default async function Home() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex items-end p-8">
                 <div className="max-w-xl">
                   <h1 className="text-3xl md:text-5xl font-bold text-white tracking-tight drop-shadow-lg mb-2">
-                    Math Art: <span className="text-primary">Emotional</span> Prompt-to-Merch • Mandelbrot + Julia Fractal
+                    Own a One-of-One <span className="text-primary">Fractal</span> Story Tee
                   </h1>
                   <p className="text-zinc-300 text-sm md:text-base line-clamp-2">
-                    Your words become numbers, and your numbers become a Julia + Mandelbrot design you can preview on a T-shirt, publish to your gallery, and buy with card checkout.
+                    Generate a one-of-one fractal story tee from your prompt, unlock a verified origin record with Real Quantum Generation, and wear a piece that proves its own futuristic creation story. Upgrade to Premium Creator for ownership rights and an earnings opportunity through QR‑linked sales and creator payouts.
                   </p>
                   <div className="mt-5 flex flex-wrap items-center gap-3">
                     <Link

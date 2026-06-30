@@ -7,11 +7,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.pixelqrypt.com"),
   title: {
-    default: "Math Art T-Shirts & AI Prompt-to-Print Merch",
+    default: "Quantum Story Tees",
     template: "%s | PixelQrypt",
   },
   description:
-    "PixelQrypt by ForeverTech is a prompt-to-print studio for creating AI-inspired fractal art (Julia set + Mandelbrot) and buying it on custom T-shirts. Generate, preview, save to your gallery, and checkout securely with card payment. Fulfilled via print-on-demand shipping.",
+    "Generate a one-of-one fractal story tee from your prompt, unlock a verified origin record with Real Quantum Generation, and wear a piece that proves its own futuristic creation story. Premium Creator unlocks ownership rights and an earnings opportunity through QR‑linked sales and creator payouts.",
   keywords: [
     "PixelQrypt",
     "ForeverTech",
@@ -33,21 +33,25 @@ export const metadata: Metadata = {
     "mathart",
     "fractalart",
     "custommerch",
+    "quantum story tees",
+    "verified origin record",
+    "fractal story tee",
+    "prompt to merch",
   ],
   openGraph: {
     type: "website",
     url: "https://www.pixelqrypt.com",
     siteName: "PixelQrypt",
-    title: "Math Art T-Shirts & AI Prompt-to-Print Merch",
+    title: "Quantum Story Tees",
     description:
-      "Create AI-inspired fractal art from prompts and buy it printed on custom apparel. Save designs to your gallery and checkout securely. Print-on-demand fulfillment and shipping.",
+      "Generate a one-of-one fractal story tee from your prompt, unlock a verified origin record with Real Quantum Generation, and wear a piece that proves its own futuristic creation story. Premium Creator unlocks ownership rights and an earnings opportunity through QR‑linked sales and creator payouts.",
     images: [{ url: "/images/ai-gen-1.png", width: 1200, height: 630, alt: "PixelQrypt AI art apparel preview" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Math Art T-Shirts & AI Prompt-to-Print Merch",
+    title: "Quantum Story Tees",
     description:
-      "Create AI-inspired fractal art from prompts and buy it printed on custom apparel. Save to gallery, checkout securely, and ship via print-on-demand fulfillment.",
+      "Generate a one-of-one fractal story tee from your prompt, unlock a verified origin record with Real Quantum Generation, and wear a piece that proves its own futuristic creation story. Premium Creator unlocks ownership rights and an earnings opportunity through QR‑linked sales and creator payouts.",
     images: ["/images/ai-gen-1.png"],
   },
   robots: {
