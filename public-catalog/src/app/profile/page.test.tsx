@@ -111,7 +111,7 @@ describe('ProfilePage', () => {
       expect(screen.getByText('Premium Creator upgrade selected.')).toBeInTheDocument();
     });
 
-    expect(screen.getByRole('button', { name: 'Connect Stripe Express' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Sign up for Stripe Express' })).toHaveAttribute('href', 'https://dashboard.stripe.com/connect');
     expect(screen.getByRole('button', { name: 'Activate Premium Creator' })).toBeInTheDocument();
   });
 });

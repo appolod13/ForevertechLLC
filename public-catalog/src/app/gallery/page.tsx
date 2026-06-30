@@ -23,6 +23,7 @@ interface GalleryItem {
 }
 
 export default function GalleryPage() {
+  const stripeConnectSignupUrl = 'https://dashboard.stripe.com/connect';
   const router = useRouter();
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,8 +34,6 @@ export default function GalleryPage() {
   const [pixelQryptModalOpen, setPixelQryptModalOpen] = useState(false);
   const [premiumCheckoutStatus, setPremiumCheckoutStatus] = useState<'idle' | 'starting' | 'redirecting' | 'error'>('idle');
   const [premiumCheckoutError, setPremiumCheckoutError] = useState('');
-  const [connectStatus, setConnectStatus] = useState<'idle' | 'starting' | 'redirecting' | 'error'>('idle');
-  const [connectError, setConnectError] = useState('');
   const creatorAccess = getCreatorAccess(user);
 
   const fetchGallery = async () => {
@@ -236,41 +235,17 @@ export default function GalleryPage() {
                 </div>
                 {!user?.stripeConnectAccountId ? (
                   <div className="flex flex-wrap gap-3">
-                    {connectStatus === 'error' && connectError ? (
-                      <div className="w-full rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-                        {connectError}
-                      </div>
-                    ) : null}
-                    <button
-                      type="button"
-                      disabled={connectStatus === 'starting' || connectStatus === 'redirecting' || !user}
-                      onClick={async () => {
-                        if (!user) return;
-                        setConnectStatus('starting');
-                        setConnectError('');
-                        try {
-                          const res = await fetch('/api/creator/connect/onboard', {
-                            method: 'POST',
-                            headers: { 'content-type': 'application/json' },
-                            body: JSON.stringify({ userId: user.id, email: user.email }),
-                          });
-                          const json = await res.json().catch(() => null);
-                          if (!res.ok || !json?.url) {
-                            setConnectStatus('error');
-                            setConnectError(String(json?.error || `HTTP_${res.status}`));
-                            return;
-                          }
-                          setConnectStatus('redirecting');
-                          window.location.href = String(json.url);
-                        } catch (e: unknown) {
-                          setConnectStatus('error');
-                          setConnectError(e instanceof Error ? e.message : 'connect_failed');
-                        }
-                      }}
-                      className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-white/15 bg-black/40 px-4 py-2 text-sm font-semibold text-white hover:bg-black/55 disabled:opacity-50"
+                    <div className="w-full text-sm text-zinc-300">
+                      To accept payments for your merch, you need to sign up for Stripe Express first. Create your Stripe account using the live link below.
+                    </div>
+                    <a
+                      href={stripeConnectSignupUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-white/15 bg-black/40 px-4 py-2 text-sm font-semibold text-white hover:bg-black/55"
                     >
-                      Connect Stripe Express
-                    </button>
+                      Sign up for Stripe Express
+                    </a>
                   </div>
                 ) : null}
               </div>
@@ -287,42 +262,18 @@ export default function GalleryPage() {
                     {premiumCheckoutError}
                   </div>
                 ) : null}
-                {connectStatus === 'error' && connectError ? (
-                  <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-                    {connectError}
-                  </div>
-                ) : null}
                 <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    disabled={connectStatus === 'starting' || connectStatus === 'redirecting' || !user}
-                    onClick={async () => {
-                      if (!user) return;
-                      setConnectStatus('starting');
-                      setConnectError('');
-                      try {
-                        const res = await fetch('/api/creator/connect/onboard', {
-                          method: 'POST',
-                          headers: { 'content-type': 'application/json' },
-                          body: JSON.stringify({ userId: user.id, email: user.email }),
-                        });
-                        const json = await res.json().catch(() => null);
-                        if (!res.ok || !json?.url) {
-                          setConnectStatus('error');
-                          setConnectError(String(json?.error || `HTTP_${res.status}`));
-                          return;
-                        }
-                        setConnectStatus('redirecting');
-                        window.location.href = String(json.url);
-                      } catch (e: unknown) {
-                        setConnectStatus('error');
-                        setConnectError(e instanceof Error ? e.message : 'connect_failed');
-                      }
-                    }}
-                    className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-white/15 bg-black/40 px-4 py-2 text-sm font-semibold text-white hover:bg-black/55 disabled:opacity-50"
+                  <div className="w-full text-sm text-zinc-300">
+                    To accept payments for your merch, you need to sign up for Stripe Express first. Create your Stripe account using the live link below, then return here to continue.
+                  </div>
+                  <a
+                    href={stripeConnectSignupUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-white/15 bg-black/40 px-4 py-2 text-sm font-semibold text-white hover:bg-black/55"
                   >
-                    Connect Stripe Express
-                  </button>
+                    Sign up for Stripe Express
+                  </a>
                   <button
                     type="button"
                     disabled={premiumCheckoutStatus === 'starting' || premiumCheckoutStatus === 'redirecting' || !user}

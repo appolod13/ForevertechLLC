@@ -23,8 +23,7 @@ function ProfilePageInner() {
   const [premiumCheckoutError, setPremiumCheckoutError] = useState('');
   const [premiumConfirmStatus, setPremiumConfirmStatus] = useState<'idle' | 'checking' | 'error'>('idle');
   const [premiumConfirmError, setPremiumConfirmError] = useState('');
-  const [connectStatus, setConnectStatus] = useState<'idle' | 'starting' | 'redirecting' | 'error'>('idle');
-  const [connectError, setConnectError] = useState('');
+  const stripeConnectSignupUrl = 'https://dashboard.stripe.com/connect';
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -161,6 +160,9 @@ function ProfilePageInner() {
               <div className="mt-2 text-sm text-purple-100/90">
                 Connect Stripe Express for future creator payouts, then activate your Premium Creator subscription to unlock 75% creator payouts and QR-linked selling.
               </div>
+              <div className="mt-3 text-sm text-purple-100/90">
+                To accept payments for your merch, you need to sign up for Stripe Express first. Create your Stripe account using the live link below, then come back to finish setup.
+              </div>
 
               {premiumConfirmStatus === 'checking' ? (
                 <div className="mt-3 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-zinc-200">
@@ -180,43 +182,15 @@ function ProfilePageInner() {
                 </div>
               ) : null}
 
-              {connectStatus === 'error' && connectError ? (
-                <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-                  {connectError}
-                </div>
-              ) : null}
-
               <div className="mt-4 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  disabled={connectStatus === 'starting' || connectStatus === 'redirecting' || !user}
-                  onClick={async () => {
-                    if (!user) return;
-                    setConnectStatus('starting');
-                    setConnectError('');
-                    try {
-                      const res = await fetch('/api/creator/connect/onboard', {
-                        method: 'POST',
-                        headers: { 'content-type': 'application/json' },
-                        body: JSON.stringify({ userId: user.id, email: user.email }),
-                      });
-                      const json = await res.json().catch(() => null);
-                      if (!res.ok || !json?.url) {
-                        setConnectStatus('error');
-                        setConnectError(String(json?.error || `HTTP_${res.status}`));
-                        return;
-                      }
-                      setConnectStatus('redirecting');
-                      window.location.href = String(json.url);
-                    } catch (e: unknown) {
-                      setConnectStatus('error');
-                      setConnectError(e instanceof Error ? e.message : 'connect_failed');
-                    }
-                  }}
-                  className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-white/15 bg-black/40 px-4 py-2 text-sm font-semibold text-white hover:bg-black/55 disabled:opacity-50"
+                <a
+                  href={stripeConnectSignupUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-white/15 bg-black/40 px-4 py-2 text-sm font-semibold text-white hover:bg-black/55"
                 >
-                  Connect Stripe Express
-                </button>
+                  Sign up for Stripe Express
+                </a>
                 <button
                   type="button"
                   disabled={
