@@ -7,6 +7,7 @@ interface User {
   email: string;
   name: string;
   premiumCreator?: boolean;
+  stripeConnectAccountId?: string;
 }
 
 interface AuthContextType {

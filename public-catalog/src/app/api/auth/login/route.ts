@@ -16,10 +16,17 @@ function getString(v: unknown, maxLen = 300): string {
 
 function normalizeUser(u: { id: string; email?: string | null; user_metadata?: Record<string, unknown> }) {
   const nameRaw = u.user_metadata && typeof u.user_metadata.name === "string" ? u.user_metadata.name : "";
+  const premiumCreator = Boolean(u.user_metadata && (u.user_metadata as Record<string, unknown>).premiumCreator === true);
+  const stripeConnectAccountId =
+    u.user_metadata && typeof (u.user_metadata as Record<string, unknown>).stripeConnectAccountId === "string"
+      ? String((u.user_metadata as Record<string, unknown>).stripeConnectAccountId)
+      : "";
   return {
     id: u.id,
     email: u.email || "",
     name: String(nameRaw || "").trim() || (u.email ? u.email.split("@")[0] : "User"),
+    premiumCreator,
+    stripeConnectAccountId: stripeConnectAccountId || undefined,
   };
 }
 
@@ -52,4 +59,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

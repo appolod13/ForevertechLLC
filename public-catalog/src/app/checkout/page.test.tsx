@@ -76,9 +76,6 @@ describe('CheckoutPage', () => {
     });
 
     expect(screen.getByText(/earn 75% on creator-linked sales/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Upgrade to Premium Creator' })).toHaveAttribute(
-      'href',
-      '/profile?upgrade=premium-creator',
-    );
+    expect(screen.getByRole('button', { name: 'Upgrade to Premium Creator' })).toBeInTheDocument();
   });
 });

@@ -7,6 +7,7 @@ import ProfilePage from './page';
 
 const useAuthMock = vi.fn();
 const pushMock = vi.fn();
+let searchParamsMock = new URLSearchParams();
 
 vi.mock('@/context/AuthContext', () => ({
   useAuth: () => useAuthMock(),
@@ -14,13 +15,14 @@ vi.mock('@/context/AuthContext', () => ({
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushMock }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => searchParamsMock,
 }));
 
 describe('ProfilePage', () => {
   beforeEach(() => {
     pushMock.mockReset();
     localStorage.clear();
+    searchParamsMock = new URLSearchParams();
     localStorage.setItem(
       'foreverteck.studio.savedGenerations',
       JSON.stringify([
@@ -67,5 +69,28 @@ describe('ProfilePage', () => {
     expect(screen.getByText('75% payout active')).toBeInTheDocument();
     expect(screen.getByText('Stored Generations')).toBeInTheDocument();
     expect(screen.getByText('2 / Unlimited')).toBeInTheDocument();
+  });
+
+  it('shows premium creator checkout actions when upgrade is selected', async () => {
+    searchParamsMock = new URLSearchParams({ upgrade: 'premium-creator' });
+
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'user-1',
+        name: 'Test User',
+        email: 'test@example.com',
+        premiumCreator: false,
+      },
+      isLoading: false,
+    });
+
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Premium Creator upgrade selected.')).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('button', { name: 'Connect Stripe Express' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Activate Premium Creator' })).toBeInTheDocument();
   });
 });

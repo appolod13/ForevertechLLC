@@ -36,6 +36,8 @@ export default function CheckoutPage() {
   const { items, total } = useCart();
   const { user, isLoading } = useAuth();
   const premiumCreator = Boolean((user as { premiumCreator?: boolean } | null)?.premiumCreator);
+  const [creatorUpgradeStatus, setCreatorUpgradeStatus] = useState<'idle' | 'starting' | 'redirecting' | 'error'>('idle');
+  const [creatorUpgradeError, setCreatorUpgradeError] = useState('');
 
   type ShippingOption = { id: string; label: string; amountUsd: number; eta?: string };
   const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
@@ -490,12 +492,41 @@ export default function CheckoutPage() {
                 <div className="mt-2 text-sm text-purple-100/90">
                   Earn 75% on creator-linked sales, unlock QR selling, and keep expanded storage for your artwork, seeds, math, code, and source records.
                 </div>
-                <Link
-                  href="/profile?upgrade=premium-creator"
-                  className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-lg border border-purple-300/30 bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-500"
+                {creatorUpgradeStatus === 'error' && creatorUpgradeError ? (
+                  <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                    {creatorUpgradeError}
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={creatorUpgradeStatus === 'starting' || creatorUpgradeStatus === 'redirecting' || !user}
+                  onClick={async () => {
+                    if (!user) return;
+                    setCreatorUpgradeStatus('starting');
+                    setCreatorUpgradeError('');
+                    try {
+                      const res = await fetch('/api/creator/premium/checkout', {
+                        method: 'POST',
+                        headers: { 'content-type': 'application/json' },
+                        body: JSON.stringify({ userId: user.id, email: user.email }),
+                      });
+                      const json = await res.json().catch(() => null);
+                      if (!res.ok || !json?.url) {
+                        setCreatorUpgradeStatus('error');
+                        setCreatorUpgradeError(String(json?.error || `HTTP_${res.status}`));
+                        return;
+                      }
+                      setCreatorUpgradeStatus('redirecting');
+                      window.location.href = String(json.url);
+                    } catch (e: unknown) {
+                      setCreatorUpgradeStatus('error');
+                      setCreatorUpgradeError(e instanceof Error ? e.message : 'creator_upgrade_failed');
+                    }
+                  }}
+                  className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg border border-purple-300/30 bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-500 disabled:opacity-50"
                 >
                   Upgrade to Premium Creator
-                </Link>
+                </button>
               </div>
             ) : null}
           </div>
