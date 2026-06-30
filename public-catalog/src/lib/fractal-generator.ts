@@ -110,26 +110,28 @@ function selectFractalsToBlend(prompt: string, complexity: number): string[] {
   // If no specific fractals found, select based on complexity
   if (selected.length === 0) {
     if (complexity > 0.8) {
-      // Ultra-detailed: blend 4 fractals
-      selected = ['sierpinski', 'koch', 'mandelbrot', 'julia'];
+      // Ultra-detailed: blend 4 fractals – Julia leads the story, Koch strings it together,
+      // Sierpinski anchors the ancient structure, Mandelbrot adds boundary depth.
+      selected = ['julia', 'koch', 'sierpinski', 'mandelbrot'];
     } else if (complexity > 0.6) {
-      // Medium-detailed: blend 3 fractals
+      // Medium-detailed: the canonical fractal storytelling trio (Julia + Koch + Sierpinski)
+      // plus alternating companions for variety.
       const options = [
-        ['sierpinski', 'koch', 'vicsek'],
-        ['julia', 'mandelbrot', 'burning_ship'],
-        ['koch', 'trinity', 'lyapunov'],
-        ['mandelbrot', 'newton', 'sierpinski'],
-        ['vicsek', 'julia', 'koch']
+        ['julia', 'koch', 'sierpinski'],    // primary trio – expressive storytelling
+        ['julia', 'sierpinski', 'koch'],    // same trio, Sierpinski as secondary anchor
+        ['julia', 'burning_ship', 'koch'],  // drama + strings
+        ['julia', 'newton', 'sierpinski'],  // resolution arc
+        ['julia', 'lyapunov', 'koch'],      // chaos theory thread
       ];
       selected = options[Math.floor(Math.random() * options.length)];
     } else {
-      // Simple: blend 2 fractals
+      // Simple: Julia + Koch – the most expressive string-like pair
       const options = [
-        ['sierpinski', 'koch'],
-        ['mandelbrot', 'julia'],
-        ['burning_ship', 'vicsek'],
-        ['trinity', 'lyapunov'],
-        ['newton', 'koch']
+        ['julia', 'koch'],
+        ['julia', 'sierpinski'],
+        ['julia', 'burning_ship'],
+        ['koch', 'sierpinski'],
+        ['julia', 'newton'],
       ];
       selected = options[Math.floor(Math.random() * options.length)];
     }
@@ -276,8 +278,8 @@ function generateMultiFractalConfig(fractals: string[], intensity: number, compl
     vicsek_scale: 1 - (0.3 * complexity),
     mandelbrot_zoom: Math.pow(2, 2 + complexity * 10),
     mandelbrot_iterations: Math.round(80 + complexity * 250),
-    julia_constant_real: -0.7269 + (intensity * 0.15),
-    julia_constant_imag: 0.1889 + (intensity * 0.15),
+    julia_constant_real: -0.7269 + (intensity * 0.08),
+    julia_constant_imag: 0.1889 + (intensity * 0.10),
     burning_ship_iterations: Math.round(60 + complexity * 200),
     trinity_fractal_param: 0.85,
     lyapunov_exponent: -0.55,
@@ -292,28 +294,30 @@ function generateMultiFractalConfig(fractals: string[], intensity: number, compl
 }
 
 /**
- * Convert multi-fractal config to enhanced prompt
+ * Convert multi-fractal config to enhanced prompt with fractal storytelling language
  */
 export function fractalConfigToPrompt(config: FractalConfig, emotion: string, quantum_emotion: string, fractals: string[]): string {
-  // Describe ALL selected fractals
+  // Describe ALL selected fractals with storytelling roles
   const fractalDescriptions = fractals.map((f, i) => {
     const descriptions: Record<string, string> = {
-      'sierpinski': `Sierpinski recursive triangles layered ${i === 0 ? 'as foundation' : 'overlaid with transparency'}`,
-      'koch': `Koch snowflake intricate branching ${i === 0 ? 'as primary' : 'blended in'}`,
-      'vicsek': `Vicsek cross-shaped self-similar fractal ${i === 0 ? 'dominant' : 'layered'}`,
-      'mandelbrot': `Mandelbrot infinite boundary complexity ${i === 0 ? 'leading' : 'contributing to'} the design`,
-      'julia': `Julia set organic flowing patterns ${i === 0 ? 'primary layer' : 'secondary layer'}`,
-      'burning_ship': `Burning Ship fire-like recursive patterns ${i === 0 ? 'main pattern' : 'mixed in'}`,
-      'trinity': `Trinity fractal 3-fold symmetric patterns ${i === 0 ? 'central' : 'incorporated'}`,
-      'lyapunov': `Lyapunov chaos theory visualization ${i === 0 ? 'base' : 'additive layer'}`,
-      'newton': `Newton fractal basin of attraction dynamics ${i === 0 ? 'primary' : 'secondary'}`,
+      'sierpinski': `Sierpinski recursive triangles ${i === 0 ? 'carrying ancient memory at the heart of the story' : 'woven as structural scaffolding across the narrative'}`,
+      'koch': `Koch snowflake string-like filaments ${i === 0 ? 'threading the opening passage' : 'branching like plot threads through the composition'}`,
+      'vicsek': `Vicsek cross-shaped self-similar fractal ${i === 0 ? 'anchoring the story grid' : 'layered as a recurring motif'}`,
+      'mandelbrot': `Mandelbrot boundary complexity ${i === 0 ? 'framing the story\'s edge' : 'adding structural depth as a supporting layer'}`,
+      'julia': `Julia set expressive organic spirals ${i === 0 ? 'as the emotional soul and primary narrator' : 'as a secondary emotional voice'}`,
+      'burning_ship': `Burning Ship fire-like recursive patterns ${i === 0 ? 'igniting the story\'s climax' : 'smoldering in the background tension'}`,
+      'trinity': `Trinity fractal 3-fold symmetric patterns ${i === 0 ? 'as the central narrative pillar' : 'woven into the resolution arc'}`,
+      'lyapunov': `Lyapunov chaos theory visualization ${i === 0 ? 'mapping the story\'s chaotic turning point' : 'adding layers of ordered chaos'}`,
+      'newton': `Newton fractal basin of attraction ${i === 0 ? 'guiding the story to resolution' : 'pulling recursive threads toward closure'}`,
     };
     return descriptions[f] || f;
   }).join(', ');
 
-  const blendTechnique = fractals.length > 2 ? `multiple fractal types merged with overlay and soft-light blending` : `${fractals.length} fractal types composited together`;
+  const blendTechnique = fractals.length > 2
+    ? `${fractals.length} fractal types composited as a multi-chapter narrative tapestry`
+    : `${fractals.length} fractal types interwoven in a recursive story arc`;
 
-  const prompt = `4D ${emotion} multi-fractal composite artwork: ${fractalDescriptions}. All ${fractals.length} fractal types ${blendTechnique}, creating intricate cross-pattern geometries. Quantum field with ${quantum_emotion} distortion mode (morphing speed ${config.quantum_field.morphing_speed.toFixed(2)}), flowing dynamic background. Color palette: ${config.color_palette.slice(0, 4).join(', ')} on black void with glowing neon accents. Perfectly centered square t-shirt print, self-similar recursive patterns throughout, ethereal luminous glow, high contrast design, mathematical precision with organic flow, professional merch-ready, 8k resolution, cinematic volumetric lighting, mystical quantum aesthetic, seamless integration of all fractal components`;
+  const prompt = `Fractal storytelling canvas — ${emotion} multi-fractal composite: ${fractalDescriptions}. ${blendTechnique}, strings and filaments of Koch branching like plot threads, Sierpinski\'s ancient triangular memory holding the structure, Julia\'s expressive organic spirals narrating the emotional core. Recursive narrative unfolding from quantum string-like filaments, each iteration a new chapter emerging from the previous. Quantum field with ${quantum_emotion} distortion mode (morphing speed ${config.quantum_field.morphing_speed.toFixed(2)}), flowing dynamic background. Color palette: ${config.color_palette.slice(0, 4).join(', ')} on black void with glowing neon accents — the image tells a story through self-similar repetition, ancient fractal geometry woven with living emotional threads. Perfectly centered, ethereal luminous glow, high contrast, mathematical precision fused with organic emotional flow, professional merch-ready, 8k resolution, cinematic volumetric lighting`;
 
   return prompt;
 }

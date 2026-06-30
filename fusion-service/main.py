@@ -31,6 +31,25 @@ MIN_QUALITY = 1
 MIN_ZOOM_LEVEL = 0.05
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
+# Curated Julia set constants for fractal storytelling.
+# Each constant produces a distinct visual "chapter": cosmic spirals, branching trees,
+# archipelago islands, dragon curves, feathery ferns, crystalline lattices, etc.
+# Ordered as a narrative arc: calm origins → rising tension → climax → resolution.
+JULIA_STORY_CONSTANTS: list[tuple[float, float]] = [
+    (-0.7269,  0.1889),   # ch 0 – spiraling cosmos (baseline)
+    (-0.7,     0.27015),  # ch 1 – galaxy arms, cosmic flow
+    (0.285,    0.01),     # ch 2 – archipelago, island story
+    (-0.4,     0.6),      # ch 3 – organic branches, life unfolding
+    (0.0,      0.8),      # ch 4 – dendritic trees, branching paths
+    (-0.8,     0.156),    # ch 5 – flame streaks, rising tension
+    (-0.74543, 0.11301),  # ch 6 – feathery spirals, complication
+    (-0.1,     0.651),    # ch 7 – crystal lattice, structure in chaos
+    (-0.54,    0.54),     # ch 8 – geometric recursion, ancient order
+    (-0.70176, 0.3842),   # ch 9 – dragon curves, mythic journey
+    (-0.835,  -0.2321),   # ch 10 – leafy ferns, natural memory
+    (0.4,     -0.3),      # ch 11 – burning coils, climax fire
+]
+
 REQUESTS = Counter("fusion_requests_total", "Fusion requests", ["endpoint"])
 LATENCY = Histogram("fusion_latency_seconds", "Fusion latency", ["device"])
 
@@ -145,11 +164,22 @@ def _sierpinski_mask(nx: float, ny: float, scale: int = 1024) -> float:
 
 
 def _koch_like_mask(nx: float, ny: float, freq: float = 22.0) -> float:
+    """Koch-inspired mask with three self-similar branching levels and string filaments.
+
+    Each recursion level (l1→l2→l3) triples the angular frequency, mimicking how a
+    Koch curve subdivides each segment into thirds.  The ``filament`` term weaves
+    string-like tendrils that give the 'coming from strings' quality.
+    """
     r = math.sqrt(nx * nx + ny * ny) + 1e-9
     t = math.atan2(ny, nx)
-    tri = abs(((t / math.pi) * freq) % 2.0 - 1.0)
+    # Three Koch recursion levels
+    l1 = abs(((t / math.pi) * freq) % 2.0 - 1.0)
+    l2 = abs(((t / math.pi) * freq * 3.0 + r * 9.0) % 2.0 - 1.0)
+    l3 = abs(((t / math.pi) * freq * 9.0 + r * 27.0) % 2.0 - 1.0)
     rings = abs((r * (freq * 0.65)) % 1.0 - 0.5) * 2.0
-    m = tri * 0.65 + rings * 0.35
+    # String/thread weave – two sine waves at different spatial phases
+    filament = abs(math.sin(r * freq * 2.5 + t * 2.0) * math.cos(r * freq * 1.8 - t))
+    m = l1 * 0.38 + l2 * 0.22 + l3 * 0.12 + rings * 0.18 + filament * 0.10
     return 1.0 - min(1.0, m)
 
 
@@ -176,15 +206,18 @@ def fractal_fusion_rgb(
     wormhole_swirl: Optional[float] = None,
     wormhole_center_x: Optional[float] = None,
     wormhole_center_y: Optional[float] = None,
-    sierpinski_weight: float = 0.10,
-    koch_weight: float = 0.08,
+    sierpinski_weight: float = 0.20,
+    koch_weight: float = 0.18,
     grid_weight: float = 0.12,
 ) -> bytes:
     rng = random.Random(seed)
-    angle = (seed % 100000) / 100000.0 * 2.0 * math.pi
-    radius = 0.7885 + (rng.random() - 0.5) * 0.08
-    cr = radius * math.cos(angle)
-    ci = radius * math.sin(angle)
+    # Select a Julia "story chapter" constant from the curated narrative arc.
+    # A small per-seed jitter keeps each render unique while preserving the
+    # expressive character of the chosen constant.
+    story_idx = seed % len(JULIA_STORY_CONSTANTS)
+    cr_base, ci_base = JULIA_STORY_CONSTANTS[story_idx]
+    cr = cr_base + (rng.random() - 0.5) * 0.025
+    ci = ci_base + (rng.random() - 0.5) * 0.025
 
     phash = abs(hash(prompt)) if prompt else seed
     q_freq = 2.0 + (phash % 7)
@@ -276,8 +309,11 @@ def fractal_fusion_rgb(
                 m_val = max_iter
             m_norm = m_val / max_iter
 
+            # Julia-dominant blend: 0.82 Julia + 0.18 Mandelbrot.
+            # The heavy Julia weight gives expressive, emotionally rich organic forms;
+            # Mandelbrot contributes structural boundary detail as a supporting layer.
             interference = 0.5 + 0.5 * math.sin(q_freq * (ix + iy) * math.pi + q_phase)
-            fused = (j_norm * 0.62 + m_norm * 0.38) * (0.74 + 0.26 * interference)
+            fused = (j_norm * 0.82 + m_norm * 0.18) * (0.76 + 0.24 * interference)
             field[row + x] = fused
 
     def sample(fx: float, fy: float) -> float:
@@ -313,6 +349,10 @@ def fractal_fusion_rgb(
     inv_h = 1.0 / max(1, height - 1)
     relief = 9.2
 
+    # Narrative phase drives a subtle story-arc pulse across the image:
+    # values near 0 are the "calm beginning", near 0.5 the "climax", near 1 the "resolution".
+    narrative_phase = (story_idx / max(1, len(JULIA_STORY_CONSTANTS) - 1)) * math.pi
+
     for y in range(height):
         fy = y * sy
         ny = (y * inv_h - 0.5)
@@ -338,7 +378,12 @@ def fractal_fusion_rgb(
             r, g, b = _hsv_to_rgb(hue, sat, val)
             rf, gf, bf = r / 255.0, g / 255.0, b / 255.0
 
-            glow = (0.10 + 0.42 * geo) * (0.35 + 0.65 * v)
+            # Story-arc glow: peaks at the "climax" chapter, dims at calm chapters.
+            # The ``depth`` term (peaks at v≈0.5) highlights mid-iteration bands —
+            # exactly the boundary region where Julia sets carry their richest detail.
+            depth = v * (1.0 - v) * 4.0
+            story_pulse = 0.5 + 0.5 * math.sin(narrative_phase + v * math.pi * 2.0)
+            glow = (0.10 + 0.35 * geo + 0.20 * depth) * (0.38 + 0.62 * story_pulse)
             rf += glow * 0.62
             gf += glow * 0.44
             bf += glow * 0.88
@@ -402,8 +447,8 @@ class GenerateRequest(BaseModel):
     wormhole_swirl: Optional[float] = None
     wormhole_center_x: Optional[float] = None
     wormhole_center_y: Optional[float] = None
-    sierpinski_weight: float = 0.10
-    koch_weight: float = 0.08
+    sierpinski_weight: float = 0.20
+    koch_weight: float = 0.18
     grid_weight: float = 0.12
 
 
