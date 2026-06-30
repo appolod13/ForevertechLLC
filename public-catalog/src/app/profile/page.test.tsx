@@ -71,6 +71,27 @@ describe('ProfilePage', () => {
     expect(screen.getByText('2 / Unlimited')).toBeInTheDocument();
   });
 
+  it('shows Stripe Express connected status when the creator account is already linked', async () => {
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'user-1',
+        name: 'Test User',
+        email: 'test@example.com',
+        premiumCreator: true,
+        stripeConnectAccountId: 'acct_123',
+      },
+      isLoading: false,
+    });
+
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Stripe Express connected')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('acct_123')).toBeInTheDocument();
+  });
+
   it('shows premium creator checkout actions when upgrade is selected', async () => {
     searchParamsMock = new URLSearchParams({ upgrade: 'premium-creator' });
 

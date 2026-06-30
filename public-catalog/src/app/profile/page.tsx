@@ -146,6 +146,15 @@ function ProfilePageInner() {
               </div>
             </div>
           </div>
+          {user.stripeConnectAccountId ? (
+            <div className="mt-5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+              <div className="text-sm font-semibold text-white">Stripe Express connected</div>
+              <div className="mt-2 text-sm text-emerald-100/90">
+                Creator payout onboarding is linked for this account. Manual creator payout records can now point to your connected Stripe Express account.
+              </div>
+              <div className="mt-3 text-xs text-emerald-100/80">{user.stripeConnectAccountId}</div>
+            </div>
+          ) : null}
           {highlightPremiumUpgrade && !access.hasPremiumCreatorAccess ? (
             <div className="mt-5 rounded-xl border border-purple-500/30 bg-purple-500/10 p-4">
               <div className="text-sm font-semibold text-white">Premium Creator upgrade selected.</div>
