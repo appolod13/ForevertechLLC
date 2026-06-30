@@ -7,6 +7,7 @@ import { Heart, RefreshCw, User, BookOpen, Shirt, ShoppingCart, Zap, Key, Send }
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import PixelQryptModal from '@/components/PixelQryptModal';
+import { getCreatorAccess } from '@/lib/creatorAccess';
 
 interface GalleryItem {
   id: string;
@@ -25,11 +26,16 @@ export default function GalleryPage() {
   const router = useRouter();
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'favorites' | 'all' | 'quantum'>('all');
+  const [filter, setFilter] = useState<'favorites' | 'all' | 'quantum' | 'creator'>('all');
   const { user } = useAuth();
   const { addToCart } = useCart();
   const [deviceId, setDeviceId] = useState<string>('');
   const [pixelQryptModalOpen, setPixelQryptModalOpen] = useState(false);
+  const [premiumCheckoutStatus, setPremiumCheckoutStatus] = useState<'idle' | 'starting' | 'redirecting' | 'error'>('idle');
+  const [premiumCheckoutError, setPremiumCheckoutError] = useState('');
+  const [connectStatus, setConnectStatus] = useState<'idle' | 'starting' | 'redirecting' | 'error'>('idle');
+  const [connectError, setConnectError] = useState('');
+  const creatorAccess = getCreatorAccess(user);
 
   const fetchGallery = async () => {
     setLoading(true);
@@ -100,6 +106,7 @@ export default function GalleryPage() {
     
     if (filter === 'favorites') return i.isFavorite;
     if (filter === 'quantum') return !!i.isQuantumVerified;
+    if (filter === 'creator') return false;
     return true;
   });
 
@@ -187,6 +194,12 @@ export default function GalleryPage() {
               >
                 <Zap className="w-4 h-4" /> PixelQrypt™ Verified
               </button>
+              <button
+                onClick={() => setFilter('creator')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${filter === 'creator' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-300'}`}
+              >
+                {creatorAccess.hasPremiumCreatorAccess ? 'Creator Hub' : 'Creator Upgrade'}
+              </button>
             </div>
             <button 
               onClick={fetchGallery}
@@ -198,7 +211,153 @@ export default function GalleryPage() {
         </div>
 
         {/* Gallery Grid */}
-        {loading && items.length === 0 ? (
+        {filter === 'creator' ? (
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-8">
+            {creatorAccess.hasPremiumCreatorAccess ? (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-2xl font-semibold text-white">Premium Creator is active</h2>
+                  <p className="mt-2 max-w-2xl text-sm text-zinc-400">
+                    Your creator account can publish QR-linked sales, track premium collection activity, and use connected payout onboarding.
+                  </p>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-xl border border-zinc-800 bg-black/30 p-5">
+                    <div className="text-sm font-semibold text-white">Creator Rights</div>
+                    <div className="mt-2 text-sm text-zinc-300">Ownership rights and creator-linked sales access are active on this account.</div>
+                  </div>
+                  <div className="rounded-xl border border-zinc-800 bg-black/30 p-5">
+                    <div className="text-sm font-semibold text-white">Payout Status</div>
+                    <div className="mt-2 text-sm text-zinc-300">{user?.stripeConnectAccountId ? 'Stripe Express connected' : 'Stripe Express not connected yet'}</div>
+                    {user?.stripeConnectAccountId ? (
+                      <div className="mt-3 text-xs text-emerald-300">{user.stripeConnectAccountId}</div>
+                    ) : null}
+                  </div>
+                </div>
+                {!user?.stripeConnectAccountId ? (
+                  <div className="flex flex-wrap gap-3">
+                    {connectStatus === 'error' && connectError ? (
+                      <div className="w-full rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                        {connectError}
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={connectStatus === 'starting' || connectStatus === 'redirecting' || !user}
+                      onClick={async () => {
+                        if (!user) return;
+                        setConnectStatus('starting');
+                        setConnectError('');
+                        try {
+                          const res = await fetch('/api/creator/connect/onboard', {
+                            method: 'POST',
+                            headers: { 'content-type': 'application/json' },
+                            body: JSON.stringify({ userId: user.id, email: user.email }),
+                          });
+                          const json = await res.json().catch(() => null);
+                          if (!res.ok || !json?.url) {
+                            setConnectStatus('error');
+                            setConnectError(String(json?.error || `HTTP_${res.status}`));
+                            return;
+                          }
+                          setConnectStatus('redirecting');
+                          window.location.href = String(json.url);
+                        } catch (e: unknown) {
+                          setConnectStatus('error');
+                          setConnectError(e instanceof Error ? e.message : 'connect_failed');
+                        }
+                      }}
+                      className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-white/15 bg-black/40 px-4 py-2 text-sm font-semibold text-white hover:bg-black/55 disabled:opacity-50"
+                    >
+                      Connect Stripe Express
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-2xl font-semibold text-white">Upgrade to Premium Creator</h2>
+                  <p className="mt-2 max-w-2xl text-sm text-zinc-400">
+                    Unlock creator ownership rights, QR-linked selling, premium collection tools, and future payout access from your gallery.
+                  </p>
+                </div>
+                {premiumCheckoutStatus === 'error' && premiumCheckoutError ? (
+                  <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                    {premiumCheckoutError}
+                  </div>
+                ) : null}
+                {connectStatus === 'error' && connectError ? (
+                  <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                    {connectError}
+                  </div>
+                ) : null}
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    disabled={connectStatus === 'starting' || connectStatus === 'redirecting' || !user}
+                    onClick={async () => {
+                      if (!user) return;
+                      setConnectStatus('starting');
+                      setConnectError('');
+                      try {
+                        const res = await fetch('/api/creator/connect/onboard', {
+                          method: 'POST',
+                          headers: { 'content-type': 'application/json' },
+                          body: JSON.stringify({ userId: user.id, email: user.email }),
+                        });
+                        const json = await res.json().catch(() => null);
+                        if (!res.ok || !json?.url) {
+                          setConnectStatus('error');
+                          setConnectError(String(json?.error || `HTTP_${res.status}`));
+                          return;
+                        }
+                        setConnectStatus('redirecting');
+                        window.location.href = String(json.url);
+                      } catch (e: unknown) {
+                        setConnectStatus('error');
+                        setConnectError(e instanceof Error ? e.message : 'connect_failed');
+                      }
+                    }}
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-white/15 bg-black/40 px-4 py-2 text-sm font-semibold text-white hover:bg-black/55 disabled:opacity-50"
+                  >
+                    Connect Stripe Express
+                  </button>
+                  <button
+                    type="button"
+                    disabled={premiumCheckoutStatus === 'starting' || premiumCheckoutStatus === 'redirecting' || !user}
+                    onClick={async () => {
+                      if (!user) return;
+                      setPremiumCheckoutStatus('starting');
+                      setPremiumCheckoutError('');
+                      try {
+                        const res = await fetch('/api/creator/premium/checkout', {
+                          method: 'POST',
+                          headers: { 'content-type': 'application/json' },
+                          body: JSON.stringify({ userId: user.id, email: user.email }),
+                        });
+                        const json = await res.json().catch(() => null);
+                        if (!res.ok || !json?.url) {
+                          setPremiumCheckoutStatus('error');
+                          setPremiumCheckoutError(String(json?.error || `HTTP_${res.status}`));
+                          return;
+                        }
+                        setPremiumCheckoutStatus('redirecting');
+                        window.location.href = String(json.url);
+                      } catch (e: unknown) {
+                        setPremiumCheckoutStatus('error');
+                        setPremiumCheckoutError(e instanceof Error ? e.message : 'checkout_failed');
+                      }
+                    }}
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-purple-300/30 bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-500 disabled:opacity-50"
+                  >
+                    Activate Premium Creator
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : loading && items.length === 0 ? (
           <div className="text-center py-20 text-zinc-500">Loading gallery...</div>
         ) : displayedItems.length === 0 ? (
           <div className="text-center py-20 bg-zinc-900/30 rounded-xl border border-dashed border-zinc-800">
