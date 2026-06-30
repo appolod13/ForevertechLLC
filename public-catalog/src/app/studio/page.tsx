@@ -11,6 +11,13 @@ import { Send, Sparkles } from 'lucide-react';
 import styles from './page.module.css';
 
 import { MIRROR_API_URL } from '@/lib/utils';
+import { buildQuantumSourceLinks, getCreatorAccess } from '@/lib/creatorAccess';
+import {
+  saveStoredGeneration,
+  upsertSourceRecord,
+  type SourceRecordLike,
+  type StoredGenerationRecord,
+} from '@/lib/creatorArtifacts';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
@@ -460,6 +467,14 @@ function StudioPageInner() {
     return `data:text/plain;charset=utf-8,${encodeURIComponent(quantumRecordText)}`;
   }, [quantumRecordText]);
 
+  const quantumSourceLinks = useMemo(() => {
+    if (!quantumRecord) return null;
+    return buildQuantumSourceLinks({
+      id: quantumRecord.id,
+      metadata: quantumRecord.metadata,
+    });
+  }, [quantumRecord]);
+
   const generateImage = async () => {
     if (!prompt) return;
     setIsGenerating(true);
@@ -757,6 +772,32 @@ function StudioPageInner() {
         );
       } catch {}
 
+      try {
+        const storedUserRaw = localStorage.getItem('user');
+        const storedUser = storedUserRaw ? (JSON.parse(storedUserRaw) as { id?: string; premiumCreator?: boolean }) : null;
+        const access = getCreatorAccess(storedUser);
+        const existingRaw = localStorage.getItem('foreverteck.studio.savedGenerations');
+        const existing = existingRaw ? (JSON.parse(existingRaw) as StoredGenerationRecord[]) : [];
+        const storageResult = saveStoredGeneration(Array.isArray(existing) ? existing : [], {
+          access,
+          record: {
+            id: requestId || `generation-${Date.now()}`,
+            prompt,
+            imageUrl,
+            createdAt: new Date().toISOString(),
+            storedVia: quantumMode ? 'quantum_paid' : access.hasPremiumCreatorAccess ? 'premium_creator' : 'free',
+          },
+        });
+        if (storageResult.saved) {
+          localStorage.setItem(
+            'foreverteck.studio.savedGenerations',
+            JSON.stringify(storageResult.records.slice(0, 250)),
+          );
+        } else {
+          addLog('Free storage is full. Upgrade or use paid quantum generation to keep more artwork.', 'warn', 'W_STORAGE_LIMIT');
+        }
+      } catch {}
+
       if (quantumMode) {
         const recordSeed =
           typeof metaObj.seed === 'string' || typeof metaObj.seed === 'number'
@@ -773,6 +814,10 @@ function StudioPageInner() {
         setQuantumRecord(nextRecord);
         try {
           localStorage.setItem('foreverteck.studio.lastQuantumRecord', JSON.stringify(nextRecord));
+          const existingRaw = localStorage.getItem('foreverteck.pixelqrypt.sourceRecords');
+          const existing = existingRaw ? (JSON.parse(existingRaw) as SourceRecordLike[]) : [];
+          const nextRecords = upsertSourceRecord(Array.isArray(existing) ? existing : [], nextRecord);
+          localStorage.setItem('foreverteck.pixelqrypt.sourceRecords', JSON.stringify(nextRecords.slice(0, 250)));
         } catch {}
       } else {
         setQuantumRecord(null);
@@ -1163,6 +1208,21 @@ function StudioPageInner() {
                   </div>
                 </label>
               </div>
+              <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 p-4">
+                <div className="text-sm font-semibold text-white">Premium Creator - $24.99/month</div>
+                <div className="mt-2 text-sm text-purple-100/90">
+                  Earn 75% on creator-linked sales, unlock QR selling, and expand storage for your images, seeds, math, code, and source records.
+                </div>
+                <div className="mt-2 text-xs text-purple-100/75">
+                  Free accounts can keep 5 stored generations. Paid quantum artworks always keep their source record.
+                </div>
+                <Link
+                  href="/profile?upgrade=premium-creator"
+                  className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-lg border border-purple-300/30 bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-500"
+                >
+                  Upgrade to Premium Creator
+                </Link>
+              </div>
               <div className="flex items-center justify-between gap-4">
                 <label className={`flex items-center gap-2 text-sm p-2 rounded-lg border transition-all cursor-pointer ${ipfsEnabled ? 'border-green-500 bg-green-500/10 shadow-[0_0_15px_rgba(34,197,94,0.3)]' : 'border-gray-700 hover:border-gray-600'}`}>
                   <input type="checkbox" className="w-4 h-4 accent-green-500" checked={ipfsEnabled} onChange={e => setIpfsEnabled(e.target.checked)} />
@@ -1291,14 +1351,14 @@ function StudioPageInner() {
                     Your seed is now part of the first generation of quantum-verified art records.
                   </div>
                   <div className="mt-3 flex flex-wrap gap-3">
-                    <a
-                      href={quantumRecordUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="rounded-lg border border-white/20 bg-black/40 px-4 py-2 text-sm font-semibold text-white hover:bg-black/60"
-                    >
-                      View Record
-                    </a>
+                    {quantumSourceLinks ? (
+                      <Link
+                        href={quantumSourceLinks.sourceRecordPath}
+                        className="rounded-lg border border-white/20 bg-black/40 px-4 py-2 text-sm font-semibold text-white hover:bg-black/60"
+                      >
+                        View Record
+                      </Link>
+                    ) : null}
                     <a
                       href={quantumRecordUrl}
                       download={`pixelqrypt-origin-record-${quantumRecord.id}.txt`}
@@ -1306,6 +1366,16 @@ function StudioPageInner() {
                     >
                       Download Record
                     </a>
+                    {quantumSourceLinks?.externalSourceUrl ? (
+                      <a
+                        href={quantumSourceLinks.externalSourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-lg border border-purple-300/30 bg-black/30 px-4 py-2 text-sm font-semibold text-purple-100 hover:bg-black/50"
+                      >
+                        {quantumSourceLinks.externalSourceLabel}
+                      </a>
+                    ) : null}
                   </div>
                 </div>
               ) : null}

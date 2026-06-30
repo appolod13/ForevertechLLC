@@ -1,16 +1,34 @@
 'use client';
 
 import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ShoppingBag, Image as ImageIcon, Loader2 } from 'lucide-react';
 import type { OrderRecord } from '@/lib/cartStore';
+import { creatorAccessConstants, getCreatorAccess } from '@/lib/creatorAccess';
+import type { StoredGenerationRecord } from '@/lib/creatorArtifacts';
 
 export default function ProfilePage() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [savedGenerations, setSavedGenerations] = useState<StoredGenerationRecord[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const access = getCreatorAccess(user);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const upgrade = (searchParams.get('upgrade') || '').trim();
+    if (upgrade !== 'premium-creator') return;
+
+    const nextUser = { ...user, premiumCreator: true };
+    try {
+      localStorage.setItem('user', JSON.stringify(nextUser));
+    } catch {
+    }
+  }, [searchParams, user]);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -20,6 +38,15 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!user) return;
+
+    try {
+      const raw = localStorage.getItem('foreverteck.studio.savedGenerations');
+      const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+      setSavedGenerations(Array.isArray(parsed) ? (parsed as StoredGenerationRecord[]) : []);
+    } catch {
+      setSavedGenerations([]);
+    }
+
     const load = async () => {
       setLoadingData(true);
       try {
@@ -57,6 +84,34 @@ export default function ProfilePage() {
       </div>
 
       <div className="space-y-8">
+        <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">
+          <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h2 className="text-2xl font-semibold text-white">{access.hasPremiumCreatorAccess ? 'Premium Creator' : 'Free Tier'}</h2>
+              <p className="mt-2 max-w-2xl text-sm text-zinc-400">
+                {access.hasPremiumCreatorAccess
+                  ? '75% payout active. Creator-linked sales, QR listings, and expanded source-record storage are available on this account.'
+                  : 'You can store up to 5 free generations. Upgrade to Premium Creator to unlock QR selling, 75% creator payouts, and expanded storage.'}
+              </p>
+            </div>
+
+            <div className="grid min-w-[220px] gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-zinc-800 bg-black/30 p-4">
+                <div className="text-xs uppercase tracking-wider text-zinc-500">Stored Generations</div>
+                <div className="mt-2 text-xl font-semibold text-white">
+                  {savedGenerations.length} / {access.hasPremiumCreatorAccess ? 'Unlimited' : creatorAccessConstants.FREE_STORAGE_LIMIT}
+                </div>
+              </div>
+              <div className="rounded-xl border border-zinc-800 bg-black/30 p-4">
+                <div className="text-xs uppercase tracking-wider text-zinc-500">Creator Payout</div>
+                <div className="mt-2 text-xl font-semibold text-white">
+                  {access.hasPremiumCreatorAccess ? '75% payout active' : 'Upgrade required'}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section>
           <h2 className="text-2xl font-semibold text-white mb-6 flex items-center gap-2">
             <ShoppingBag className="h-6 w-6 text-primary" />
@@ -108,9 +163,32 @@ export default function ProfilePage() {
             <ImageIcon className="h-6 w-6 text-primary" />
             Saved AI Generations
           </h2>
-          <div className="rounded-xl border border-dashed border-zinc-800 p-12 text-center text-zinc-500">
-            Designs you like will be saved here for long-term access.
-          </div>
+          {savedGenerations.length ? (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {savedGenerations.map((generation) => (
+                <div key={generation.id} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+                  <div className="relative mb-4 aspect-square overflow-hidden rounded-lg bg-black">
+                    <img
+                      src={generation.imageUrl}
+                      alt={generation.prompt}
+                      className="absolute inset-0 h-full w-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </div>
+                  <div className="text-sm font-semibold text-white">{generation.prompt}</div>
+                  <div className="mt-2 flex items-center justify-between text-xs text-zinc-500">
+                    <span>{new Date(generation.createdAt).toLocaleDateString()}</span>
+                    <span>{generation.storedVia === 'quantum_paid' ? 'Quantum record' : generation.storedVia === 'premium_creator' ? 'Premium creator' : 'Free storage'}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-zinc-800 p-12 text-center text-zinc-500">
+              Designs you like will be saved here for long-term access.
+            </div>
+          )}
         </section>
       </div>
     </div>

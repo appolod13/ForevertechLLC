@@ -67,4 +67,18 @@ describe('CheckoutPage', () => {
 
     expect(screen.queryByText('Quantum Verified Premium')).not.toBeInTheDocument();
   });
+
+  it('shows the premium creator upsell instead of a checkout quantum upsell', async () => {
+    render(<CheckoutPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Premium Creator - $24.99/month')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/earn 75% on creator-linked sales/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Upgrade to Premium Creator' })).toHaveAttribute(
+      'href',
+      '/profile?upgrade=premium-creator',
+    );
+  });
 });

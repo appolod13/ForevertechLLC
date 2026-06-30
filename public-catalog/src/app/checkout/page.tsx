@@ -35,6 +35,7 @@ function extractCartQrDisabled(items: CartItem[]): boolean {
 export default function CheckoutPage() {
   const { items, total } = useCart();
   const { user, isLoading } = useAuth();
+  const premiumCreator = Boolean((user as { premiumCreator?: boolean } | null)?.premiumCreator);
 
   type ShippingOption = { id: string; label: string; amountUsd: number; eta?: string };
   const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
@@ -482,6 +483,21 @@ export default function CheckoutPage() {
                 <span>${grandTotal.toFixed(2)}</span>
               </div>
             </div>
+
+            {!premiumCreator ? (
+              <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 p-4">
+                <div className="text-sm font-semibold text-white">Premium Creator - $24.99/month</div>
+                <div className="mt-2 text-sm text-purple-100/90">
+                  Earn 75% on creator-linked sales, unlock QR selling, and keep expanded storage for your artwork, seeds, math, code, and source records.
+                </div>
+                <Link
+                  href="/profile?upgrade=premium-creator"
+                  className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-lg border border-purple-300/30 bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-500"
+                >
+                  Upgrade to Premium Creator
+                </Link>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

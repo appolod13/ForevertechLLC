@@ -120,4 +120,14 @@ describe('StudioPage calendar date range', () => {
     expect(ipfs.checked).toBe(true);
     expect(screen.getByRole('button', { name: 'Unlock Real Quantum Generation - $9.99' })).toBeInTheDocument();
   });
+
+  it('shows a separate premium creator upgrade path', async () => {
+    await renderStudioPage();
+    expect(screen.getByText('Premium Creator - $24.99/month')).toBeInTheDocument();
+    expect(screen.getByText(/earn 75% on creator-linked sales/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Upgrade to Premium Creator' })).toHaveAttribute(
+      'href',
+      '/profile?upgrade=premium-creator',
+    );
+  });
 });
