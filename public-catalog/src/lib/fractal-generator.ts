@@ -303,11 +303,11 @@ export function fractalConfigToPrompt(config: FractalConfig, emotion: string, qu
       'sierpinski': `Sierpinski recursive triangles ${i === 0 ? 'carrying ancient memory at the heart of the story' : 'woven as structural scaffolding across the narrative'}`,
       'koch': `Koch snowflake string-like filaments ${i === 0 ? 'threading the opening passage' : 'branching like plot threads through the composition'}`,
       'vicsek': `Vicsek cross-shaped self-similar fractal ${i === 0 ? 'anchoring the story grid' : 'layered as a recurring motif'}`,
-      'mandelbrot': `Mandelbrot boundary complexity ${i === 0 ? 'framing the story\'s edge' : 'adding structural depth as a supporting layer'}`,
+      'mandelbrot': `Mandelbrot boundary complexity ${i === 0 ? "framing the story's edge" : 'adding structural depth as a supporting layer'}`,
       'julia': `Julia set expressive organic spirals ${i === 0 ? 'as the emotional soul and primary narrator' : 'as a secondary emotional voice'}`,
-      'burning_ship': `Burning Ship fire-like recursive patterns ${i === 0 ? 'igniting the story\'s climax' : 'smoldering in the background tension'}`,
+      'burning_ship': `Burning Ship fire-like recursive patterns ${i === 0 ? "igniting the story's climax" : 'smoldering in the background tension'}`,
       'trinity': `Trinity fractal 3-fold symmetric patterns ${i === 0 ? 'as the central narrative pillar' : 'woven into the resolution arc'}`,
-      'lyapunov': `Lyapunov chaos theory visualization ${i === 0 ? 'mapping the story\'s chaotic turning point' : 'adding layers of ordered chaos'}`,
+      'lyapunov': `Lyapunov chaos theory visualization ${i === 0 ? "mapping the story's chaotic turning point" : 'adding layers of ordered chaos'}`,
       'newton': `Newton fractal basin of attraction ${i === 0 ? 'guiding the story to resolution' : 'pulling recursive threads toward closure'}`,
     };
     return descriptions[f] || f;
@@ -317,7 +317,7 @@ export function fractalConfigToPrompt(config: FractalConfig, emotion: string, qu
     ? `${fractals.length} fractal types composited as a multi-chapter narrative tapestry`
     : `${fractals.length} fractal types interwoven in a recursive story arc`;
 
-  const prompt = `Fractal storytelling canvas — ${emotion} multi-fractal composite: ${fractalDescriptions}. ${blendTechnique}, strings and filaments of Koch branching like plot threads, Sierpinski\'s ancient triangular memory holding the structure, Julia\'s expressive organic spirals narrating the emotional core. Recursive narrative unfolding from quantum string-like filaments, each iteration a new chapter emerging from the previous. Quantum field with ${quantum_emotion} distortion mode (morphing speed ${config.quantum_field.morphing_speed.toFixed(2)}), flowing dynamic background. Color palette: ${config.color_palette.slice(0, 4).join(', ')} on black void with glowing neon accents — the image tells a story through self-similar repetition, ancient fractal geometry woven with living emotional threads. Perfectly centered, ethereal luminous glow, high contrast, mathematical precision fused with organic emotional flow, professional merch-ready, 8k resolution, cinematic volumetric lighting`;
+  const prompt = `Fractal storytelling canvas — ${emotion} multi-fractal composite: ${fractalDescriptions}. ${blendTechnique}, strings and filaments of Koch branching like plot threads, Sierpinski's ancient triangular memory holding the structure, Julia's expressive organic spirals narrating the emotional core. Recursive narrative unfolding from quantum string-like filaments, each iteration a new chapter emerging from the previous. Quantum field with ${quantum_emotion} distortion mode (morphing speed ${config.quantum_field.morphing_speed.toFixed(2)}), flowing dynamic background. Color palette: ${config.color_palette.slice(0, 4).join(', ')} on black void with glowing neon accents — the image tells a story through self-similar repetition, ancient fractal geometry woven with living emotional threads. Perfectly centered, ethereal luminous glow, high contrast, mathematical precision fused with organic emotional flow, professional merch-ready, 8k resolution, cinematic volumetric lighting`;
 
   return prompt;
 }

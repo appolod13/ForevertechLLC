@@ -166,8 +166,8 @@ def _sierpinski_mask(nx: float, ny: float, scale: int = 1024) -> float:
 def _koch_like_mask(nx: float, ny: float, freq: float = 22.0) -> float:
     """Koch-inspired mask with three self-similar branching levels and string filaments.
 
-    Each recursion level (l1→l2→l3) triples the angular frequency, mimicking how a
-    Koch curve subdivides each segment into thirds.  The ``filament`` term weaves
+    Each recursion level (l1->l2->l3) triples the angular frequency, mimicking how a
+    Koch curve subdivides each segment into thirds.  The filament term weaves
     string-like tendrils that give the 'coming from strings' quality.
     """
     r = math.sqrt(nx * nx + ny * ny) + 1e-9
