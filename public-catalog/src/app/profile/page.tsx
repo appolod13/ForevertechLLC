@@ -1,14 +1,14 @@
 'use client';
 
+import { Suspense, useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
 import { ShoppingBag, Image as ImageIcon, Loader2 } from 'lucide-react';
 import type { OrderRecord } from '@/lib/cartStore';
 import { creatorAccessConstants, getCreatorAccess } from '@/lib/creatorAccess';
 import type { StoredGenerationRecord } from '@/lib/creatorArtifacts';
 
-export default function ProfilePage() {
+function ProfilePageInner() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -17,18 +17,7 @@ export default function ProfilePage() {
   const [loadingData, setLoadingData] = useState(true);
   const access = getCreatorAccess(user);
 
-  useEffect(() => {
-    if (!user) return;
-
-    const upgrade = (searchParams.get('upgrade') || '').trim();
-    if (upgrade !== 'premium-creator') return;
-
-    const nextUser = { ...user, premiumCreator: true };
-    try {
-      localStorage.setItem('user', JSON.stringify(nextUser));
-    } catch {
-    }
-  }, [searchParams, user]);
+  const highlightPremiumUpgrade = (searchParams.get('upgrade') || '').trim() === 'premium-creator';
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -110,6 +99,11 @@ export default function ProfilePage() {
               </div>
             </div>
           </div>
+          {highlightPremiumUpgrade && !access.hasPremiumCreatorAccess ? (
+            <div className="mt-5 rounded-xl border border-purple-500/30 bg-purple-500/10 p-4 text-sm text-purple-100">
+              Premium Creator upgrade selected. Connect this screen to the paid subscription checkout to unlock 75% creator payouts and QR-linked selling.
+            </div>
+          ) : null}
         </section>
 
         <section>
@@ -192,5 +186,13 @@ export default function ProfilePage() {
         </section>
       </div>
     </div>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
+      <ProfilePageInner />
+    </Suspense>
   );
 }

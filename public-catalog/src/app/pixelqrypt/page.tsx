@@ -146,6 +146,7 @@ function PixelQryptContent() {
   }, [code, sessionIdFromUrl, deviceId]);
 
   const canDownload = purchaseStatus === 'purchased';
+  const isCreatorLinkedSale = Boolean(lookup?.creatorUserId);
 
   const customizeHref = useMemo(() => {
     if (!lookup?.imageUrl) return '/customize';
@@ -223,6 +224,15 @@ function PixelQryptContent() {
                     </div>
                   </div>
 
+                  {isCreatorLinkedSale ? (
+                    <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 p-4">
+                      <div className="text-sm font-semibold text-white">Creator-linked sale</div>
+                      <div className="mt-2 text-sm text-purple-100/90">
+                        This QR unlock is tied to a creator listing. One-time buyer access lets collectors purchase this code or artwork without subscribing.
+                      </div>
+                    </div>
+                  ) : null}
+
                   {purchaseStatus === 'error' && purchaseError ? (
                     <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
                       {purchaseError}
@@ -297,7 +307,7 @@ function PixelQryptContent() {
                         className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 transition-colors"
                       >
                         <Download className="h-4 w-4" />
-                        {buyStatus === 'starting' ? 'Starting checkout…' : 'Purchase Download Access'}
+                        {buyStatus === 'starting' ? 'Starting checkout…' : isCreatorLinkedSale ? 'Buy This Code / Artwork' : 'Purchase Download Access'}
                       </button>
                     )}
 
@@ -310,7 +320,9 @@ function PixelQryptContent() {
                     </Link>
                   </div>
                   <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-xs text-zinc-300">
-                    Download access is delivered instantly after a successful payment. For help with access or refund questions, see{" "}
+                    {isCreatorLinkedSale
+                      ? 'One-time buyer access is delivered instantly after a successful payment. For help with creator-linked purchases, access, or refund questions, see '
+                      : 'Download access is delivered instantly after a successful payment. For help with access or refund questions, see '}
                     <Link className="text-blue-300 hover:text-blue-200" href="/refund-policy">
                       Refund & Return Policy
                     </Link>{" "}

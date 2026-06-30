@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
@@ -27,7 +27,7 @@ function readStoredSourceRecords() {
   }
 }
 
-export default function PixelQryptSourcePage() {
+function PixelQryptSourcePageInner() {
   const searchParams = useSearchParams();
   const recordId = (searchParams.get('record') || '').trim();
   const [record, setRecord] = useState<SourceRecord | null>(null);
@@ -159,5 +159,13 @@ export default function PixelQryptSourcePage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function PixelQryptSourcePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black text-white"><Header /><main className="container mx-auto px-4 py-10">Loading…</main></div>}>
+      <PixelQryptSourcePageInner />
+    </Suspense>
   );
 }
