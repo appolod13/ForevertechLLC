@@ -146,6 +146,12 @@ export function generateFractalRenderParams(
             [-0.70176, 0.3842],   // dragon curves
             [-0.835,  -0.2321],   // leafy ferns
             [0.4,     -0.3],      // burning coils
+            [-0.1226,  0.7449],   // Douady rabbit: dense three-lobe boundary
+            [-0.75,    0.1],      // San Marco variant: symmetric dragon wings
+            [-1.0,     0.0],      // Basilica: twin-arch fractal cathedrals
+            [0.285,    0.013],    // island archipelago with dendritic veins
+            [-0.5,     0.5657],   // 45° snowflake lace, 8-fold symmetry
+            [-1.755,   0.0],      // Airplane Julia: aerodynamic fractal arcs
           ];
           const storyIdx = Math.floor(layerSeed % STORY_JULIA.length);
           const [baseReal, baseImag] = STORY_JULIA[storyIdx];
