@@ -356,11 +356,11 @@ def fractal_fusion_rgb(
                 m_val = max_iter
             m_norm = m_val / max_iter
 
-            # Julia-dominant blend: 0.82 Julia + 0.18 Mandelbrot.
-            # The heavy Julia weight gives expressive, emotionally rich organic forms;
-            # Mandelbrot contributes structural boundary detail as a supporting layer.
+            # Julia-dominant blend: 0.92 Julia + 0.08 Mandelbrot.
+            # Near-pure Julia gives the richest organic fractal structure; a trace of
+            # Mandelbrot sharpens boundary edges for added detail.
             interference = 0.5 + 0.5 * math.sin(q_freq * (ix + iy) * math.pi + q_phase)
-            fused = (j_norm * 0.82 + m_norm * 0.18) * (0.76 + 0.24 * interference)
+            fused = (j_norm * 0.92 + m_norm * 0.08) * (0.76 + 0.24 * interference)
             field[row + x] = fused
 
     def sample(fx: float, fy: float) -> float:
@@ -394,7 +394,7 @@ def fractal_fusion_rgb(
 
     inv_w = 1.0 / max(1, width - 1)
     inv_h = 1.0 / max(1, height - 1)
-    relief = 9.2
+    relief = 16.0
 
     # Narrative phase drives a subtle story-arc pulse across the image:
     # values near 0 are the "calm beginning", near 0.5 the "climax", near 1 the "resolution".
@@ -418,11 +418,11 @@ def fractal_fusion_rgb(
             grid = _quantum_grid(nx, ny, freq=7.0 + (phash % 7), phase=q_phase)
             a_mask = _apollonian_mask(nx, ny)
 
-            # Fractal geometry overlay: visible in flat areas (0.40 floor) and
+            # Fractal geometry overlay: visible in flat areas (0.60 floor) and
             # amplified at boundaries — fractals always show regardless of edge value.
             geo_raw = (s_mask * sierpinski_weight + k_mask * koch_weight
                        + grid * grid_weight + a_mask * apollonian_weight)
-            geo = geo_raw * (0.40 + 0.60 * edge)
+            geo = geo_raw * (0.60 + 0.40 * edge)
 
             # 4D hyperplane projection — two hidden axes (w, z) derived from the
             # narrative phase and fractal value create iridescent depth shimmer that
@@ -432,12 +432,12 @@ def fractal_fusion_rgb(
             z4 = nx * math.cos(angle_4d) - ny * math.sin(angle_4d) + v * 0.42
             depth_4d = 0.5 + 0.5 * math.sin(w4 * q_freq * 1.4 + narrative_phase) * math.cos(z4 * q_freq * 0.85 - q_phase)
 
-            # Iridescent hue shift from 4D depth — prismatic rainbow sheen
-            hue_4d_shift = depth_4d * 0.14
-            hue = (base_hue + v * hue_span * 2.5 + geo * 0.10 + hue_4d_shift) % 1.0
-            sat = min(1.0, sat_base + 0.28 * (1.0 - v) + geo * 0.12 + depth_4d * 0.08)
-            # Lowered brightness floor + dampened fractal response + 4D shimmer
-            val = min(1.0, max(0.0, (0.18 + 0.72 * v + val_bias) * (0.82 + 0.18 * geo) * (0.88 + 0.16 * depth_4d)))
+            # Iridescent hue shift from 4D depth — strong prismatic diamond sheen
+            hue_4d_shift = depth_4d * 0.22
+            hue = (base_hue + v * hue_span * 3.5 + geo * 0.15 + hue_4d_shift) % 1.0
+            sat = min(1.0, sat_base + 0.42 * (1.0 - v) + geo * 0.18 + depth_4d * 0.12)
+            # Deep black background (low val floor), bright vibrant highlights
+            val = min(1.0, max(0.0, (0.04 + 0.88 * v + val_bias) * (0.90 + 0.22 * geo) * (0.88 + 0.16 * depth_4d)))
 
             r, g, b = _hsv_to_rgb(hue, sat, val)
             rf, gf, bf = r / 255.0, g / 255.0, b / 255.0
@@ -447,20 +447,20 @@ def fractal_fusion_rgb(
             # exactly the boundary region where Julia sets carry their richest detail.
             depth = v * (1.0 - v) * 4.0
             story_pulse = 0.5 + 0.5 * math.sin(narrative_phase + v * math.pi * 2.0)
-            # Dampened glow with 4D shimmer modulation
-            glow = (0.10 + 0.30 * geo + 0.18 * depth) * (0.40 + 0.60 * story_pulse) * (0.80 + 0.20 * depth_4d)
-            rf += glow * 0.45
-            gf += glow * 0.35
-            bf += glow * 0.65
+            # Strong diamond-sparkle glow with 4D shimmer
+            glow = (0.22 + 0.65 * geo + 0.42 * depth) * (0.50 + 0.50 * story_pulse) * (0.80 + 0.20 * depth_4d)
+            rf += glow * 0.65
+            gf += glow * 0.45
+            bf += glow * 0.90
 
-            # Darker specular outline: subdued flash at fractal boundaries
-            specular = max(0.0, edge - 0.65) * (0.7 + geo * 1.5) * (0.8 + 0.15 * depth_4d)
-            rf += specular * 0.55
-            gf += specular * 0.60
-            bf += specular * 0.70
+            # Sharp diamond facet specular: bright flashes at fractal edges
+            specular = max(0.0, edge - 0.40) * (1.5 + geo * 3.0) * (0.9 + 0.25 * depth_4d)
+            rf += specular * 1.00
+            gf += specular * 0.90
+            bf += specular * 1.10
 
-            # Reduced brightness multiplier — darker, richer output
-            bright = 0.65
+            # Full brightness — vibrant, high-contrast diamond output
+            bright = 1.0
             rf = min(1.0, rf * bright) ** gamma
             gf = min(1.0, gf * bright) ** gamma
             bf = min(1.0, bf * bright) ** gamma
