@@ -331,7 +331,7 @@ export async function POST(req: NextRequest) {
       // `/api/images/placeholder.png` does not exist on disk; use the mock
       // generator to produce a guaranteed-valid inline SVG placeholder.
       try {
-        const ph = await (generateImageForPlatform as any)("mock", prompt, platform);
+        const ph = await generateImageForPlatform("mock", prompt, platform as "linkedin" | "instagram" | "twitter");
         result.image_url = ph.image_url;
       } catch {
         result.image_url = "";
