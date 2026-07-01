@@ -199,7 +199,9 @@ export function FusionAI({ prompt, baseImageUrl, onImageGenerated }: FusionAIPro
       }, 2000);
       return;
     }
-    const ws = new WebSocket(`ws://127.0.0.1:8000/progress/${jobId}`);
+    const fusionBase = (process.env.NEXT_PUBLIC_FUSION_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
+    const wsBase = fusionBase.replace(/^https/, 'wss').replace(/^http/, 'ws');
+    const ws = new WebSocket(`${wsBase}/progress/${jobId}`);
     
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -207,7 +209,8 @@ export function FusionAI({ prompt, baseImageUrl, onImageGenerated }: FusionAIPro
       setProgress(data.progress);
 
       if (data.status === 'done') {
-        const imageUrl = `http://127.0.0.1:8000${data.result}`;
+        const result: string = data.result || '';
+        const imageUrl = result.startsWith('/') ? `${fusionBase}${result}` : result;
         onImageGenerated(imageUrl);
         setIsFusing(false);
         setIsOpen(false);

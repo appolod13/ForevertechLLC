@@ -53,7 +53,8 @@ JULIA_STORY_CONSTANTS: list[tuple[float, float]] = [
 REQUESTS = Counter("fusion_requests_total", "Fusion requests", ["endpoint"])
 LATENCY = Histogram("fusion_latency_seconds", "Fusion latency", ["device"])
 
-os.makedirs("uploads", exist_ok=True)
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app = FastAPI(title="Fusion Service")
 app.add_middleware(
@@ -63,7 +64,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 jobs: dict[str, dict] = {}
 
@@ -561,7 +562,7 @@ async def generate_image(payload: GenerateRequest):
     )
 
     filename = f"gen_{job_id}_{width}x{height}.png"
-    out_path = os.path.join("uploads", filename)
+    out_path = os.path.join(UPLOAD_DIR, filename)
     write_png_rgb(out_path, width, height, rgb)
     image_url = f"/uploads/{filename}"
 
@@ -605,7 +606,7 @@ async def metrics():
 
 @app.get("/")
 async def root():
-    return RedirectResponse(url="/uploads")
+    return {"service": "fusion", "status": "ok", "uploads": "/uploads"}
 
 
 @app.post("/fuse")
