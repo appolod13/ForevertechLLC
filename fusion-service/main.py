@@ -458,7 +458,7 @@ def fractal_fusion_rgb(
             gf += specular * 0.95
             bf += specular * 1.10
 
-            # Natural brightness (reduced from 1.35 for more organic, less blown-out look)
+            # Natural brightness multiplier — keeps highlights organic without blown-out clipping
             bright = 0.95
             rf = min(1.0, rf * bright) ** gamma
             gf = min(1.0, gf * bright) ** gamma
