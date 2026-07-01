@@ -296,7 +296,7 @@ def fractal_fusion_rgb(
     log2 = math.log(2.0)
     bailout = 16.0
 
-    max_field_dim = 320
+    max_field_dim = 448
     long_side = max(width, height)
     scale = 1.0 if long_side <= max_field_dim else max_field_dim / long_side
     fw = max(2, min(width, int(round(width * scale))))
@@ -408,6 +408,11 @@ def fractal_fusion_rgb(
             fx = x * sx
             v = sample(fx, fy)
 
+            # Fractal boundary signal: peaks at 1.0 when v=0.5 (escape-band boundary),
+            # zero at interior (v=1, fully inside the set) and far exterior (v≈0).
+            # This is the primary "bring fractals forward" driver.
+            depth_v = v * (1.0 - v) * 4.0
+
             dx = (sample(fx - 1.0, fy) - sample(fx + 1.0, fy)) * relief
             dy = (sample(fx, fy - 1.0) - sample(fx, fy + 1.0)) * relief
             edge = min(1.0, math.sqrt(dx * dx + dy * dy) * 0.52)
@@ -418,48 +423,46 @@ def fractal_fusion_rgb(
             grid = _quantum_grid(nx, ny, freq=7.0 + (phash % 7), phase=q_phase)
             a_mask = _apollonian_mask(nx, ny)
 
-            # Fractal geometry overlay: visible in flat areas (0.60 floor) and
-            # amplified at boundaries — fractals always show regardless of edge value.
+            # Fractal geometry overlay tied to edge + boundary bands only.
+            # The 0.60 floor is removed so overlays do not flood flat/interior areas.
             geo_raw = (s_mask * sierpinski_weight + k_mask * koch_weight
                        + grid * grid_weight + a_mask * apollonian_weight)
-            geo = geo_raw * (0.60 + 0.40 * edge)
+            geo = geo_raw * (edge + 0.20 * depth_v)
 
-            # 4D hyperplane projection — two hidden axes (w, z) derived from the
-            # narrative phase and fractal value create iridescent depth shimmer that
-            # pulses as if the image is rotating through a 4th spatial dimension.
+            # 4D hyperplane projection — iridescent depth shimmer
             angle_4d = narrative_phase * 1.5 + q_phase * 0.7
             w4 = nx * math.sin(angle_4d) + ny * math.cos(angle_4d) + v * 0.85
             z4 = nx * math.cos(angle_4d) - ny * math.sin(angle_4d) + v * 0.42
             depth_4d = 0.5 + 0.5 * math.sin(w4 * q_freq * 1.4 + narrative_phase) * math.cos(z4 * q_freq * 0.85 - q_phase)
 
-            # Iridescent hue shift from 4D depth — strong prismatic diamond sheen
-            hue_4d_shift = depth_4d * 0.22
-            hue = (base_hue + v * hue_span * 3.5 + geo * 0.15 + hue_4d_shift) % 1.0
-            sat = min(1.0, sat_base + 0.42 * (1.0 - v) + geo * 0.18 + depth_4d * 0.12)
-            # Deep black background (low val floor), bright vibrant highlights
-            val = min(1.0, max(0.0, (0.04 + 0.88 * v + val_bias) * (0.90 + 0.22 * geo) * (0.88 + 0.16 * depth_4d)))
+            # Rapid hue cycling across escape bands — each Julia ring has its own color.
+            # 6× span gives clearly distinct colored bands without full desaturation.
+            hue_4d_shift = depth_4d * 0.28
+            hue = (base_hue + v * hue_span * 6.0 + geo * 0.18 + hue_4d_shift) % 1.0
+            # Near-full saturation for vivid quantum aesthetic
+            sat = min(1.0, 0.88 + geo * 0.12 + depth_4d * 0.08)
+            # Quantum field brightness: deep black at interior/exterior, vivid at bands.
+            # Interior (depth_v≈0, edge≈0) → near-black; boundary bands → bright.
+            val = min(1.0, max(0.0, depth_v * 1.15 + edge * 0.50 + geo * 0.12 + val_bias))
 
             r, g, b = _hsv_to_rgb(hue, sat, val)
             rf, gf, bf = r / 255.0, g / 255.0, b / 255.0
 
-            # Story-arc glow: peaks at the "climax" chapter, dims at calm chapters.
-            # The ``depth`` term (peaks at v≈0.5) highlights mid-iteration bands —
-            # exactly the boundary region where Julia sets carry their richest detail.
-            depth = v * (1.0 - v) * 4.0
+            # Quantum glow: no flat base — glow exists only where fractal bands/edges are.
+            # Cyan-blue tint evokes the "Quantum Asset" energy field aesthetic.
             story_pulse = 0.5 + 0.5 * math.sin(narrative_phase + v * math.pi * 2.0)
-            # Strong diamond-sparkle glow with 4D shimmer
-            glow = (0.22 + 0.65 * geo + 0.42 * depth) * (0.50 + 0.50 * story_pulse) * (0.80 + 0.20 * depth_4d)
-            rf += glow * 0.65
-            gf += glow * 0.45
-            bf += glow * 0.90
+            glow = (depth_v * 0.55 + edge * 0.50 + geo * 0.40 * edge) * (0.70 + 0.30 * story_pulse) * (0.85 + 0.15 * depth_4d)
+            rf += glow * 0.55
+            gf += glow * 0.75
+            bf += glow * 1.00
 
-            # Sharp diamond facet specular: bright flashes at fractal edges
-            specular = max(0.0, edge - 0.40) * (1.5 + geo * 3.0) * (0.9 + 0.25 * depth_4d)
-            rf += specular * 1.00
-            gf += specular * 0.90
-            bf += specular * 1.10
+            # Prismatic quantum edge flash — white-blue specular at fractal boundaries
+            specular = max(0.0, edge - 0.35) * (1.8 + geo * 2.5) * (0.90 + 0.22 * depth_4d)
+            rf += specular * 0.85
+            gf += specular * 1.00
+            bf += specular * 1.20
 
-            # Full brightness — vibrant, high-contrast diamond output
+            # Full brightness — gamma controls contrast curve
             bright = 1.0
             rf = min(1.0, rf * bright) ** gamma
             gf = min(1.0, gf * bright) ** gamma
