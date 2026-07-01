@@ -158,27 +158,49 @@ def _palette_params(profile: Optional[str], phash: int) -> dict[str, float]:
 
 
 def _sierpinski_mask(nx: float, ny: float, scale: int = 1024) -> float:
+    """Multi-scale Sierpinski triangle — sacred ancient triangular geometry at 3 zoom levels.
+
+    Three overlapping bitwise Sierpinski passes (primary, half-scale, and 60°-rotated
+    triadic coordinates) stack triangular lattices, producing a richer interlocking
+    structure that stands out clearly even in low-edge regions.
+    """
+    # Primary scale
     xi = int((nx + 0.5) * scale)
     yi = int((ny + 0.5) * scale)
-    return 1.0 if (xi & yi) == 0 else 0.0
+    s = 0.50 if (xi & yi) == 0 else 0.0
+    # Half-scale — finer inner triangular structure
+    xi2 = int((nx * 1.75 + 0.5) * scale)
+    yi2 = int((ny * 1.75 + 0.5) * scale)
+    s += 0.30 if (xi2 & yi2) == 0 else 0.0
+    # Triadic (60°-rotated) variant for 3-fold symmetry overlay
+    tx = nx + ny * 0.5774
+    ty = ny * 1.1547
+    xi3 = int((tx + 0.5) * scale)
+    yi3 = int((ty + 0.5) * scale)
+    s += 0.20 if (xi3 & yi3) == 0 else 0.0
+    return min(1.0, s)
 
 
 def _koch_like_mask(nx: float, ny: float, freq: float = 22.0) -> float:
-    """Koch-inspired mask with three self-similar branching levels and string filaments.
+    """Koch snowflake: 6-fold symmetric boundary with 3 self-similar recursion levels.
 
-    Each recursion level (l1->l2->l3) triples the angular frequency, mimicking how a
-    Koch curve subdivides each segment into thirds.  The filament term weaves
-    string-like tendrils that give the 'coming from strings' quality.
+    Folds all angular sectors into a single 60° wedge (true hexagonal symmetry),
+    then triples the angular frequency at each recursion level — mirroring the Koch
+    subdivision rule.  Radial growth-ring and crystal-filament terms add sparkle on
+    the snowflake arms, making the boundary shimmer at any zoom level.
     """
     r = math.sqrt(nx * nx + ny * ny) + 1e-9
     t = math.atan2(ny, nx)
-    # Three Koch recursion levels
-    l1 = abs(((t / math.pi) * freq) % 2.0 - 1.0)
-    l2 = abs(((t / math.pi) * freq * 3.0 + r * 9.0) % 2.0 - 1.0)
-    l3 = abs(((t / math.pi) * freq * 9.0 + r * 27.0) % 2.0 - 1.0)
+    # 6-fold symmetry: fold all sectors into first 60° wedge
+    t6 = (t % (math.pi / 3.0)) - math.pi / 6.0
+    # Three Koch recursion levels (frequency triples each step)
+    l1 = abs(((t6 / math.pi) * freq) % 2.0 - 1.0)
+    l2 = abs(((t6 / math.pi) * freq * 3.0 + r * 9.0) % 2.0 - 1.0)
+    l3 = abs(((t6 / math.pi) * freq * 9.0 + r * 27.0) % 2.0 - 1.0)
+    # Radial growth rings (snowflake layer boundaries)
     rings = abs((r * (freq * 0.65)) % 1.0 - 0.5) * 2.0
-    # String/thread weave – two sine waves at different spatial phases
-    filament = abs(math.sin(r * freq * 2.5 + t * 2.0) * math.cos(r * freq * 1.8 - t))
+    # Crystal filaments — sine weave locked to 6-fold arm spacing
+    filament = abs(math.sin(r * freq * 2.5 + t * 6.0) * math.cos(r * freq * 1.8 - t * 6.0))
     m = l1 * 0.38 + l2 * 0.22 + l3 * 0.12 + rings * 0.18 + filament * 0.10
     return 1.0 - min(1.0, m)
 
@@ -187,6 +209,29 @@ def _quantum_grid(nx: float, ny: float, freq: float, phase: float) -> float:
     a = math.sin((nx + ny) * freq * math.pi + phase)
     b = math.sin((nx - ny) * (freq * 0.85) * math.pi + phase * 1.23)
     return 0.5 + 0.5 * (a * b)
+
+
+def _apollonian_mask(nx: float, ny: float) -> float:
+    """Apollonian gasket: iterated circle inversions — ancient Greek / Islamic fractal.
+
+    Repeatedly inverts the sample point through a sequence of shrinking circles,
+    measuring proximity to each ring boundary at every depth.  The result is
+    infinitely nested tangent circles that mirror the Apollonian packing found in
+    ancient Greek mathematics and in Islamic geometric art.
+    """
+    x, y = nx * 2.0, ny * 2.0
+    acc = 0.0
+    r_target = 0.80
+    for level in range(6):
+        r = math.sqrt(x * x + y * y) + 1e-9
+        ring_dist = abs(r - r_target)
+        acc += max(0.0, 1.0 - ring_dist * (9.0 + level * 1.8)) * (0.68 ** level)
+        # Circle inversion: reflect the point through the current ring
+        r2 = r * r
+        x = x / r2 * (r_target * r_target) - r_target * 0.45
+        y = y / r2 * (r_target * r_target)
+        r_target *= 0.52
+    return min(1.0, acc)
 
 
 def fractal_fusion_rgb(
@@ -209,6 +254,7 @@ def fractal_fusion_rgb(
     sierpinski_weight: float = 0.20,
     koch_weight: float = 0.18,
     grid_weight: float = 0.12,
+    apollonian_weight: float = 0.16,
 ) -> bytes:
     rng = random.Random(seed)
     # Select a Julia "story chapter" constant from the curated narrative arc.
@@ -369,11 +415,28 @@ def fractal_fusion_rgb(
             s_mask = _sierpinski_mask(nx, ny)
             k_mask = _koch_like_mask(nx, ny)
             grid = _quantum_grid(nx, ny, freq=7.0 + (phash % 7), phase=q_phase)
-            geo = (s_mask * sierpinski_weight + k_mask * koch_weight + grid * grid_weight) * edge
+            a_mask = _apollonian_mask(nx, ny)
 
-            hue = (base_hue + v * hue_span * 2.2 + geo * 0.08) % 1.0
-            sat = min(1.0, sat_base + 0.22 * (1.0 - v) + geo * 0.10)
-            val = min(1.0, max(0.0, (0.26 + 0.86 * v + val_bias) * (0.92 + 0.18 * geo)))
+            # Fractal geometry overlay: visible in flat areas (0.40 floor) and
+            # amplified at boundaries — fractals always show regardless of edge value.
+            geo_raw = (s_mask * sierpinski_weight + k_mask * koch_weight
+                       + grid * grid_weight + a_mask * apollonian_weight)
+            geo = geo_raw * (0.40 + 0.60 * edge)
+
+            # 4D hyperplane projection — two hidden axes (w, z) derived from the
+            # narrative phase and fractal value create iridescent depth shimmer that
+            # pulses as if the image is rotating through a 4th spatial dimension.
+            angle_4d = narrative_phase * 1.5 + q_phase * 0.7
+            w4 = nx * math.sin(angle_4d) + ny * math.cos(angle_4d) + v * 0.85
+            z4 = nx * math.cos(angle_4d) - ny * math.sin(angle_4d) + v * 0.42
+            depth_4d = 0.5 + 0.5 * math.sin(w4 * q_freq * 1.4 + narrative_phase) * math.cos(z4 * q_freq * 0.85 - q_phase)
+
+            # Iridescent hue shift from 4D depth — prismatic rainbow sheen
+            hue_4d_shift = depth_4d * 0.14
+            hue = (base_hue + v * hue_span * 2.5 + geo * 0.10 + hue_4d_shift) % 1.0
+            sat = min(1.0, sat_base + 0.28 * (1.0 - v) + geo * 0.12 + depth_4d * 0.08)
+            # Raised brightness floor + amplified fractal response + 4D shimmer
+            val = min(1.0, max(0.0, (0.32 + 0.92 * v + val_bias) * (0.88 + 0.22 * geo) * (0.90 + 0.20 * depth_4d)))
 
             r, g, b = _hsv_to_rgb(hue, sat, val)
             rf, gf, bf = r / 255.0, g / 255.0, b / 255.0
@@ -383,14 +446,23 @@ def fractal_fusion_rgb(
             # exactly the boundary region where Julia sets carry their richest detail.
             depth = v * (1.0 - v) * 4.0
             story_pulse = 0.5 + 0.5 * math.sin(narrative_phase + v * math.pi * 2.0)
-            glow = (0.10 + 0.35 * geo + 0.20 * depth) * (0.38 + 0.62 * story_pulse)
-            rf += glow * 0.62
-            gf += glow * 0.44
-            bf += glow * 0.88
+            # Boosted glow with 4D shimmer modulation
+            glow = (0.14 + 0.45 * geo + 0.25 * depth) * (0.40 + 0.60 * story_pulse) * (0.85 + 0.30 * depth_4d)
+            rf += glow * 0.72
+            gf += glow * 0.55
+            bf += glow * 1.00
 
-            rf = min(1.0, rf) ** gamma
-            gf = min(1.0, gf) ** gamma
-            bf = min(1.0, bf) ** gamma
+            # Specular crystal highlight: white-blue flash at fractal boundaries
+            specular = max(0.0, edge - 0.50) * (1.0 + geo * 2.5) * (0.9 + 0.2 * depth_4d)
+            rf += specular * 0.90
+            gf += specular * 0.95
+            bf += specular * 1.10
+
+            # Global brightness boost then gamma (1.35× makes the render shining/bright)
+            bright = 1.35
+            rf = min(1.0, rf * bright) ** gamma
+            gf = min(1.0, gf * bright) ** gamma
+            bf = min(1.0, bf * bright) ** gamma
 
             buf[i3] = 255 if rf >= 1.0 else int(rf * 255)
             buf[i3 + 1] = 255 if gf >= 1.0 else int(gf * 255)
@@ -450,6 +522,7 @@ class GenerateRequest(BaseModel):
     sierpinski_weight: float = 0.20
     koch_weight: float = 0.18
     grid_weight: float = 0.12
+    apollonian_weight: float = 0.16
 
 
 @app.post("/generate")
@@ -484,6 +557,7 @@ async def generate_image(payload: GenerateRequest):
         sierpinski_weight=payload.sierpinski_weight,
         koch_weight=payload.koch_weight,
         grid_weight=payload.grid_weight,
+        apollonian_weight=payload.apollonian_weight,
     )
 
     filename = f"gen_{job_id}_{width}x{height}.png"
@@ -513,6 +587,7 @@ async def generate_image(payload: GenerateRequest):
                 "sierpinski_weight": payload.sierpinski_weight,
                 "koch_weight": payload.koch_weight,
                 "grid_weight": payload.grid_weight,
+                "apollonian_weight": payload.apollonian_weight,
             },
         },
     }
