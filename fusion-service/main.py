@@ -49,6 +49,12 @@ JULIA_STORY_CONSTANTS: list[tuple[float, float]] = [
     (-0.70176, 0.3842),   # ch 9 – dragon curves, mythic journey
     (-0.835,  -0.2321),   # ch 10 – leafy ferns, natural memory
     (0.4,     -0.3),      # ch 11 – burning coils, climax fire
+    (-0.1226,  0.7449),   # ch 12 – Douady rabbit: dense three-lobe boundary
+    (-0.75,    0.1),      # ch 13 – San Marco variant: symmetric dragon wings
+    (-1.0,     0.0),      # ch 14 – Basilica: twin-arch fractal cathedrals
+    (0.285,    0.013),    # ch 15 – island archipelago with dendritic veins
+    (-0.5,     0.5657),   # ch 16 – 45° snowflake lace, 8-fold symmetry
+    (-1.755,   0.0),      # ch 17 – Airplane Julia: aerodynamic fractal arcs
 ]
 
 REQUESTS = Counter("fusion_requests_total", "Fusion requests", ["endpoint"])
@@ -274,6 +280,80 @@ def _apollonian_mask(nx: float, ny: float) -> float:
     return min(1.0, acc)
 
 
+def _burning_ship_mask(nx: float, ny: float) -> float:
+    """Burning Ship fractal boundary — jagged flame towers and ship-hull silhouettes.
+
+    Replaces the standard squaring step with (|Re(z)| + i|Im(z)|)^2 + c, producing
+    asymmetric, craggy boundary structures that differ sharply from Julia/Mandelbrot.
+    Oscillating band modulation turns each escape ring into a distinct bright outline.
+    """
+    log2 = math.log(2.0)
+    max_iter = 20
+    bailout = 4.0
+    cx = nx * 1.6 - 0.4
+    cy = ny * 0.9 + 0.35
+    zr, zi = 0.0, 0.0
+    for i in range(max_iter):
+        zr2, zi2 = zr * zr, zi * zi
+        if zr2 + zi2 > bailout:
+            mag = math.sqrt(zr2 + zi2) + 1e-9
+            smooth = (i + 1.0 - math.log(math.log(mag) / log2 + 1e-9) / log2) / max_iter
+            # Oscillating ring pattern — each escape band becomes a bright flame outline
+            band = 0.5 + 0.5 * math.sin(smooth * math.pi * 12.0)
+            return band * max(0.0, 1.0 - smooth * 2.5)
+        # Burning ship: take absolute value of both components before squaring
+        zi_new = 2.0 * abs(zr) * abs(zi) + cy
+        zr = zr2 - zi2 + cx
+        zi = zi_new
+    return 0.0
+
+
+def _tricorn_mask(nx: float, ny: float) -> float:
+    """Tricorn (Mandelbar) fractal boundary — 3-fold symmetric crown and star shapes.
+
+    Uses the conjugate squaring rule z → conj(z)^2 + c, which gives the Mandelbar set
+    its characteristic three-pronged crown and intricate symmetric star boundaries.
+    """
+    log2 = math.log(2.0)
+    max_iter = 20
+    bailout = 4.0
+    cx = nx * 2.0
+    cy = ny * 2.0
+    zr, zi = 0.0, 0.0
+    for i in range(max_iter):
+        zr2, zi2 = zr * zr, zi * zi
+        if zr2 + zi2 > bailout:
+            mag = math.sqrt(zr2 + zi2) + 1e-9
+            smooth = (i + 1.0 - math.log(math.log(mag) / log2 + 1e-9) / log2) / max_iter
+            band = 0.5 + 0.5 * math.cos(smooth * math.pi * 10.0)
+            return band * max(0.0, 1.0 - smooth * 2.2)
+        # Tricorn: z → conj(z)² + c  ⟹  Re stays, Im negates
+        zr_new = zr2 - zi2 + cx
+        zi_new = -2.0 * zr * zi + cy
+        zr, zi = zr_new, zi_new
+    return 0.0
+
+
+def _dragon_curve_mask(nx: float, ny: float) -> float:
+    """Dragon curve inspired overlay — self-similar paired S-curves at 3 recursion levels.
+
+    Builds the characteristic interleaved wing-pair appearance of the Heighway dragon
+    by stacking three sine-based spiral layers whose angular frequency doubles at each
+    level (mimicking the recursive fold property) and whose chirality alternates.
+    """
+    r = math.sqrt(nx * nx + ny * ny) + 1e-9
+    t = math.atan2(ny, nx)
+    # Chirality reverses at each doubling (dragon fold rule)
+    l1 = abs(math.sin(t * 1.0 + r * math.pi * 3.5))
+    l2 = abs(math.sin(t * 2.0 - r * math.pi * 7.0 + math.pi * 0.25))
+    l3 = abs(math.sin(t * 4.0 + r * math.pi * 14.0 - math.pi * 0.5))
+    # Radial density: wings are densest near the main fold axis
+    density = max(0.0, 1.0 - r * 1.6)
+    raw = l1 * 0.46 + l2 * 0.32 + l3 * 0.22
+    # Boundary contour of the 0.5 level — where dragon wings intersect
+    return (1.0 - min(1.0, abs(raw - 0.5) * 3.8)) * (0.55 + 0.45 * density)
+
+
 def fractal_fusion_rgb(
     width: int,
     height: int,
@@ -295,6 +375,10 @@ def fractal_fusion_rgb(
     koch_weight: float = 0.18,
     grid_weight: float = 0.12,
     apollonian_weight: float = 0.16,
+    burning_ship_weight: float = 0.18,
+    tricorn_weight: float = 0.15,
+    dragon_weight: float = 0.14,
+    tricorn_blend: float = 0.08,
 ) -> bytes:
     rng = random.Random(seed)
     # Select a Julia "story chapter" constant from the curated narrative arc.
@@ -395,11 +479,32 @@ def fractal_fusion_rgb(
                 m_val = max_iter
             m_norm = m_val / max_iter
 
-            # Julia-dominant blend: 0.92 Julia + 0.08 Mandelbrot.
-            # Near-pure Julia gives the richest organic fractal structure; a trace of
-            # Mandelbrot sharpens boundary edges for added detail.
+            # Tricorn (Mandelbar) pass: z → conj(z)² + c — adds 3-fold symmetric crown
+            # structures and star-shaped boundary detail to the field.
+            tc_r, tc_i = ix, iy
+            t_iter = 0
+            while t_iter < max_iter:
+                tc_r2 = tc_r * tc_r
+                tc_i2 = tc_i * tc_i
+                if tc_r2 + tc_i2 > bailout:
+                    break
+                tc_r_new = tc_r2 - tc_i2 + cr
+                tc_i_new = -2.0 * tc_r * tc_i + ci
+                tc_r, tc_i = tc_r_new, tc_i_new
+                t_iter += 1
+            if t_iter < max_iter:
+                mag = math.sqrt(tc_r * tc_r + tc_i * tc_i) + 1e-9
+                tc_val = t_iter + 1.0 - math.log(math.log(mag) / log2 + 1e-9) / log2
+            else:
+                tc_val = max_iter
+            tc_norm = tc_val / max_iter
+
+            # Three-fractal blend: Julia-dominant with Mandelbrot edge detail and
+            # Tricorn symmetry crown.  tricorn_blend shifts weight from Julia to Tricorn.
+            tc_share = min(0.15, max(0.0, float(tricorn_blend)))
+            j_weight = max(0.0, 0.82 - tc_share)
             interference = 0.5 + 0.5 * math.sin(q_freq * (ix + iy) * math.pi + q_phase)
-            fused = (j_norm * 0.92 + m_norm * 0.08) * (0.76 + 0.24 * interference)
+            fused = (j_norm * j_weight + m_norm * 0.10 + tc_norm * tc_share) * (0.76 + 0.24 * interference)
             field[row + x] = fused
 
     def sample(fx: float, fy: float) -> float:
@@ -433,7 +538,8 @@ def fractal_fusion_rgb(
 
     inv_w = 1.0 / max(1, width - 1)
     inv_h = 1.0 / max(1, height - 1)
-    relief = 16.0
+    # Increased relief amplifies the gradient signal → sharper, more visible fractal outlines.
+    relief = 26.0
 
     # Narrative phase drives a subtle story-arc pulse across the image:
     # values near 0 are the "calm beginning", near 0.5 the "climax", near 1 the "resolution".
@@ -454,19 +560,26 @@ def fractal_fusion_rgb(
 
             dx = (sample(fx - 1.0, fy) - sample(fx + 1.0, fy)) * relief
             dy = (sample(fx, fy - 1.0) - sample(fx, fy + 1.0)) * relief
-            edge = min(1.0, math.sqrt(dx * dx + dy * dy) * 0.52)
+            # Raised edge multiplier (0.52 → 0.68) so outlines are brighter and more visible.
+            edge = min(1.0, math.sqrt(dx * dx + dy * dy) * 0.68)
 
             nx = (x * inv_w - 0.5)
             s_mask = _sierpinski_mask(nx, ny)
             k_mask = _koch_like_mask(nx, ny)
             grid = _quantum_grid(nx, ny, freq=7.0 + (phash % 7), phase=q_phase)
             a_mask = _apollonian_mask(nx, ny)
+            b_mask = _burning_ship_mask(nx, ny)
+            tc_mask = _tricorn_mask(nx, ny)
+            d_mask = _dragon_curve_mask(nx, ny)
 
-            # Fractal geometry overlay tied to edge + boundary bands only.
-            # The 0.60 floor is removed so overlays do not flood flat/interior areas.
+            # All seven fractal layers combined — each adds distinct outline character.
+            # geo is tied to edge + boundary bands so overlays reinforce fractal structure.
             geo_raw = (s_mask * sierpinski_weight + k_mask * koch_weight
-                       + grid * grid_weight + a_mask * apollonian_weight)
-            geo = geo_raw * (edge + 0.20 * depth_v)
+                       + grid * grid_weight + a_mask * apollonian_weight
+                       + b_mask * burning_ship_weight + tc_mask * tricorn_weight
+                       + d_mask * dragon_weight)
+            # Raised depth_v coupling (0.20 → 0.30) so overlays appear in band regions too.
+            geo = geo_raw * (edge + 0.30 * depth_v)
 
             # 4D hyperplane projection — iridescent depth shimmer
             angle_4d = narrative_phase * 1.5 + q_phase * 0.7
@@ -480,9 +593,9 @@ def fractal_fusion_rgb(
             hue = (base_hue + v * hue_span * 6.0 + geo * 0.18 + hue_4d_shift) % 1.0
             # Near-full saturation for vivid quantum aesthetic
             sat = min(1.0, 0.88 + geo * 0.12 + depth_4d * 0.08)
-            # Quantum field brightness: deep black at interior/exterior, vivid at bands.
-            # Interior (depth_v≈0, edge≈0) → near-black; boundary bands → bright.
-            val = min(1.0, max(0.0, depth_v * 1.15 + edge * 0.50 + geo * 0.12 + val_bias))
+            # Stronger edge contribution (0.50 → 0.72) keeps fractal outlines bright
+            # even on pixels that are far from escape-band center.
+            val = min(1.0, max(0.0, depth_v * 1.20 + edge * 0.72 + geo * 0.14 + val_bias))
 
             r, g, b = _hsv_to_rgb(hue, sat, val)
             rf, gf, bf = r / 255.0, g / 255.0, b / 255.0
@@ -490,13 +603,14 @@ def fractal_fusion_rgb(
             # Quantum glow: no flat base — glow exists only where fractal bands/edges are.
             # Cyan-blue tint evokes the "Quantum Asset" energy field aesthetic.
             story_pulse = 0.5 + 0.5 * math.sin(narrative_phase + v * math.pi * 2.0)
-            glow = (depth_v * 0.55 + edge * 0.50 + geo * 0.40 * edge) * (0.70 + 0.30 * story_pulse) * (0.85 + 0.15 * depth_4d)
+            glow = (depth_v * 0.60 + edge * 0.65 + geo * 0.50 * edge) * (0.70 + 0.30 * story_pulse) * (0.85 + 0.15 * depth_4d)
             rf += glow * 0.55
             gf += glow * 0.75
             bf += glow * 1.00
 
-            # Prismatic quantum edge flash — white-blue specular at fractal boundaries
-            specular = max(0.0, edge - 0.35) * (1.8 + geo * 2.5) * (0.90 + 0.22 * depth_4d)
+            # Prismatic quantum edge flash — white-blue specular at fractal boundaries.
+            # Lower threshold (0.35 → 0.15) exposes specular on thinner outlines.
+            specular = max(0.0, edge - 0.15) * (2.5 + geo * 3.5) * (0.90 + 0.22 * depth_4d)
             rf += specular * 0.85
             gf += specular * 1.00
             bf += specular * 1.20
@@ -566,6 +680,10 @@ class GenerateRequest(BaseModel):
     koch_weight: float = 0.18
     grid_weight: float = 0.12
     apollonian_weight: float = 0.16
+    burning_ship_weight: float = 0.18
+    tricorn_weight: float = 0.15
+    dragon_weight: float = 0.14
+    tricorn_blend: float = 0.08
 
 
 @app.post("/generate")
@@ -601,6 +719,10 @@ async def generate_image(payload: GenerateRequest):
         koch_weight=payload.koch_weight,
         grid_weight=payload.grid_weight,
         apollonian_weight=payload.apollonian_weight,
+        burning_ship_weight=payload.burning_ship_weight,
+        tricorn_weight=payload.tricorn_weight,
+        dragon_weight=payload.dragon_weight,
+        tricorn_blend=payload.tricorn_blend,
     )
 
     filename = f"gen_{job_id}_{width}x{height}.png"
@@ -641,6 +763,10 @@ async def generate_image(payload: GenerateRequest):
                 "koch_weight": payload.koch_weight,
                 "grid_weight": payload.grid_weight,
                 "apollonian_weight": payload.apollonian_weight,
+                "burning_ship_weight": payload.burning_ship_weight,
+                "tricorn_weight": payload.tricorn_weight,
+                "dragon_weight": payload.dragon_weight,
+                "tricorn_blend": payload.tricorn_blend,
             },
         },
     }
