@@ -106,11 +106,22 @@ function StudioPageInner() {
   const [logs, setLogs] = useState<
     { time: string; msg: string; code?: string; type: 'info' | 'error' | 'warn' | 'success' }[]
   >([]);
+  const [savedGenerationsCount, setSavedGenerationsCount] = useState<number>(0);
 
   const addLog = (msg: string, type: 'info' | 'error' | 'warn' | 'success' = 'info', code?: string) => {
     const t = new Date();
     const time = t.toISOString().split('T')[1]?.slice(0, 8) || t.toISOString();
     setLogs((prev) => [...prev, { time, msg, type, code }]);
+  };
+
+  const handleClearSavedGenerations = () => {
+    try {
+      localStorage.removeItem('foreverteck.studio.savedGenerations');
+      setSavedGenerationsCount(0);
+      addLog('Saved generations cleared. Storage reset to 0/20.', 'success', 'I_STORAGE_CLEARED');
+    } catch {
+      addLog('Failed to clear saved generations.', 'error', 'E_STORAGE_CLEAR');
+    }
   };
 
   useEffect(() => {
@@ -253,6 +264,16 @@ function StudioPageInner() {
         });
       }
     } catch {
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('foreverteck.studio.savedGenerations');
+      const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+      setSavedGenerationsCount(Array.isArray(parsed) ? parsed.length : 0);
+    } catch {
+      setSavedGenerationsCount(0);
     }
   }, []);
 
@@ -793,6 +814,7 @@ function StudioPageInner() {
             'foreverteck.studio.savedGenerations',
             JSON.stringify(storageResult.records.slice(0, 250)),
           );
+          setSavedGenerationsCount(storageResult.records.length);
         } else {
           addLog('Free storage is full. Upgrade or use paid quantum generation to keep more artwork.', 'warn', 'W_STORAGE_LIMIT');
         }
@@ -1222,6 +1244,24 @@ function StudioPageInner() {
                 >
                   Upgrade to Premium Creator
                 </Link>
+              </div>
+              <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-white">Free Storage</div>
+                    <div className="mt-1 text-xs text-gray-400">{savedGenerationsCount} / 20 slots used</div>
+                  </div>
+                  <button
+                    onClick={handleClearSavedGenerations}
+                    disabled={savedGenerationsCount === 0}
+                    className={`min-h-[36px] rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${savedGenerationsCount === 0 ? 'cursor-not-allowed border-gray-700 text-gray-600' : 'border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20'}`}
+                  >
+                    Clear Saved Generations
+                  </button>
+                </div>
+                <div className="mt-2 text-xs text-gray-500">
+                  Clears your locally saved generation list so you can start fresh on the free tier.
+                </div>
               </div>
               <div className="flex items-center justify-between gap-4">
                 <label className={`flex items-center gap-2 text-sm p-2 rounded-lg border transition-all cursor-pointer ${ipfsEnabled ? 'border-green-500 bg-green-500/10 shadow-[0_0_15px_rgba(34,197,94,0.3)]' : 'border-gray-700 hover:border-gray-600'}`}>
