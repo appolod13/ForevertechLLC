@@ -56,6 +56,26 @@ LATENCY = Histogram("fusion_latency_seconds", "Fusion latency", ["device"])
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# Maximum number of generated images to keep in the uploads directory.
+# Older gen_*.png files are removed automatically to free disk space.
+MAX_STORED_GENERATIONS = 200
+
+
+def _cleanup_old_generations() -> None:
+    """Delete the oldest gen_*.png files, keeping at most MAX_STORED_GENERATIONS."""
+    try:
+        gen_files = sorted(
+            (f for f in os.scandir(UPLOAD_DIR) if f.name.startswith("gen_") and f.name.endswith(".png")),
+            key=lambda e: e.stat().st_mtime,
+        )
+        for entry in gen_files[:-MAX_STORED_GENERATIONS]:
+            try:
+                os.remove(entry.path)
+            except OSError:
+                pass
+    except OSError:
+        pass
+
 app = FastAPI(title="Fusion Service")
 app.add_middleware(
     CORSMiddleware,
@@ -566,6 +586,7 @@ async def generate_image(payload: GenerateRequest):
 
     filename = f"gen_{job_id}_{width}x{height}.png"
     out_path = os.path.join(UPLOAD_DIR, filename)
+    _cleanup_old_generations()
     write_png_rgb(out_path, width, height, rgb)
     image_url = f"/uploads/{filename}"
 

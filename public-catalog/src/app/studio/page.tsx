@@ -1214,7 +1214,7 @@ function StudioPageInner() {
                   Earn 75% on creator-linked sales, unlock QR selling, and expand storage for your images, seeds, math, code, and source records.
                 </div>
                 <div className="mt-2 text-xs text-purple-100/75">
-                  Free accounts can keep 5 stored generations. Paid quantum artworks always keep their source record.
+                  Free accounts can keep 20 stored generations. Paid quantum artworks always keep their source record.
                 </div>
                 <Link
                   href="/profile?upgrade=premium-creator"

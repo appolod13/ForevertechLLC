@@ -11,7 +11,7 @@ import {
 describe('creatorAccess', () => {
   it('defaults unauthenticated users to the free tier', () => {
     expect(getCreatorAccess(null)).toEqual({
-      storageLimit: 5,
+      storageLimit: 20,
       tier: 'free',
       canResell: false,
       payoutRate: 0,
@@ -37,9 +37,9 @@ describe('creatorAccess', () => {
     expect(canStoreGeneration(existing, { access, storedVia: 'premium_creator' })).toBe(true);
   });
 
-  it('blocks a sixth free stored generation but allows a paid quantum artwork', () => {
+  it('blocks a 21st free stored generation but allows a paid quantum artwork', () => {
     const access = getCreatorAccess({ id: 'user-1' });
-    const existing: StoredGenerationLike[] = Array.from({ length: 5 }, (_, index) => ({
+    const existing: StoredGenerationLike[] = Array.from({ length: 20 }, (_, index) => ({
       id: `generation-${index}`,
       prompt: `prompt-${index}`,
       imageUrl: `https://example.com/${index}.png`,

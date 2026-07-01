@@ -28,7 +28,7 @@ export type QuantumSourceLinksInput = {
   metadata?: Record<string, unknown> | null;
 };
 
-const FREE_STORAGE_LIMIT = 5;
+const FREE_STORAGE_LIMIT = 20;
 
 export function getCreatorAccess(user: UserAccessLike | null | undefined): CreatorAccess {
   if (user?.premiumCreator) {
