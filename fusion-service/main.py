@@ -458,8 +458,8 @@ def fractal_fusion_rgb(
             gf += specular * 0.95
             bf += specular * 1.10
 
-            # Global brightness boost then gamma (1.35× makes the render shining/bright)
-            bright = 1.35
+            # Natural brightness (reduced from 1.35 for more organic, less blown-out look)
+            bright = 0.95
             rf = min(1.0, rf * bright) ** gamma
             gf = min(1.0, gf * bright) ** gamma
             bf = min(1.0, bf * bright) ** gamma
