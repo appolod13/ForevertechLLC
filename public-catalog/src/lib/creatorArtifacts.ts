@@ -31,9 +31,21 @@ export function saveStoredGeneration(
   });
 
   if (!saved) {
+    // Auto-evict the oldest free-tier generation (by createdAt) to make room
+    let oldestFreeIndex = -1;
+    for (let i = 0; i < next.length; i++) {
+      if (next[i]!.storedVia !== 'free') continue;
+      if (oldestFreeIndex === -1 || next[i]!.createdAt < next[oldestFreeIndex]!.createdAt) {
+        oldestFreeIndex = i;
+      }
+    }
+    if (oldestFreeIndex === -1) {
+      return { saved: false, records: next };
+    }
+    const trimmed = next.filter((_, i) => i !== oldestFreeIndex);
     return {
-      saved: false,
-      records: next,
+      saved: true,
+      records: [options.record, ...trimmed],
     };
   }
 
