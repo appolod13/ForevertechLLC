@@ -435,8 +435,8 @@ def fractal_fusion_rgb(
             hue_4d_shift = depth_4d * 0.14
             hue = (base_hue + v * hue_span * 2.5 + geo * 0.10 + hue_4d_shift) % 1.0
             sat = min(1.0, sat_base + 0.28 * (1.0 - v) + geo * 0.12 + depth_4d * 0.08)
-            # Raised brightness floor + amplified fractal response + 4D shimmer
-            val = min(1.0, max(0.0, (0.32 + 0.92 * v + val_bias) * (0.88 + 0.22 * geo) * (0.90 + 0.20 * depth_4d)))
+            # Lowered brightness floor + dampened fractal response + 4D shimmer
+            val = min(1.0, max(0.0, (0.18 + 0.72 * v + val_bias) * (0.82 + 0.18 * geo) * (0.88 + 0.16 * depth_4d)))
 
             r, g, b = _hsv_to_rgb(hue, sat, val)
             rf, gf, bf = r / 255.0, g / 255.0, b / 255.0
@@ -446,20 +446,20 @@ def fractal_fusion_rgb(
             # exactly the boundary region where Julia sets carry their richest detail.
             depth = v * (1.0 - v) * 4.0
             story_pulse = 0.5 + 0.5 * math.sin(narrative_phase + v * math.pi * 2.0)
-            # Boosted glow with 4D shimmer modulation
-            glow = (0.14 + 0.45 * geo + 0.25 * depth) * (0.40 + 0.60 * story_pulse) * (0.85 + 0.30 * depth_4d)
-            rf += glow * 0.72
-            gf += glow * 0.55
-            bf += glow * 1.00
+            # Dampened glow with 4D shimmer modulation
+            glow = (0.10 + 0.30 * geo + 0.18 * depth) * (0.40 + 0.60 * story_pulse) * (0.80 + 0.20 * depth_4d)
+            rf += glow * 0.45
+            gf += glow * 0.35
+            bf += glow * 0.65
 
-            # Specular crystal highlight: white-blue flash at fractal boundaries
-            specular = max(0.0, edge - 0.50) * (1.0 + geo * 2.5) * (0.9 + 0.2 * depth_4d)
-            rf += specular * 0.90
-            gf += specular * 0.95
-            bf += specular * 1.10
+            # Darker specular outline: subdued flash at fractal boundaries
+            specular = max(0.0, edge - 0.65) * (0.7 + geo * 1.5) * (0.8 + 0.15 * depth_4d)
+            rf += specular * 0.55
+            gf += specular * 0.60
+            bf += specular * 0.70
 
-            # Natural brightness multiplier — keeps highlights organic without blown-out clipping
-            bright = 0.95
+            # Reduced brightness multiplier — darker, richer output
+            bright = 0.65
             rf = min(1.0, rf * bright) ** gamma
             gf = min(1.0, gf * bright) ** gamma
             bf = min(1.0, bf * bright) ** gamma
