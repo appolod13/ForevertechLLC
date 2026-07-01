@@ -164,6 +164,15 @@ async function tryFusionGenerate(
     if (data.success === true && typeof data.imageUrl === "string") {
       const raw = data.imageUrl.trim();
 
+      // Prefer the pre-embedded base64 payload (added to avoid ephemeral-disk
+      // race conditions on Render free tier where a second GET can 404).
+      if (typeof data.imageData === "string" && data.imageData.startsWith("data:")) {
+        return {
+          image_url: data.imageData,
+          meta: isRecord(data.meta) ? data.meta : { provider: "fusion" },
+        };
+      }
+
       // Eagerly fetch the image bytes from the fusion service while they are
       // guaranteed to exist.  The fusion service stores files on an ephemeral
       // disk (Render.com free tier, Docker without a persistent volume) so by

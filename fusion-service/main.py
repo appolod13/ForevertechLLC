@@ -1,3 +1,4 @@
+import base64
 import binascii
 import json
 import math
@@ -58,23 +59,41 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # Maximum number of generated images to keep in the uploads directory.
 # Older gen_*.png files are removed automatically to free disk space.
-MAX_STORED_GENERATIONS = 200
+MAX_STORED_GENERATIONS = 50
 
 
 def _cleanup_old_generations() -> None:
-    """Delete the oldest gen_*.png files, keeping at most MAX_STORED_GENERATIONS."""
+    """Delete auxiliary files and old gen_*.png files to keep disk usage low.
+
+    Keeps only the MAX_STORED_GENERATIONS most-recent gen_*.png files and
+    unconditionally removes heavyweight tensor/clip caches that are no longer
+    needed after a generation completes.
+    """
     try:
-        gen_files = sorted(
-            (f for f in os.scandir(UPLOAD_DIR) if f.name.startswith("gen_") and f.name.endswith(".png")),
-            key=lambda e: e.stat().st_mtime,
-        )
-        for entry in gen_files[:-MAX_STORED_GENERATIONS]:
+        entries = list(os.scandir(UPLOAD_DIR))
+    except OSError:
+        return
+
+    # Remove PyTorch tensor caches and CLIP embedding caches – these are large
+    # temporary files that accumulate quickly on an ephemeral disk.
+    _aux_prefixes = ("tensor_", "clip_", "result_", "generated_base_")
+    for e in entries:
+        if any(e.name.startswith(p) for p in _aux_prefixes):
             try:
-                os.remove(entry.path)
+                os.remove(e.path)
             except OSError:
                 pass
-    except OSError:
-        pass
+
+    # Trim old gen_*.png files, keeping the newest MAX_STORED_GENERATIONS.
+    gen_files = sorted(
+        (e for e in entries if e.name.startswith("gen_") and e.name.endswith(".png")),
+        key=lambda e: e.stat().st_mtime,
+    )
+    for entry in gen_files[:-MAX_STORED_GENERATIONS]:
+        try:
+            os.remove(entry.path)
+        except OSError:
+            pass
 
 app = FastAPI(title="Fusion Service")
 app.add_middleware(
@@ -590,9 +609,18 @@ async def generate_image(payload: GenerateRequest):
     write_png_rgb(out_path, width, height, rgb)
     image_url = f"/uploads/{filename}"
 
+    # Embed the image bytes inline so callers never need a second round-trip.
+    # This avoids 404s caused by ephemeral-disk race conditions on Render free tier.
+    try:
+        with open(out_path, "rb") as _f:
+            _b64 = base64.b64encode(_f.read()).decode()
+        image_data = f"data:image/png;base64,{_b64}"
+    except OSError:
+        image_data = None
+
     latency = time.time() - start_time
     LATENCY.labels(device="mock_cpu").observe(latency)
-    return {
+    resp: dict = {
         "success": True,
         "imageUrl": image_url,
         "meta": {
@@ -616,6 +644,9 @@ async def generate_image(payload: GenerateRequest):
             },
         },
     }
+    if image_data is not None:
+        resp["imageData"] = image_data
+    return resp
 
 
 @app.get("/health")
