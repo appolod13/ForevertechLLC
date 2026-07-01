@@ -191,17 +191,18 @@ async function tryFusionGenerate(
             };
           }
         } catch (fetchErr) {
-          console.error("Fusion image inline-fetch failed, falling back to URL:", fetchErr);
+          console.error("Fusion image inline-fetch failed:", fetchErr);
         }
+        // Both imageData (pre-embedded) and inline fetch are unavailable.
+        // On ephemeral-disk deployments the file is likely already gone, so
+        // returning the relative path as a public URL would produce a broken
+        // image in the browser.  Return null to let the next generator run.
+        return null;
       }
 
-      // Fallback: return the public URL (works when storage is persistent)
-      const imageUrl = raw.startsWith("/") && cfg.fusion.publicBaseUrl.trim()
-        ? `${cfg.fusion.publicBaseUrl.trim().replace(/\/$/, "")}${raw}`
-        : raw;
-
+      // raw is already an absolute URL or data URL — use it directly.
       return {
-        image_url: imageUrl,
+        image_url: raw,
         meta: isRecord(data.meta) ? data.meta : { provider: "fusion" },
       };
     }
@@ -327,7 +328,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (!result.image_url) {
-      result.image_url = "/api/images/placeholder.png";
+      // `/api/images/placeholder.png` does not exist on disk; use the mock
+      // generator to produce a guaranteed-valid inline SVG placeholder.
+      try {
+        const ph = await (generateImageForPlatform as any)("mock", prompt, platform);
+        result.image_url = ph.image_url;
+      } catch {
+        result.image_url = "";
+      }
     }
 
     // Optional IPFS upload

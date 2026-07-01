@@ -58,7 +58,10 @@ export function canStoreGeneration(
     return true;
   }
 
-  return existing.length < options.access.storageLimit;
+  // Only count free-tier items toward the limit so that accumulated quantum_paid
+  // records (which bypass the cap entirely) don't block new free generations.
+  const freeCount = existing.filter((item) => item.storedVia === 'free').length;
+  return freeCount < options.access.storageLimit;
 }
 
 export function buildQuantumSourceLinks(input: QuantumSourceLinksInput) {
