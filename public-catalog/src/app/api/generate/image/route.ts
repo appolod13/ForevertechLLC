@@ -163,6 +163,30 @@ async function tryFusionGenerate(
 
     if (data.success === true && typeof data.imageUrl === "string") {
       const raw = data.imageUrl.trim();
+
+      // Eagerly fetch the image bytes from the fusion service while they are
+      // guaranteed to exist.  The fusion service stores files on an ephemeral
+      // disk (Render.com free tier, Docker without a persistent volume) so by
+      // the time the browser makes a second round-trip the file may be gone.
+      // Embedding the bytes as a base64 data URL avoids that race entirely.
+      if (raw.startsWith("/")) {
+        try {
+          const imgRes = await fetch(`${base}${raw}`, { cache: "no-store" });
+          if (imgRes.ok) {
+            const buf = await imgRes.arrayBuffer();
+            const b64 = Buffer.from(buf).toString("base64");
+            const mime = imgRes.headers.get("content-type") || "image/png";
+            return {
+              image_url: `data:${mime};base64,${b64}`,
+              meta: isRecord(data.meta) ? data.meta : { provider: "fusion" },
+            };
+          }
+        } catch (fetchErr) {
+          console.error("Fusion image inline-fetch failed, falling back to URL:", fetchErr);
+        }
+      }
+
+      // Fallback: return the public URL (works when storage is persistent)
       const imageUrl = raw.startsWith("/") && cfg.fusion.publicBaseUrl.trim()
         ? `${cfg.fusion.publicBaseUrl.trim().replace(/\/$/, "")}${raw}`
         : raw;
