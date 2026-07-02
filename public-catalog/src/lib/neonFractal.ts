@@ -406,7 +406,7 @@ export async function generateNeonFractalPng(
   // Float RGB working buffer.
   const rgb = new Float32Array(w * h * 3);
   // Escape field (for bloom / rim detection).
-  let field = new Float32Array(w * h);
+  let field: Float32Array = new Float32Array(w * h);
 
   // Single continuous-line (string) fractals: Koch, Sierpinski, dragon, Hilbert.
   if (p.fractalType !== "julia") {
