@@ -163,12 +163,46 @@ async function tryFusionGenerate(
 
     if (data.success === true && typeof data.imageUrl === "string") {
       const raw = data.imageUrl.trim();
-      const imageUrl = raw.startsWith("/") && cfg.fusion.publicBaseUrl.trim()
-        ? `${cfg.fusion.publicBaseUrl.trim().replace(/\/$/, "")}${raw}`
-        : raw;
 
+      // Prefer the pre-embedded base64 payload (added to avoid ephemeral-disk
+      // race conditions on Render free tier where a second GET can 404).
+      if (typeof data.imageData === "string" && data.imageData.startsWith("data:")) {
+        return {
+          image_url: data.imageData,
+          meta: isRecord(data.meta) ? data.meta : { provider: "fusion" },
+        };
+      }
+
+      // Eagerly fetch the image bytes from the fusion service while they are
+      // guaranteed to exist.  The fusion service stores files on an ephemeral
+      // disk (Render.com free tier, Docker without a persistent volume) so by
+      // the time the browser makes a second round-trip the file may be gone.
+      // Embedding the bytes as a base64 data URL avoids that race entirely.
+      if (raw.startsWith("/")) {
+        try {
+          const imgRes = await fetch(`${base}${raw}`, { cache: "no-store" });
+          if (imgRes.ok) {
+            const buf = await imgRes.arrayBuffer();
+            const b64 = Buffer.from(buf).toString("base64");
+            const mime = imgRes.headers.get("content-type") || "image/png";
+            return {
+              image_url: `data:${mime};base64,${b64}`,
+              meta: isRecord(data.meta) ? data.meta : { provider: "fusion" },
+            };
+          }
+        } catch (fetchErr) {
+          console.error("Fusion image inline-fetch failed:", fetchErr);
+        }
+        // Both imageData (pre-embedded) and inline fetch are unavailable.
+        // On ephemeral-disk deployments the file is likely already gone, so
+        // returning the relative path as a public URL would produce a broken
+        // image in the browser.  Return null to let the next generator run.
+        return null;
+      }
+
+      // raw is already an absolute URL or data URL — use it directly.
       return {
-        image_url: imageUrl,
+        image_url: raw,
         meta: isRecord(data.meta) ? data.meta : { provider: "fusion" },
       };
     }
@@ -294,7 +328,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (!result.image_url) {
-      result.image_url = "/api/images/placeholder.png";
+      // `/api/images/placeholder.png` does not exist on disk; use the mock
+      // generator to produce a guaranteed-valid inline SVG placeholder.
+      try {
+        const ph = await generateImageForPlatform("mock", prompt, platform as "linkedin" | "instagram" | "twitter");
+        result.image_url = ph.image_url;
+      } catch {
+        result.image_url = "";
+      }
     }
 
     // Optional IPFS upload

@@ -90,6 +90,7 @@ def test_generate_endpoint_forwards_render_params_to_fractal_fusion(monkeypatch)
         "zoom_level": 0.9,
         "center_x": -0.42,
         "center_y": 0.18,
+        "apollonian_weight": 0.25,
     }
     response = client.post("/generate", json=payload)
     assert response.status_code == 200
@@ -101,11 +102,13 @@ def test_generate_endpoint_forwards_render_params_to_fractal_fusion(monkeypatch)
     assert captured["kwargs"]["zoom_level"] == 0.9
     assert captured["kwargs"]["center_x"] == -0.42
     assert captured["kwargs"]["center_y"] == 0.18
+    assert captured["kwargs"]["apollonian_weight"] == 0.25
 
 def test_fractal_fusion_rgb_render_params_change_output():
     base = fusion_main.fractal_fusion_rgb(48, 48, "same prompt", 123)
     quality_variant = fusion_main.fractal_fusion_rgb(48, 48, "same prompt", 123, quality=2)
     rotation_variant = fusion_main.fractal_fusion_rgb(48, 48, "same prompt", 123, rotation=22.0)
+    apollonian_variant = fusion_main.fractal_fusion_rgb(48, 48, "same prompt", 123, apollonian_weight=0.40)
     modified = fusion_main.fractal_fusion_rgb(
         48,
         48,
@@ -118,9 +121,11 @@ def test_fractal_fusion_rgb_render_params_change_output():
         zoom_level=1.1,
         center_x=-0.35,
         center_y=0.12,
+        apollonian_weight=0.30,
     )
     assert base != quality_variant
     assert base != rotation_variant
+    assert base != apollonian_variant
     assert base != modified
 
 def test_brain_img2img_invalid_image_rejected():

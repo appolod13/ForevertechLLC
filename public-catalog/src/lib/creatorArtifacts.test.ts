@@ -9,8 +9,8 @@ import {
 import { getCreatorAccess } from './creatorAccess';
 
 describe('creatorArtifacts', () => {
-  it('refuses to save a sixth free stored generation', () => {
-    const existing: StoredGenerationRecord[] = Array.from({ length: 5 }, (_, index) => ({
+  it('evicts the oldest free generation when the free cap is reached', () => {
+    const existing: StoredGenerationRecord[] = Array.from({ length: 20 }, (_, index) => ({
       id: `generation-${index}`,
       prompt: `prompt-${index}`,
       imageUrl: `https://example.com/${index}.png`,
@@ -21,20 +21,22 @@ describe('creatorArtifacts', () => {
     const result = saveStoredGeneration(existing, {
       access: getCreatorAccess({ id: 'user-1' }),
       record: {
-        id: 'generation-6',
-        prompt: 'blocked prompt',
-        imageUrl: 'https://example.com/6.png',
-        createdAt: new Date(2026, 5, 6).toISOString(),
+        id: 'generation-new',
+        prompt: 'new prompt',
+        imageUrl: 'https://example.com/new.png',
+        createdAt: new Date(2026, 5, 21).toISOString(),
         storedVia: 'free',
       },
     });
 
-    expect(result.saved).toBe(false);
-    expect(result.records).toHaveLength(5);
+    expect(result.saved).toBe(true);
+    expect(result.records).toHaveLength(20);
+    expect(result.records[0]?.id).toBe('generation-new');
+    expect(result.records.find((r) => r.id === 'generation-0')).toBeUndefined();
   });
 
   it('saves a paid quantum generation even after the free cap is reached', () => {
-    const existing: StoredGenerationRecord[] = Array.from({ length: 5 }, (_, index) => ({
+    const existing: StoredGenerationRecord[] = Array.from({ length: 20 }, (_, index) => ({
       id: `generation-${index}`,
       prompt: `prompt-${index}`,
       imageUrl: `https://example.com/${index}.png`,
@@ -45,16 +47,16 @@ describe('creatorArtifacts', () => {
     const result = saveStoredGeneration(existing, {
       access: getCreatorAccess({ id: 'user-1' }),
       record: {
-        id: 'generation-6',
+        id: 'generation-21',
         prompt: 'quantum prompt',
-        imageUrl: 'https://example.com/6.png',
-        createdAt: new Date(2026, 5, 6).toISOString(),
+        imageUrl: 'https://example.com/21.png',
+        createdAt: new Date(2026, 5, 21).toISOString(),
         storedVia: 'quantum_paid',
       },
     });
 
     expect(result.saved).toBe(true);
-    expect(result.records).toHaveLength(6);
+    expect(result.records).toHaveLength(21);
   });
 
   it('upserts source records by id so new metadata replaces stale copies', () => {

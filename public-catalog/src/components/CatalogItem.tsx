@@ -218,6 +218,8 @@ export function CatalogItem({
     >
       {/* Image Section */}
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-zinc-950">
+        {/* Quantum field background — mirrors the home-page hero gradient */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.20),transparent_55%),radial-gradient(ellipse_at_bottom,rgba(16,185,129,0.12),transparent_55%)]" />
         {isLoading && (
           <div className="absolute inset-0 animate-pulse bg-zinc-800" />
         )}

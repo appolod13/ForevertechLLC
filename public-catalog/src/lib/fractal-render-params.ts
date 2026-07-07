@@ -130,15 +130,40 @@ export function generateFractalRenderParams(
         break;
 
       case 'julia':
-        // Different Julia sets based on seed
-        params.julia_c_real = -0.7269 + ((layerSeed % 1000) / 1000) * 0.3;
-        params.julia_c_imag = 0.1889 + ((layerSeed % 500) / 500) * 0.3;
-        params.julia_zoom = 1 + intensity * 0.5;
-        params.julia_iterations = Math.round(80 + complexity * 200);
-        layerParams.c_real = params.julia_c_real;
-        layerParams.c_imag = params.julia_c_imag;
-        layerParams.zoom = params.julia_zoom;
-        layerParams.iterations = params.julia_iterations;
+        // Curated expressive Julia constants matching the JULIA_STORY_CONSTANTS in fusion-service.
+        // Indexed by seed so the same chapter plays consistently across renders.
+        {
+          const STORY_JULIA: Array<[number, number]> = [
+            [-0.7269,  0.1889],   // spiraling cosmos
+            [-0.7,     0.27015],  // galaxy arms
+            [0.285,    0.01],     // archipelago
+            [-0.4,     0.6],      // organic branches
+            [0.0,      0.8],      // dendritic trees
+            [-0.8,     0.156],    // flame streaks
+            [-0.74543, 0.11301],  // feathery spirals
+            [-0.1,     0.651],    // crystal lattice
+            [-0.54,    0.54],     // geometric recursion
+            [-0.70176, 0.3842],   // dragon curves
+            [-0.835,  -0.2321],   // leafy ferns
+            [0.4,     -0.3],      // burning coils
+            [-0.1226,  0.7449],   // Douady rabbit: dense three-lobe boundary
+            [-0.75,    0.1],      // San Marco variant: symmetric dragon wings
+            [-1.0,     0.0],      // Basilica: twin-arch fractal cathedrals
+            [0.285,    0.013],    // island archipelago with dendritic veins
+            [-0.5,     0.5657],   // 45° snowflake lace, 8-fold symmetry
+            [-1.755,   0.0],      // Airplane Julia: aerodynamic fractal arcs
+          ];
+          const storyIdx = Math.floor(layerSeed % STORY_JULIA.length);
+          const [baseReal, baseImag] = STORY_JULIA[storyIdx];
+          params.julia_c_real = baseReal + ((layerSeed % 100) / 10000);
+          params.julia_c_imag = baseImag + ((layerSeed % 50) / 10000);
+          params.julia_zoom = 1.2 + intensity * 0.6;
+          params.julia_iterations = Math.round(100 + complexity * 220);
+          layerParams.c_real = params.julia_c_real;
+          layerParams.c_imag = params.julia_c_imag;
+          layerParams.zoom = params.julia_zoom;
+          layerParams.iterations = params.julia_iterations;
+        }
         break;
 
       case 'burning_ship':
