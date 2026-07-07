@@ -25,6 +25,28 @@ function ProfilePageInner() {
   const [premiumConfirmError, setPremiumConfirmError] = useState('');
   const [connectStatus, setConnectStatus] = useState<'idle' | 'starting' | 'redirecting' | 'error'>('idle');
   const [connectError, setConnectError] = useState('');
+  const [discordWebhook, setDiscordWebhook] = useState('');
+  const [discordWebhookDisplay, setDiscordWebhookDisplay] = useState('');
+  const [discordStatus, setDiscordStatus] = useState<'idle' | 'saving' | 'deleting' | 'error'>('idle');
+  const [discordError, setDiscordError] = useState('');
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    const loadDiscord = async () => {
+      try {
+        const res = await fetch(`/api/social/discord?userId=${encodeURIComponent(user.id)}`, { cache: 'no-store' });
+        const json = await res.json().catch(() => null);
+        if (cancelled || !json?.success) return;
+        setDiscordWebhookDisplay(typeof json.webhookDisplay === 'string' ? json.webhookDisplay : '');
+      } catch {
+      }
+    };
+    loadDiscord();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -255,6 +277,93 @@ function ProfilePageInner() {
               </div>
             </div>
           ) : null}
+        </section>
+
+        <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">
+          <h2 className="text-2xl font-semibold text-white">Discord Webhook</h2>
+          <p className="mt-2 text-sm text-zinc-400">
+            Manage the per-user Discord destination used by the Multi-Channel Poster.
+          </p>
+          {discordWebhookDisplay ? (
+            <div className="mt-4 rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-100">
+              {discordWebhookDisplay}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-lg border border-zinc-800 bg-black/30 px-3 py-2 text-sm text-zinc-400">
+              No Discord webhook connected yet.
+            </div>
+          )}
+          {discordError ? (
+            <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              {discordError}
+            </div>
+          ) : null}
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <input
+              type="url"
+              value={discordWebhook}
+              onChange={(e) => setDiscordWebhook(e.target.value)}
+              placeholder="https://discord.com/api/webhooks/..."
+              className="min-h-[44px] flex-1 rounded-lg border border-zinc-700 bg-black/40 px-4 py-2 text-sm text-white"
+            />
+            <button
+              type="button"
+              disabled={!user || discordStatus === 'saving'}
+              onClick={async () => {
+                if (!user) return;
+                setDiscordStatus('saving');
+                setDiscordError('');
+                try {
+                  const res = await fetch('/api/social/discord', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({ userId: user.id, webhookUrl: discordWebhook }),
+                  });
+                  const json = await res.json().catch(() => null);
+                  if (!res.ok || !json?.success) {
+                    setDiscordStatus('error');
+                    setDiscordError(String(json?.error || `HTTP_${res.status}`));
+                    return;
+                  }
+                  setDiscordStatus('idle');
+                  setDiscordWebhook('');
+                  setDiscordWebhookDisplay(String(json.webhookDisplay || 'Discord connected'));
+                } catch (e: unknown) {
+                  setDiscordStatus('error');
+                  setDiscordError(e instanceof Error ? e.message : 'discord_save_failed');
+                }
+              }}
+              className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-indigo-300/30 bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
+            >
+              Save Discord Webhook
+            </button>
+            <button
+              type="button"
+              disabled={!user || !discordWebhookDisplay || discordStatus === 'deleting'}
+              onClick={async () => {
+                if (!user) return;
+                setDiscordStatus('deleting');
+                setDiscordError('');
+                try {
+                  const res = await fetch(`/api/social/discord?userId=${encodeURIComponent(user.id)}`, { method: 'DELETE' });
+                  const json = await res.json().catch(() => null);
+                  if (!res.ok || !json?.success) {
+                    setDiscordStatus('error');
+                    setDiscordError(String(json?.error || `HTTP_${res.status}`));
+                    return;
+                  }
+                  setDiscordStatus('idle');
+                  setDiscordWebhookDisplay('');
+                } catch (e: unknown) {
+                  setDiscordStatus('error');
+                  setDiscordError(e instanceof Error ? e.message : 'discord_delete_failed');
+                }
+              }}
+              className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-white/15 bg-black/40 px-4 py-2 text-sm font-semibold text-white hover:bg-black/55 disabled:opacity-50"
+            >
+              Remove Discord Webhook
+            </button>
+          </div>
         </section>
 
         <section>

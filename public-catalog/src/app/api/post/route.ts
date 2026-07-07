@@ -11,6 +11,43 @@ type PostMetadata = {
   [key: string]: unknown;
 };
 
+function getString(value: unknown, maxLen = 4000) {
+  const s = typeof value === 'string' ? value.trim() : '';
+  return s.length > maxLen ? s.slice(0, maxLen) : s;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+async function loadDiscordWebhookForUser(userId: string) {
+  const { getServiceSupabase } = await import('@/lib/supabase');
+  const supabase = getServiceSupabase();
+  if (!supabase || !userId) return '';
+  const { data } = await supabase
+    .from('user_social_destinations')
+    .select('webhook_url')
+    .eq('user_id', userId)
+    .eq('platform', 'discord')
+    .maybeSingle();
+  return getString((data as { webhook_url?: unknown } | null)?.webhook_url);
+}
+
+async function insertPosterPostRow(row: { userId: string; content: string; mediaUrl?: string; platforms: string[]; title?: string }) {
+  const { getServiceSupabase } = await import('@/lib/supabase');
+  const supabase = getServiceSupabase();
+  if (!supabase) throw new Error('supabase_not_configured');
+  const { error } = await supabase.from('poster_posts').insert({
+    user_id: row.userId,
+    content: row.content,
+    media_url: row.mediaUrl || null,
+    platforms: row.platforms,
+    title: row.title || null,
+    created_at: new Date().toISOString(),
+  });
+  if (error) throw new Error('poster_posts_insert_failed');
+}
+
 async function blobFromDataUrl(dataUrl: string): Promise<Blob> {
   const match = dataUrl.match(/^data:([^;,]+)(;base64)?,(.*)$/);
   if (!match) throw new Error('invalid_data_url');
@@ -455,14 +492,15 @@ async function igWaitForContainerReady(params: { creationId: string; accessToken
 export async function POST(request: Request) {
   try {
     const payload = await request.json();
-    
+
     // Validate required fields
     if (!payload.content || !payload.platforms) {
       return NextResponse.json({ success: false, error: 'Missing content or platforms' }, { status: 400 });
     }
 
-    const { content, platforms, metadata } = payload as { content: string, platforms: string[], metadata?: PostMetadata };
+    const { content, platforms, metadata, userId } = payload as { content: string; platforms: string[]; metadata?: PostMetadata; userId?: string };
     const mediaUrl = metadata?.mediaUrl;
+    const safeUserId = getString(userId, 200);
 
     const results: Record<string, unknown> = {};
 
@@ -876,9 +914,58 @@ export async function POST(request: Request) {
       }
     }
 
+    if (platforms.includes('discord')) {
+      const webhookUrl = await loadDiscordWebhookForUser(safeUserId);
+      if (!webhookUrl) {
+        hasErrors = true;
+        errorMessage = 'Discord is not connected. Save a Discord webhook first.';
+        results.discord = { success: false, error: errorMessage };
+      } else {
+        try {
+          const body = {
+            content,
+            embeds: mediaUrl
+              ? [
+                  {
+                    description: content,
+                    image: { url: mediaUrl },
+                  },
+                ]
+              : undefined,
+          };
+          const res = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body),
+            cache: 'no-store',
+          });
+          if (!res.ok) throw new Error(`discord_http_${res.status}`);
+          results.discord = { success: true };
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : 'Discord publish failed';
+          hasErrors = true;
+          errorMessage = msg;
+          results.discord = { success: false, error: msg };
+        }
+      }
+    }
+
+    if (platforms.includes('rss')) {
+      try {
+        const title = getString(content.split('\n')[0], 300) || 'PixelQrypt Post';
+        await insertPosterPostRow({ userId: safeUserId, content, mediaUrl, platforms, title });
+        results.rss = { success: true };
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'RSS publish failed';
+        hasErrors = true;
+        errorMessage = errorMessage || msg;
+        results.rss = { success: false, error: msg };
+      }
+    }
+
     // Mock other platforms
     for (const p of platforms) {
-      if (p !== 'twitter' && p !== 'instagram' && p !== 'telegram' && p !== 'tiktok' && p !== 'reddit' && p !== 'youtube') {
+      if (p !== 'twitter' && p !== 'instagram' && p !== 'telegram' && p !== 'tiktok' && p !== 'reddit' && p !== 'youtube' && p !== 'discord' && p !== 'rss') {
         results[p] = { success: true, mock: true };
       }
     }

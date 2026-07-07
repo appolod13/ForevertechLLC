@@ -82,7 +82,10 @@ function StudioPageInner() {
     telegram: null,
     instagram: null,
     tiktok: null,
-    youtube: null
+    youtube: null,
+    reddit: null,
+    discord: null,
+    rss: null,
   });
 
   const [posterAttachedImage, setPosterAttachedImage] = useState<string | null>(null);
@@ -148,7 +151,10 @@ function StudioPageInner() {
         telegram: { authenticated: false },
         instagram: { authenticated: false },
         tiktok: { authenticated: false },
-        youtube: { authenticated: false }
+        youtube: { authenticated: false },
+        reddit: { authenticated: false },
+        discord: { authenticated: false },
+        rss: { authenticated: false },
       }));
   }, []);
 
@@ -866,6 +872,9 @@ function StudioPageInner() {
       if (socialAccounts.instagram?.authenticated) platforms.push('instagram');
       if (socialAccounts.tiktok?.authenticated) platforms.push('tiktok');
       if (socialAccounts.youtube?.authenticated) platforms.push('youtube');
+      if (socialAccounts.reddit?.authenticated) platforms.push('reddit');
+      if (socialAccounts.discord?.authenticated) platforms.push('discord');
+      if (socialAccounts.rss?.authenticated) platforms.push('rss');
       const res = await fetch('/api/post', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1518,17 +1527,27 @@ function StudioPageInner() {
               </div>
               
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 my-4">
-                {['twitter', 'telegram', 'instagram', 'tiktok', 'youtube'].map((platform) => {
+                {['twitter', 'telegram', 'instagram', 'tiktok', 'youtube', 'reddit', 'discord', 'rss'].map((platform) => {
                   const account = socialAccounts[platform];
                   const labels: Record<string, string> = {
-                    twitter: 'Twitter', telegram: 'Telegram', instagram: 'Instagram', tiktok: 'TikTok', youtube: 'YouTube'
+                    twitter: 'Twitter',
+                    telegram: 'Telegram',
+                    instagram: 'Instagram',
+                    tiktok: 'TikTok',
+                    youtube: 'YouTube',
+                    reddit: 'Reddit',
+                    discord: 'Discord',
+                    rss: 'RSS',
                   };
                   const colors: Record<string, string> = {
                     twitter: 'bg-[#1DA1F2] border-[#1DA1F2]',
                     telegram: 'bg-[#0088cc] border-[#0088cc]',
                     instagram: 'bg-[#E1306C] border-[#E1306C]',
                     tiktok: 'bg-[#000000] border-[#333333]',
-                    youtube: 'bg-[#FF0000] border-[#FF0000]'
+                    youtube: 'bg-[#FF0000] border-[#FF0000]',
+                    reddit: 'bg-[#FF4500] border-[#FF4500]',
+                    discord: 'bg-[#5865F2] border-[#5865F2]',
+                    rss: 'bg-[#f59e0b] border-[#f59e0b]',
                   };
                   
                   if (account === null) {
@@ -1561,11 +1580,25 @@ function StudioPageInner() {
                           alert('Telegram posting uses a Bot token + Chat ID. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID on the server, then refresh.');
                           return;
                         }
+                        if (platform === 'discord') {
+                          window.location.href = '/profile';
+                          return;
+                        }
+                        if (platform === 'rss') {
+                          window.open('/rss.xml', '_blank');
+                          return;
+                        }
                         window.location.href = `/api/auth/${platform}/login`;
                       }}
                       className={`px-3 py-2 rounded-lg text-sm font-semibold border ${colors[platform]} text-white flex items-center justify-center gap-2 transition hover:opacity-80`}
                     >
-                      {platform === 'telegram' ? 'Configure Telegram' : `Sign in to ${labels[platform]}`}
+                      {platform === 'telegram'
+                        ? 'Configure Telegram'
+                        : platform === 'discord'
+                          ? 'Configure Discord'
+                          : platform === 'rss'
+                            ? 'Open RSS feed'
+                            : `Sign in to ${labels[platform]}`}
                     </button>
                   );
                 })}

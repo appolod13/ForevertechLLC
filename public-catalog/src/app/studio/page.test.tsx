@@ -84,6 +84,19 @@ describe('StudioPage calendar date range', () => {
             instagram: { authenticated: false },
             tiktok: { authenticated: false },
             youtube: { authenticated: false },
+            reddit: { authenticated: true, screenName: 'reddit_user' },
+            discord: { authenticated: true, screenName: 'Discord connected' },
+            rss: { authenticated: true, screenName: 'RSS feed' },
+          }),
+        } as Response;
+      }
+      if (url.includes('/api/social/discord')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            connected: true,
+            webhookDisplay: 'https://discord.com/.../abc...xyz',
           }),
         } as Response;
       }
@@ -183,5 +196,13 @@ describe('StudioPage calendar date range', () => {
         'No Printify sample image is linked yet. The finished product mockup above still shows the buyer what the shirt looks like before purchase.',
       ),
     ).toBeInTheDocument();
+  });
+
+  it('shows Reddit, Discord, and RSS inside the Multi-Channel Poster', async () => {
+    await renderStudioPage();
+
+    expect(screen.getByText('@reddit_user')).toBeInTheDocument();
+    expect(screen.getByText('@Discord connected')).toBeInTheDocument();
+    expect(screen.getByText('@RSS feed')).toBeInTheDocument();
   });
 });

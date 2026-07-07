@@ -55,7 +55,7 @@ describe('ProfilePage', () => {
 
     global.fetch = vi.fn(async () => ({
       ok: true,
-      json: async () => ({ orders: [] }),
+      json: async () => ({ orders: [], success: true, connected: true, webhookDisplay: 'https://discord.com/.../abc...xyz' }),
     })) as typeof fetch;
   });
 
@@ -113,5 +113,15 @@ describe('ProfilePage', () => {
 
     expect(screen.getByRole('button', { name: 'Connect Stripe Express' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Activate Premium Creator' })).toBeInTheDocument();
+  });
+
+  it('shows Discord webhook management in profile settings', async () => {
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Discord Webhook')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('https://discord.com/.../abc...xyz')).toBeInTheDocument();
   });
 });
