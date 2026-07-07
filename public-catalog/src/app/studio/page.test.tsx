@@ -5,6 +5,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import StudioPage from './page';
 import { Providers } from '../../components/Providers';
 
+let latestAiImageResolvedUrlOverride: string | null = null;
+
 vi.mock('sonner', () => ({
   Toaster: () => null,
 }));
@@ -30,7 +32,7 @@ vi.mock('../../components/LatestAIImage', () => ({
     onResolvedUrl?: (url: string | null) => void;
   }) => {
     React.useEffect(() => {
-      onResolvedUrl?.(overrideUrl || 'https://example.com/latest-build.png');
+      onResolvedUrl?.((latestAiImageResolvedUrlOverride ?? overrideUrl) || 'https://example.com/latest-build.png');
     }, [overrideUrl, onResolvedUrl]);
 
     return <div>LatestAIImage</div>;
@@ -72,6 +74,7 @@ class EventSourceMock {
 
 describe('StudioPage calendar date range', () => {
   beforeEach(() => {
+    latestAiImageResolvedUrlOverride = null;
     vi.stubGlobal('EventSource', EventSourceMock);
     global.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
@@ -204,5 +207,23 @@ describe('StudioPage calendar date range', () => {
     expect(screen.getByText('@reddit_user')).toBeInTheDocument();
     expect(screen.getByText('@Discord connected')).toBeInTheDocument();
     expect(screen.getByText('@RSS feed')).toBeInTheDocument();
+  });
+
+  it('keeps the real generated image when LatestAIImage resolves to a placeholder svg', async () => {
+    latestAiImageResolvedUrlOverride =
+      'data:image/svg+xml;base64,PHN2Zz48dGV4dD5BSSBJbWFnZTwvdGV4dD48L3N2Zz4=';
+    localStorage.setItem(
+      'foreverteck.studio.lastImage',
+      JSON.stringify({
+        imageUrl: 'https://example.com/real-generated.png',
+        prompt: 'metallic dim fractal',
+      }),
+    );
+
+    await renderStudioPage();
+
+    const customizeLink = await screen.findByRole('link', { name: 'Customize Your Gear' });
+    expect(customizeLink).toHaveAttribute('href', expect.stringContaining(encodeURIComponent('https://example.com/real-generated.png')));
+    expect(customizeLink).not.toHaveAttribute('href', expect.stringContaining(encodeURIComponent('data:image/svg+xml')));
   });
 });

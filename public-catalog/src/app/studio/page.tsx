@@ -24,6 +24,19 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
 }
 
+function isFallbackImageUrl(value: string | null | undefined) {
+  const url = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return url.startsWith('data:image/svg+xml');
+}
+
+function pickPreferredImageUrl(primary: string | null | undefined, secondary: string | null | undefined) {
+  const first = typeof primary === 'string' ? primary.trim() : '';
+  const second = typeof secondary === 'string' ? secondary.trim() : '';
+  if (first && !isFallbackImageUrl(first)) return first;
+  if (second && !isFallbackImageUrl(second)) return second;
+  return first || second || null;
+}
+
 export default function StudioPage() {
   return (
     <Suspense fallback={null}>
@@ -110,6 +123,7 @@ function StudioPageInner() {
   const [logs, setLogs] = useState<
     { time: string; msg: string; code?: string; type: 'info' | 'error' | 'warn' | 'success' }[]
   >([]);
+  const previewImageUrl = useMemo(() => pickPreferredImageUrl(generatedImage, latestDropImageUrl), [generatedImage, latestDropImageUrl]);
 
   const addLog = (msg: string, type: 'info' | 'error' | 'warn' | 'success' = 'info', code?: string) => {
     const t = new Date();
@@ -1339,10 +1353,12 @@ function StudioPageInner() {
                 <LatestAIImage
                   key={lastGenTimestamp}
                   overrideUrl={generatedImage}
-                  onResolvedUrl={setLatestDropImageUrl}
+                  onResolvedUrl={(url) => {
+                    setLatestDropImageUrl((prev) => pickPreferredImageUrl(generatedImage, url) || pickPreferredImageUrl(generatedImage, prev));
+                  }}
                 />
               </div>
-              {latestDropImageUrl ? (
+              {previewImageUrl ? (
                 <div className="mt-5 rounded-[28px] border border-zinc-800 bg-zinc-950/70 p-4">
                   <div className="mb-4">
                     <div className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">Finished Product</div>
@@ -1351,7 +1367,7 @@ function StudioPageInner() {
                     </div>
                   </div>
                   <MerchPreviewPanel
-                    imageUrl={latestDropImageUrl}
+                    imageUrl={previewImageUrl}
                     prompt={(prompt || generatedTextContent).trim()}
                     productName="Premium Tee"
                     printType="standard"
@@ -1359,9 +1375,9 @@ function StudioPageInner() {
                   />
                 </div>
               ) : null}
-              {latestDropImageUrl ? (
+              {previewImageUrl ? (
                 <Link
-                  href={`/customize?imageUrl=${encodeURIComponent(latestDropImageUrl)}${
+                  href={`/customize?imageUrl=${encodeURIComponent(previewImageUrl)}${
                     (prompt || generatedTextContent).trim()
                       ? `&prompt=${encodeURIComponent((prompt || generatedTextContent).trim())}`
                       : ''
