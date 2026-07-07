@@ -141,4 +141,42 @@ describe('ProductCustomizer', () => {
         .every((link) => link.getAttribute('href') === 'https://printify.example/mockup.png'),
     ).toBe(true);
   });
+
+  it('uses a taller mobile preview shell for the finished product view', async () => {
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        success: true,
+        products: [
+          {
+            id: 'tee',
+            name: 'Premium Tee',
+            description: 'Premium cotton tee printed on-demand.',
+            basePrice: 59.99,
+            currency: 'usd',
+            variants: ['S', 'M', 'L'],
+            colors: ['Black', 'White'],
+            image: '',
+            printType: 'standard',
+            previewMode: 'flat',
+            placementMode: 'single_front_with_back_optional',
+            surfaces: ['front', 'back', 'overview', 'spin360', 'finished'],
+            printifySkus: { S: 'sku-standard-s', M: 'sku-standard-m', L: 'sku-standard-l' },
+          },
+        ],
+      }),
+    }) as Response) as typeof fetch;
+
+    render(<ProductCustomizer initialImageUrl="https://example.com/design.png" promptOverride="quantum wormhole tee" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Finished Product' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Finished Product' }));
+
+    const previewShell = screen.getByTestId('preview-shell');
+    expect(previewShell.className).toContain('min-h-[');
+    expect(previewShell.className).toContain('lg:aspect-square');
+  });
 });

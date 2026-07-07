@@ -423,6 +423,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
   const selectedSurfaces = selectedProduct?.surfaces || ['front', 'back', 'overview', 'spin360', 'finished'];
   const isAopProduct = selectedProduct?.printType === 'all_over_print';
   const isBackView = view === 'back';
+  const isFinishedView = view === 'finished';
   const frontArtClass = isAopProduct
     ? "w-[58%] h-[58%] -mt-[3%] shadow-2xl rounded-2xl overflow-hidden bg-zinc-950/60 backdrop-blur-sm border border-white/10 p-2"
     : "w-[35%] h-[35%] -mt-[15%] shadow-xl rounded-lg overflow-hidden bg-zinc-950/50 backdrop-blur-sm border border-white/10 p-1 mix-blend-multiply opacity-95";
@@ -504,7 +505,13 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
             </div>
          </div>
 
-          <div className="relative mt-6 aspect-square overflow-hidden rounded-[24px] border border-white/5 bg-black/25">
+          <div
+            data-testid="preview-shell"
+            className={cn(
+              'relative mt-6 rounded-[24px] border border-white/5 bg-black/25',
+              isFinishedView ? 'min-h-[760px] overflow-visible lg:aspect-square lg:min-h-0 lg:overflow-hidden' : 'aspect-square overflow-hidden',
+            )}
+          >
            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08),transparent_52%)]" />
 
            {view === 'finished' ? (
