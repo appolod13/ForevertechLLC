@@ -4,6 +4,7 @@ import { addOrder, clearCart, getCart, type OrderLineItem, type OrderRecord } fr
 import { getPrintifyBackTextConfig, renderBackAbstractPngBuffer, renderBackTextPngBuffer } from '@/lib/printifyBackText';
 import { requestIbmQuantumProof, type QuantumProof } from '@/lib/quantumVerified';
 import { getAiGeneratorsConfig } from '@/lib/aiGeneratorsConfig';
+import { expandAopPlacementKeys, resolveTemplateProductIdForItem } from '@/lib/printifyProductMode';
 import { getServiceSupabase } from '@/lib/supabase';
 import sharp from 'sharp';
 import QRCode from 'qrcode';
@@ -97,6 +98,7 @@ type PrintifyTemplateProduct = {
 };
 
 let cachedTemplateProductId: string | undefined;
+const cachedTemplateProducts = new Map<string, PrintifyTemplateProduct>();
 let cachedLogoPreviewUrl: string | undefined;
 let cachedLogoPreviewUrlAt = 0;
 const cachedBackWordPreviewUrls = new Map<string, { url: string; at: number }>();
@@ -142,6 +144,19 @@ function sanitizeCustomerBackText(text: string): string {
 }
 
 type VectorGlyph = { adv: number; strokes: Array<Array<[number, number]>> };
+type VectorCanvasContext = {
+  save: () => void;
+  restore: () => void;
+  beginPath: () => void;
+  moveTo: (x: number, y: number) => void;
+  lineTo: (x: number, y: number) => void;
+  stroke: () => void;
+  lineCap: string;
+  lineJoin: string;
+  miterLimit: number;
+  strokeStyle: unknown;
+  lineWidth: number;
+};
 
 const VECTOR_GLYPHS: Record<string, VectorGlyph> = {
   ' ': { adv: 0.55, strokes: [] },
@@ -208,7 +223,7 @@ function measureVectorTextWidth(text: string, size: number, tracking: number) {
 }
 
 function strokeVectorText(params: {
-  ctx: any;
+  ctx: VectorCanvasContext;
   text: string;
   x: number;
   y: number;
@@ -1056,9 +1071,12 @@ async function uploadImageToPrintify(fileName: string, base64Contents: string) {
   return uploaded.preview_url as string;
 }
 
-async function getTemplateProduct(shopId: string) {
-  const templateProductId = process.env.PRINTIFY_TEMPLATE_PRODUCT_ID;
+async function getTemplateProduct(shopId: string, preferredProductId?: string) {
+  const templateProductId = preferredProductId || process.env.PRINTIFY_TEMPLATE_PRODUCT_ID;
   let resolvedProductId = templateProductId;
+  if (resolvedProductId && cachedTemplateProducts.has(resolvedProductId)) {
+    return cachedTemplateProducts.get(resolvedProductId)!;
+  }
   if (!resolvedProductId && process.env.NODE_ENV !== 'production') {
     if (cachedTemplateProductId) {
       resolvedProductId = cachedTemplateProductId;
@@ -1114,6 +1132,7 @@ async function getTemplateProduct(shopId: string) {
   if (!isRecord(product)) {
     throw new Error('Printify template product response was invalid');
   }
+  cachedTemplateProducts.set(resolvedProductId, product as PrintifyTemplateProduct);
   return product as PrintifyTemplateProduct;
 }
 
@@ -1268,18 +1287,18 @@ async function loadCheckoutFromSupabase(sessionId: string): Promise<{ orderId: s
   }
 
   const items: CartItem[] = rows
-    .map((r: any, idx: number) => {
+    .map((r: Record<string, unknown>, idx: number) => {
       const meta = r && typeof r.metadata === 'object' && r.metadata !== null ? (r.metadata as Record<string, unknown>) : {};
       const cartItem = meta && typeof meta.cart_item === 'object' && meta.cart_item !== null ? (meta.cart_item as Record<string, unknown>) : null;
       const quantity = Math.max(1, Number(r?.quantity || 1));
       if (cartItem) {
-        const out: CartItem = { ...(cartItem as any) };
+        const out: CartItem = { ...cartItem };
         out.quantity = quantity;
         return out;
       }
       return { id: `order-item-${idx}`, quantity, metadata: meta };
     })
-    .filter((x: any) => x && typeof x === 'object');
+    .filter((x): x is CartItem => Boolean(x && typeof x === 'object'));
 
   return { orderId: order.id, items };
 }
@@ -1404,12 +1423,6 @@ export async function POST(request: Request) {
   const firstItem = (cartItems as CartItem[])[0];
   const firstMeta = firstItem?.metadata && isRecord(firstItem.metadata) ? firstItem.metadata : {};
   const orderKeyword = keywordFromCartItem(firstItem || {}, firstMeta);
-  const template = await getTemplateProduct(shopId);
-  const templateBlueprintId = getNumber(template.blueprint_id);
-  const templatePrintProviderId = getNumber(template.print_provider_id);
-  if (!Number.isFinite(templateBlueprintId) || !Number.isFinite(templatePrintProviderId)) {
-    throw new Error('Printify template product is missing blueprint_id or print_provider_id');
-  }
 
   const customerName = getString(session.metadata?.customerName);
   const { first, last } = splitName(customerName);
@@ -1433,6 +1446,7 @@ export async function POST(request: Request) {
     const quantity = Math.max(1, Number(item.quantity || 1));
     const metadata = item.metadata && isRecord(item.metadata) ? item.metadata : {};
     const keyword = keywordFromCartItem(item, metadata);
+    const printType = getString(metadata['printType']) || 'standard';
     const rawPrintify = metadata['printify'];
     const printify: PrintifyItemMeta | null = isRecord(rawPrintify) ? (rawPrintify as PrintifyItemMeta) : null;
     const variant = typeof metadata['variant'] === 'string' ? metadata['variant'] : '';
@@ -1447,6 +1461,13 @@ export async function POST(request: Request) {
       itemSize && (process.env as Record<string, string | undefined>)[`PRINTIFY_SKU_${itemSize}`]
         ? (process.env as Record<string, string | undefined>)[`PRINTIFY_SKU_${itemSize}`]
         : process.env.PRINTIFY_DEFAULT_SKU;
+    const resolvedTemplateProductId = resolveTemplateProductIdForItem(metadata, {
+      defaultTemplateProductId: process.env.PRINTIFY_TEMPLATE_PRODUCT_ID,
+      aopTemplateProductId: process.env.PRINTIFY_AOP_TEMPLATE_PRODUCT_ID,
+    });
+    const template = await getTemplateProduct(shopId, resolvedTemplateProductId || undefined);
+    const templateBlueprintId = getNumber(template.blueprint_id);
+    const templatePrintProviderId = getNumber(template.print_provider_id);
     const sku = getString(printify?.sku) || getString(printifySku) || getString(envSku);
     const placementKey = getString(printify?.placementKey) || process.env.PRINTIFY_PLACEMENT || 'front';
     const blueprintId = Number.isFinite(getNumber(printify?.blueprintId)) ? getNumber(printify?.blueprintId) : templateBlueprintId;
@@ -1524,21 +1545,40 @@ export async function POST(request: Request) {
           }
         : transform;
 
-    const printAreas: Record<string, PrintifyPrintAreaInfo[]> = {
-      [placementKey]: [
-        {
-          src: previewUrl,
-          x: finalTransform.x,
-          y: finalTransform.y,
-          scale: finalTransform.scale,
-          angle: finalTransform.angle,
-        },
-      ],
-    };
+    const availablePlacements = getPlacementKeysForVariant(template, variantId);
+    const printAreas: Record<string, PrintifyPrintAreaInfo[]> =
+      printType === 'all_over_print'
+        ? Object.fromEntries(
+            expandAopPlacementKeys(availablePlacements).map((placement) => {
+              const placementTransform = getTransformFromTemplate(template, variantId, placement);
+              return [
+                placement,
+                [
+                  {
+                    src: previewUrl,
+                    x: Number.isFinite(placementTransform.x) ? placementTransform.x : 0.5,
+                    y: Number.isFinite(placementTransform.y) ? placementTransform.y : 0.5,
+                    scale: Number.isFinite(placementTransform.scale) ? placementTransform.scale : 1,
+                    angle: Number.isFinite(placementTransform.angle) ? placementTransform.angle : 0,
+                  },
+                ],
+              ];
+            }),
+          )
+        : {
+            [placementKey]: [
+              {
+                src: previewUrl,
+                x: finalTransform.x,
+                y: finalTransform.y,
+                scale: finalTransform.scale,
+                angle: finalTransform.angle,
+              },
+            ],
+          };
 
-    if (origin) {
+    if (origin && printType !== 'all_over_print') {
       try {
-        const availablePlacements = getPlacementKeysForVariant(template, variantId);
         const preferredPlacement = (process.env.PRINTIFY_LOGO_PLACEMENT || '').trim();
         const candidates = [
           preferredPlacement,
@@ -1574,10 +1614,9 @@ export async function POST(request: Request) {
     }
 
     try {
-      const availablePlacements = getPlacementKeysForVariant(template, variantId);
       const backKey = pickBackPlacementKey(availablePlacements);
 
-      if (backKey) {
+      if (backKey && printType !== 'all_over_print') {
         const bannerText = bannerTextFromCartItem(item, metadata);
         const customerBackText = customerBackTextFromCartItem(metadata);
         const customerBackImage = customerBackImageFromCartItem(metadata);

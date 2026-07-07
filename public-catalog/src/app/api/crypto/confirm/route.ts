@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Interface, JsonRpcProvider } from "ethers";
 import { addOrder, clearCart, getCryptoCheckout, setCryptoCheckout, type CartItem, type OrderRecord } from "@/lib/cartStore";
 import { getCryptoConfig } from "@/lib/cryptoConfig";
+import { expandAopPlacementKeys, resolveTemplateProductIdForItem } from "@/lib/printifyProductMode";
 
 export const runtime = "nodejs";
 
@@ -156,8 +157,8 @@ async function uploadImageToPrintify(fileName: string, base64Contents: string) {
   return uploaded.preview_url as string;
 }
 
-async function getTemplateProduct(shopId: string) {
-  const templateProductId = process.env.PRINTIFY_TEMPLATE_PRODUCT_ID;
+async function getTemplateProduct(shopId: string, preferredProductId?: string) {
+  const templateProductId = preferredProductId || process.env.PRINTIFY_TEMPLATE_PRODUCT_ID;
   const resolvedProductId = typeof templateProductId === "string" ? templateProductId.trim() : "";
   if (!resolvedProductId) {
     throw new Error("Missing PRINTIFY_TEMPLATE_PRODUCT_ID");
@@ -227,6 +228,29 @@ function getTransformFromTemplate(template: PrintifyTemplateProduct, variantId: 
     }
   }
   return { x: 0, y: 0, scale: 1, angle: 0 };
+}
+
+function getPlacementKeysForVariant(template: PrintifyTemplateProduct, variantId: number) {
+  const printAreasRaw = template.print_areas;
+  if (!Array.isArray(printAreasRaw)) return [];
+  const keys: string[] = [];
+
+  for (const area of printAreasRaw as PrintifyTemplatePrintArea[]) {
+    if (!isRecord(area)) continue;
+    const variantIdsRaw = (area as Record<string, unknown>).variant_ids;
+    const placeholdersRaw = (area as Record<string, unknown>).placeholders;
+    const variantIds = Array.isArray(variantIdsRaw) ? variantIdsRaw.map(getNumber).filter(Number.isFinite) : [];
+    if (!variantIds.includes(variantId)) continue;
+    if (!Array.isArray(placeholdersRaw)) continue;
+
+    for (const ph of placeholdersRaw as PrintifyTemplatePlaceholder[]) {
+      if (!isRecord(ph)) continue;
+      const pos = getString((ph as Record<string, unknown>).position);
+      if (pos) keys.push(pos);
+    }
+  }
+
+  return Array.from(new Set(keys));
 }
 
 function buildPrintifyFileName(title: string, id: string) {
@@ -392,17 +416,11 @@ async function finalizePrintifyAndStoreOrder(
   checkoutId: string,
   txHash: string,
   checkout: ReturnType<typeof getCryptoCheckout> extends infer T ? Exclude<T, null> : never,
-  _requiredConfirmations: number,
+  requiredConfirmations: number,
 ) {
+  void requiredConfirmations;
   const shopId = (process.env.PRINTIFY_SHOP_ID || "").trim();
   if (!shopId) return NextResponse.json({ success: false, error: "missing_PRINTIFY_SHOP_ID" }, { status: 500 });
-
-  const template = await getTemplateProduct(shopId);
-  const blueprintId = getNumber(template.blueprint_id);
-  const printProviderId = getNumber(template.print_provider_id);
-  if (!Number.isFinite(blueprintId) || !Number.isFinite(printProviderId)) {
-    return NextResponse.json({ success: false, error: "template_missing_ids" }, { status: 500 });
-  }
 
   const origin = req.headers.get("origin") || "";
   const items = Array.isArray(checkout.items) ? checkout.items : [];
@@ -410,6 +428,18 @@ async function finalizePrintifyAndStoreOrder(
 
   for (const raw of items as CartItem[]) {
     const item = isRecord(raw) ? (raw as Record<string, unknown>) : {};
+    const meta = isRecord(item.metadata) ? (item.metadata as Record<string, unknown>) : {};
+    const printType = getString(meta.printType, 64) || "standard";
+    const resolvedTemplateProductId = resolveTemplateProductIdForItem(meta, {
+      defaultTemplateProductId: process.env.PRINTIFY_TEMPLATE_PRODUCT_ID,
+      aopTemplateProductId: process.env.PRINTIFY_AOP_TEMPLATE_PRODUCT_ID,
+    });
+    const template = await getTemplateProduct(shopId, resolvedTemplateProductId || undefined);
+    const blueprintId = getNumber(template.blueprint_id);
+    const printProviderId = getNumber(template.print_provider_id);
+    if (!Number.isFinite(blueprintId) || !Number.isFinite(printProviderId)) {
+      return NextResponse.json({ success: false, error: "template_missing_ids" }, { status: 500 });
+    }
     const sku = resolveSkuFromCartItem(item);
     const variantId = sku ? getVariantIdFromTemplate(template, sku) : getVariantIdFromTemplate(template, "");
     const quantity = Math.max(1, Math.trunc(getNumber(item.quantity) || 1));
@@ -430,6 +460,37 @@ async function finalizePrintifyAndStoreOrder(
       scale: desiredScale,
       angle: Number.isFinite(transform.angle) ? transform.angle : 0,
     };
+    const availablePlacements = getPlacementKeysForVariant(template, variantId);
+    const printAreas =
+      printType === "all_over_print"
+        ? Object.fromEntries(
+            expandAopPlacementKeys(availablePlacements).map((placement) => {
+              const placementTransform = getTransformFromTemplate(template, variantId, placement);
+              return [
+                placement,
+                [
+                  {
+                    src: previewUrl,
+                    x: Number.isFinite(placementTransform.x) ? placementTransform.x : 0.5,
+                    y: Number.isFinite(placementTransform.y) ? placementTransform.y : 0.5,
+                    scale: Number.isFinite(placementTransform.scale) ? placementTransform.scale : 1,
+                    angle: Number.isFinite(placementTransform.angle) ? placementTransform.angle : 0,
+                  },
+                ],
+              ];
+            }),
+          )
+        : {
+            [placementKey]: [
+              {
+                src: previewUrl,
+                x: finalTransform.x,
+                y: finalTransform.y,
+                scale: finalTransform.scale,
+                angle: finalTransform.angle,
+              },
+            ],
+          };
 
     lineItems.push({
       blueprint_id: blueprintId,
@@ -437,17 +498,7 @@ async function finalizePrintifyAndStoreOrder(
       variant_id: variantId,
       quantity,
       external_id: String(item.id || ""),
-      print_areas: {
-        [placementKey]: [
-          {
-            src: previewUrl,
-            x: finalTransform.x,
-            y: finalTransform.y,
-            scale: finalTransform.scale,
-            angle: finalTransform.angle,
-          },
-        ],
-      },
+      print_areas: printAreas,
     });
   }
 

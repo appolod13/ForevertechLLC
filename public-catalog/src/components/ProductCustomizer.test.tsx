@@ -48,4 +48,54 @@ describe('ProductCustomizer', () => {
       expect(screen.getAllByText(/\$?\s*59\.99/).length).toBeGreaterThan(0);
     });
   });
+
+  it('shows an all-over-print option with overview and 360 preview tabs', async () => {
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        success: true,
+        products: [
+          {
+            id: 'tee',
+            name: 'Premium Tee',
+            description: 'Premium cotton tee printed on-demand.',
+            basePrice: 59.99,
+            currency: 'usd',
+            variants: ['S', 'M', 'L'],
+            colors: ['Black', 'White'],
+            image: '',
+            printType: 'standard',
+            previewMode: 'flat',
+            placementMode: 'single_front_with_back_optional',
+            surfaces: ['front', 'back', 'overview', 'spin360'],
+            printifySkus: { S: 'sku-standard-s', M: 'sku-standard-m', L: 'sku-standard-l' },
+          },
+          {
+            id: 'tee-aop',
+            name: 'All-over-print Tee',
+            description: 'Cut-and-sew all-over-print premium shirt.',
+            basePrice: 74.99,
+            currency: 'usd',
+            variants: ['S', 'M', 'L'],
+            colors: ['Black', 'Midnight'],
+            image: '',
+            printType: 'all_over_print',
+            previewMode: 'aop',
+            placementMode: 'all_over_print',
+            surfaces: ['front', 'back', 'overview', 'spin360'],
+            printifySkus: { S: 'sku-aop-s', M: 'sku-aop-m', L: 'sku-aop-l' },
+          },
+        ],
+      }),
+    }) as Response) as typeof fetch;
+
+    render(<ProductCustomizer initialImageUrl="https://example.com/design.png" promptOverride="quantum wormhole tee" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /all-over-print tee/i })).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '360 Preview' })).toBeInTheDocument();
+  });
 });
