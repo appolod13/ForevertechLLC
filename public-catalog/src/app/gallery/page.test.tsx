@@ -50,6 +50,8 @@ describe('GalleryPage creator tab', () => {
                 imageUrl: 'https://example.com/1.png',
                 prompt: 'quantum skyline',
                 printifyPreviewUrl: 'https://printify.example/gallery-sample.png',
+                printType: 'all_over_print',
+                productName: 'AOP Tee',
                 userName: 'Test User',
                 catalogName: 'Test Catalog',
                 userId: 'user-1',
@@ -136,6 +138,8 @@ describe('GalleryPage creator tab', () => {
 
     expect(screen.getByText('Buyer Preview')).toBeInTheDocument();
     expect(screen.getByText('Printify Sample')).toBeInTheDocument();
+    expect(screen.getByText('AOP Tee')).toBeInTheDocument();
+    expect(screen.getByText('AOP Ready')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open Printify sample' })).toHaveAttribute(
       'href',
       'https://printify.example/gallery-sample.png',

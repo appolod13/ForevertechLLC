@@ -49,6 +49,7 @@ describe('CatalogItem', () => {
         metadata={{
           title: 'Quantum Skyline Tee',
           prompt: 'quantum skyline shirt',
+          printType: 'all_over_print',
           printifyPreviewUrl: 'https://printify.example/catalog-sample.png',
         }}
       />,
@@ -58,6 +59,7 @@ describe('CatalogItem', () => {
 
     expect(screen.getByText('Buyer Preview')).toBeInTheDocument();
     expect(screen.getAllByText('Printify Sample').length).toBeGreaterThan(0);
+    expect(screen.getByText('AOP Ready')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open Printify sample' })).toHaveAttribute(
       'href',
       'https://printify.example/catalog-sample.png',

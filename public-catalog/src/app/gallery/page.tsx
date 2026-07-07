@@ -15,6 +15,8 @@ interface GalleryItem {
   imageUrl: string;
   prompt: string;
   printifyPreviewUrl?: string;
+  printType?: 'standard' | 'all_over_print';
+  productName?: string;
   userName: string;
   catalogName: string;
   userId?: string;
@@ -486,8 +488,8 @@ export default function GalleryPage() {
               <MerchPreviewPanel
                 imageUrl={previewItem.imageUrl}
                 prompt={previewItem.prompt}
-                productName="Premium Tee"
-                printType="standard"
+                productName={previewItem.productName || 'Premium Tee'}
+                printType={previewItem.printType || 'standard'}
                 printifyPreviewUrl={previewItem.printifyPreviewUrl || ''}
                 enablePrintifyMockups
               />

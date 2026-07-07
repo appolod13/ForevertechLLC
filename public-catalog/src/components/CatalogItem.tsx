@@ -137,6 +137,7 @@ export function CatalogItem({
   })();
   const printifyPreviewUrl = typeof metadata?.printifyPreviewUrl === 'string' ? metadata.printifyPreviewUrl : '';
   const previewProductName = typeof metadata?.title === 'string' && metadata.title.trim() ? metadata.title.trim() : 'Premium Tee';
+  const previewPrintType = metadata?.printType === 'all_over_print' ? 'all_over_print' : 'standard';
 
   if (isHidden) return null;
 
@@ -408,7 +409,7 @@ export function CatalogItem({
               imageUrl={imgSrc}
               prompt={customizePrompt}
               productName={previewProductName}
-              printType="standard"
+              printType={previewPrintType}
               printifyPreviewUrl={printifyPreviewUrl}
               enablePrintifyMockups
             />
