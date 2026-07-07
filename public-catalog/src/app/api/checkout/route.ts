@@ -58,6 +58,20 @@ function getRequestOrigin(request: Request): string {
   return process.env.NODE_ENV !== 'production' ? 'http://localhost:3001' : '';
 }
 
+const STRIPE_ALLOWED_SHIPPING_COUNTRIES = [
+  'US',
+  'CA',
+  'GB',
+  'AU',
+  'NZ',
+  'DE',
+  'FR',
+  'ES',
+  'IT',
+  'NL',
+  'IE',
+] as const;
+
 function resolveUnitAmountCents(item: unknown): number | null {
   const rec = isRecord(item) ? item : {};
   const meta = isRecord(rec.metadata) ? (rec.metadata as Record<string, unknown>) : {};
@@ -201,34 +215,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing site origin. Set NEXT_PUBLIC_SITE_URL.' }, { status: 500 });
     }
 
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: lineItems,
-      mode: 'payment',
-      success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/checkout`,
-      customer_email: customerEmail || undefined,
-      metadata: {
-        customerName: customerName || '',
-        deviceId: String(deviceId || ''),
-        userId: String(userId || ''),
-        origin,
-        quantumVerified: '0',
-        quantumFeeCents: '0',
-        shippingOptionId: selectedShip?.id || '',
-        shippingCents: selectedShip ? String(Math.round(Number(selectedShip.amountUsd) * 100)) : '0',
-        qrUrl: qrUrl || '',
-        qrDisabled: qrDisabled ? '1' : '0',
-        ...(metadata || {}),
-      }
-    });
-
+    const normalizedShippingCountry = String(shipCountry || 'US').toUpperCase();
+    const stripeShippingCountry = STRIPE_ALLOWED_SHIPPING_COUNTRIES.includes(
+      normalizedShippingCountry as (typeof STRIPE_ALLOWED_SHIPPING_COUNTRIES)[number],
+    )
+      ? (normalizedShippingCountry as (typeof STRIPE_ALLOWED_SHIPPING_COUNTRIES)[number])
+      : 'US';
+    const orderId = crypto.randomUUID();
     const supabase = getServiceSupabase();
+
     if (supabase) {
       const { data: orderRow, error: orderError } = await supabase
         .from('orders')
         .insert({
-          stripe_checkout_session_id: session.id,
+          id: orderId,
+          stripe_checkout_session_id: `pending:${orderId}`,
           user_id: userId || null,
           device_id: deviceId || null,
           status: 'pending',
@@ -240,11 +241,7 @@ export async function POST(request: Request) {
         .single();
 
       if (orderError || !orderRow?.id) {
-        try {
-          await stripe.checkout.sessions.expire(session.id);
-        } catch {
-        }
-        return NextResponse.json({ error: orderError?.message || 'Failed to persist order snapshot' }, { status: 500 });
+        return NextResponse.json({ error: orderError?.message || 'Failed to create order' }, { status: 500 });
       }
 
       const orderItemRows = cartItems.map((item: unknown) => {
@@ -260,7 +257,7 @@ export async function POST(request: Request) {
         const quantity = Math.max(1, Math.trunc(getNumber(rec.quantity) || 1));
         const price = resolveUnitAmountCents(item);
         return {
-          order_id: orderRow.id,
+          order_id: orderId,
           product_id: productId,
           variant_id: variantId,
           quantity,
@@ -271,15 +268,50 @@ export async function POST(request: Request) {
 
       const { error: itemsError } = await supabase.from('order_items').insert(orderItemRows);
       if (itemsError) {
-        try {
-          await supabase.from('orders').delete().eq('id', orderRow.id);
-        } catch {
-        }
+        return NextResponse.json({ error: itemsError.message || 'Failed to persist order items snapshot' }, { status: 500 });
+      }
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: lineItems,
+      mode: 'payment',
+      success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/checkout`,
+      customer_email: customerEmail || undefined,
+      shipping_address_collection: { allowed_countries: [stripeShippingCountry] },
+      phone_number_collection: { enabled: true },
+      metadata: {
+        orderId,
+        customerName: customerName || '',
+        deviceId: String(deviceId || ''),
+        userId: String(userId || ''),
+        origin,
+        quantumVerified: '0',
+        quantumFeeCents: '0',
+        shippingOptionId: selectedShip?.id || '',
+        shippingCents: selectedShip ? String(Math.round(Number(selectedShip.amountUsd) * 100)) : '0',
+        qrUrl: qrUrl || '',
+        qrDisabled: qrDisabled ? '1' : '0',
+        ...(metadata || {}),
+      }
+    });
+
+    if (supabase) {
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({
+          stripe_checkout_session_id: session.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId);
+
+      if (updateError) {
         try {
           await stripe.checkout.sessions.expire(session.id);
         } catch {
         }
-        return NextResponse.json({ error: itemsError.message || 'Failed to persist order items snapshot' }, { status: 500 });
+        return NextResponse.json({ error: updateError.message || 'Failed to link Stripe session to order' }, { status: 500 });
       }
     }
 

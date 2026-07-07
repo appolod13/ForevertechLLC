@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom/vitest';
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import StudioPage from './page';
@@ -21,7 +22,19 @@ vi.mock('../../components/FusionAI', () => ({
 }));
 
 vi.mock('../../components/LatestAIImage', () => ({
-  LatestAIImage: () => <div>LatestAIImage</div>,
+  LatestAIImage: ({
+    overrideUrl,
+    onResolvedUrl,
+  }: {
+    overrideUrl?: string;
+    onResolvedUrl?: (url: string | null) => void;
+  }) => {
+    React.useEffect(() => {
+      onResolvedUrl?.(overrideUrl || 'https://example.com/latest-build.png');
+    }, [overrideUrl, onResolvedUrl]);
+
+    return <div>LatestAIImage</div>;
+  },
 }));
 
 vi.mock('next/navigation', async () => {
@@ -42,6 +55,13 @@ async function renderStudioPage() {
   renderWithProviders(<StudioPage />);
   await waitFor(() => {
     expect(screen.getByText('AI Asset Generator')).toBeInTheDocument();
+  });
+  await waitFor(() => {
+    expect(
+      (global.fetch as unknown as { mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> } }).mock.calls.some((c) =>
+        String(c[0]).includes('/api/printify/mockups'),
+      ),
+    ).toBe(true);
   });
 }
 
@@ -72,6 +92,17 @@ describe('StudioPage calendar date range', () => {
       }
       if (url.includes('/api/catalog/posts')) {
         return { ok: true, json: async () => ({ posts: [] }) } as Response;
+      }
+      if (url.includes('/api/printify/mockups')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            designHash: 'hash_test',
+            status: 'pending',
+            mockups: { frontUrl: undefined, backUrl: undefined, leftUrl: undefined, rightUrl: undefined },
+          }),
+        } as Response;
       }
       return { ok: true, json: async () => ({ success: true }) } as Response;
     }) as typeof fetch;
@@ -129,5 +160,28 @@ describe('StudioPage calendar date range', () => {
       'href',
       '/profile?upgrade=premium-creator',
     );
+  });
+
+  it('shows the approved merch buyer preview for the latest generated image', async () => {
+    localStorage.setItem(
+      'foreverteck.studio.lastImage',
+      JSON.stringify({
+        imageUrl: 'https://example.com/latest-build.png',
+        prompt: 'quantum skyline tee',
+      }),
+    );
+
+    await renderStudioPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Buyer Preview')).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText('Printify Sample').length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        'No Printify sample image is linked yet. The finished product mockup above still shows the buyer what the shirt looks like before purchase.',
+      ),
+    ).toBeInTheDocument();
   });
 });

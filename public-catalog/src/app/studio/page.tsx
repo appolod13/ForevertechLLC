@@ -7,6 +7,7 @@ import { Header } from '../../components/Header';
 import { DataDashboardButton } from '../../components/DataDashboardButton';
 import { FusionAI } from '../../components/FusionAI';
 import { LatestAIImage } from '../../components/LatestAIImage';
+import { MerchPreviewPanel } from '../../components/MerchPreviewPanel';
 import { Send, Sparkles } from 'lucide-react';
 import styles from './page.module.css';
 
@@ -1332,6 +1333,23 @@ function StudioPageInner() {
                   onResolvedUrl={setLatestDropImageUrl}
                 />
               </div>
+              {latestDropImageUrl ? (
+                <div className="mt-5 rounded-[28px] border border-zinc-800 bg-zinc-950/70 p-4">
+                  <div className="mb-4">
+                    <div className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">Finished Product</div>
+                    <div className="mt-2 text-sm text-zinc-400">
+                      See how the latest generation looks as a buyer-ready shirt before opening the full merch editor.
+                    </div>
+                  </div>
+                  <MerchPreviewPanel
+                    imageUrl={latestDropImageUrl}
+                    prompt={(prompt || generatedTextContent).trim()}
+                    productName="Premium Tee"
+                    printType="standard"
+                    enablePrintifyMockups
+                  />
+                </div>
+              ) : null}
               {latestDropImageUrl ? (
                 <Link
                   href={`/customize?imageUrl=${encodeURIComponent(latestDropImageUrl)}${

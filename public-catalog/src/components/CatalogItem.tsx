@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { useCart } from '@/context/CartContext';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { MerchPreviewPanel } from '@/components/MerchPreviewPanel';
 
 export interface CatalogItemProps {
   id: string;
@@ -134,6 +135,9 @@ export function CatalogItem({
     const p = metadata?.prompt ?? metadata?.title ?? safeContent;
     return typeof p === 'string' ? p : (p ? JSON.stringify(p) : '');
   })();
+  const printifyPreviewUrl = typeof metadata?.printifyPreviewUrl === 'string' ? metadata.printifyPreviewUrl : '';
+  const previewProductName = typeof metadata?.title === 'string' && metadata.title.trim() ? metadata.title.trim() : 'Premium Tee';
+  const previewPrintType = metadata?.printType === 'all_over_print' ? 'all_over_print' : 'standard';
 
   if (isHidden) return null;
 
@@ -385,18 +389,31 @@ export function CatalogItem({
       {/* Preview Modal */}
       {showPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setShowPreview(false)}>
-          <div className="relative max-w-4xl w-full aspect-square md:aspect-video rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800" onClick={(e) => e.stopPropagation()}>
-            <img
-              src={imgSrc}
-              alt="Preview"
-              className="absolute inset-0 h-full w-full object-contain"
-              onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-                const target = e.currentTarget;
-                target.src = 'https://via.placeholder.com/400x300?text=Preview+Not+Available';
-              }}
-              loading="eager"
+          <div className="relative max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[28px] border border-zinc-800 bg-zinc-950 p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">Product Preview</div>
+                <div className="mt-2 text-lg font-semibold text-white">{previewProductName}</div>
+                <div className="mt-1 text-sm text-zinc-400">
+                  Review the finished buyer preview before opening the full customizer.
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowPreview(false)}
+                className="h-10 w-10 bg-black/50 hover:bg-black/80 text-white rounded-full flex items-center justify-center transition-colors"
+              >
+                &times;
+              </button>
+            </div>
+            <MerchPreviewPanel
+              imageUrl={imgSrc}
+              prompt={customizePrompt}
+              productName={previewProductName}
+              printType={previewPrintType}
+              printifyPreviewUrl={printifyPreviewUrl}
+              enablePrintifyMockups
             />
-            <div className="absolute bottom-4 right-4">
+            <div className="mt-5 flex justify-end">
               <Link
                 href={`/customize?imageUrl=${encodeURIComponent(imgSrc)}&prompt=${encodeURIComponent(customizePrompt)}`}
                 className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200 transition-colors"
@@ -404,13 +421,7 @@ export function CatalogItem({
                 Customize Your Gear
               </Link>
             </div>
-            <button 
-              onClick={() => setShowPreview(false)}
-              className="absolute top-4 right-4 h-10 w-10 bg-black/50 hover:bg-black/80 text-white rounded-full flex items-center justify-center transition-colors"
-            >
-              &times;
-            </button>
-            <div className="absolute bottom-4 left-4 bg-black/60 px-4 py-2 rounded-lg text-sm text-white backdrop-blur-md">
+            <div className="mt-4 rounded-lg bg-black/30 px-4 py-2 text-sm text-white backdrop-blur-md">
               <span className="font-semibold text-primary">{likes} Likes</span> - AI generated
             </div>
           </div>
