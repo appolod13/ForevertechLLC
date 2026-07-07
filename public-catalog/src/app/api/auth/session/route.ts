@@ -31,7 +31,7 @@ export async function GET(request?: Request) {
 
   let discordConnected = false;
   if (userId) {
-    const supabase = getServiceSupabase();
+    const supabase = getServiceSupabase({ requireServiceRole: true });
     if (supabase) {
       const { data } = await supabase
         .from('user_social_destinations')
@@ -44,7 +44,7 @@ export async function GET(request?: Request) {
   }
   session.discord = discordConnected ? { authenticated: true, screenName: 'Discord connected' } : { authenticated: false };
 
-  const rssEnabled = Boolean(getServiceSupabase());
+  const rssEnabled = Boolean(getServiceSupabase({ requireServiceRole: true }));
   session.rss = rssEnabled ? { authenticated: true, screenName: 'RSS feed' } : { authenticated: false };
 
   return NextResponse.json(session);

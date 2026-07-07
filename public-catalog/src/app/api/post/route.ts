@@ -22,7 +22,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 async function loadDiscordWebhookForUser(userId: string) {
   const { getServiceSupabase } = await import('@/lib/supabase');
-  const supabase = getServiceSupabase();
+  const supabase = getServiceSupabase({ requireServiceRole: true });
   if (!supabase || !userId) return '';
   const { data } = await supabase
     .from('user_social_destinations')
@@ -35,7 +35,7 @@ async function loadDiscordWebhookForUser(userId: string) {
 
 async function insertPosterPostRow(row: { userId: string; content: string; mediaUrl?: string; platforms: string[]; title?: string }) {
   const { getServiceSupabase } = await import('@/lib/supabase');
-  const supabase = getServiceSupabase();
+  const supabase = getServiceSupabase({ requireServiceRole: true });
   if (!supabase) throw new Error('supabase_not_configured');
   const { error } = await supabase.from('poster_posts').insert({
     user_id: row.userId,

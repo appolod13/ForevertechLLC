@@ -25,7 +25,7 @@ function redactWebhook(value: string) {
 }
 
 async function loadDestination(userId: string) {
-  const supabase = getServiceSupabase();
+  const supabase = getServiceSupabase({ requireServiceRole: true });
   if (!supabase) return { data: null, error: 'supabase_not_configured' as const };
   const result = await supabase
     .from('user_social_destinations')
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, error: 'discord_webhook_verification_failed' }, { status: 400 });
   }
 
-  const supabase = getServiceSupabase();
+  const supabase = getServiceSupabase({ requireServiceRole: true });
   if (!supabase) return NextResponse.json({ success: false, error: 'supabase_not_configured' }, { status: 500 });
 
   const { error } = await supabase.from('user_social_destinations').upsert(
@@ -99,7 +99,7 @@ export async function DELETE(request: Request) {
   const userId = getString(new URL(request.url).searchParams.get('userId'));
   if (!userId) return NextResponse.json({ success: false, error: 'missing_user_id' }, { status: 400 });
 
-  const supabase = getServiceSupabase();
+  const supabase = getServiceSupabase({ requireServiceRole: true });
   if (!supabase) return NextResponse.json({ success: false, error: 'supabase_not_configured' }, { status: 500 });
 
   const { error } = await supabase.from('user_social_destinations').delete().eq('user_id', userId).eq('platform', 'discord');

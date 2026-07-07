@@ -16,7 +16,7 @@ function getSiteUrl(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const supabase = getServiceSupabase();
+  const supabase = getServiceSupabase({ requireServiceRole: true });
   const siteUrl = getSiteUrl(request);
   const now = new Date().toUTCString();
 
