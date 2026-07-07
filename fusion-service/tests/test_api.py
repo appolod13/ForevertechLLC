@@ -123,6 +123,17 @@ def test_fractal_fusion_rgb_render_params_change_output():
     assert base != rotation_variant
     assert base != modified
 
+def test_texture_style_for_seed_is_deterministic_and_supported():
+    style = fusion_main._texture_style_for_seed(123)
+    assert style == fusion_main._texture_style_for_seed(123)
+    assert style in {"diagonal_hatch", "diamond_wave", "spiral"}
+
+def test_metallic_profile_dims_background_and_boosts_edges():
+    profile = fusion_main._metallic_profile("peaceful")
+    assert 0.35 <= profile["background_dim"] <= 0.8
+    assert profile["outline_boost"] > 0.2
+    assert profile["metal_desat"] > 0.05
+
 def test_brain_img2img_invalid_image_rejected():
     response = client.post(
         "/brain/img2img",

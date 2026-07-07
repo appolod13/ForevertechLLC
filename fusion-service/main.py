@@ -121,21 +121,64 @@ def _wormhole_warp(
 def _palette_params(profile: Optional[str], phash: int) -> dict[str, float]:
     p = (profile or "").strip().lower()
     if p in {"peaceful", "serene", "tranquil", "meditative", "calm"}:
-        return {"base": 0.56, "span": 0.28, "sat": 0.72, "val_bias": 0.02, "gamma": 1.0 / 1.12}
+        return {"base": 0.56, "span": 0.26, "sat": 0.68, "val_bias": -0.10, "gamma": 1.0 / 1.22}
     if p in {"angry", "rage", "ominous"}:
-        return {"base": 0.98, "span": 0.22, "sat": 0.82, "val_bias": -0.02, "gamma": 1.0 / 1.22}
+        return {"base": 0.98, "span": 0.20, "sat": 0.80, "val_bias": -0.12, "gamma": 1.0 / 1.28}
     if p in {"joyful", "joy", "radiant"}:
-        return {"base": 0.10, "span": 0.34, "sat": 0.80, "val_bias": 0.05, "gamma": 1.0 / 1.08}
+        return {"base": 0.10, "span": 0.30, "sat": 0.76, "val_bias": -0.04, "gamma": 1.0 / 1.18}
     if p in {"void", "dark", "shadow", "abyss"}:
-        return {"base": 0.70, "span": 0.18, "sat": 0.62, "val_bias": -0.06, "gamma": 1.0 / 1.35}
+        return {"base": 0.70, "span": 0.16, "sat": 0.58, "val_bias": -0.18, "gamma": 1.0 / 1.42}
     if p in {"cosmic", "nebula", "mysterious"}:
-        return {"base": 0.80, "span": 0.30, "sat": 0.78, "val_bias": 0.00, "gamma": 1.0 / 1.18}
+        return {"base": 0.80, "span": 0.28, "sat": 0.76, "val_bias": -0.08, "gamma": 1.0 / 1.24}
     if p in {"ethereal", "dreamlike"}:
-        return {"base": 0.76, "span": 0.26, "sat": 0.74, "val_bias": 0.02, "gamma": 1.0 / 1.12}
+        return {"base": 0.76, "span": 0.24, "sat": 0.70, "val_bias": -0.08, "gamma": 1.0 / 1.20}
     if p in {"quantum", "crystalline", "fractured"}:
-        return {"base": 0.72, "span": 0.32, "sat": 0.80, "val_bias": 0.02, "gamma": 1.0 / 1.16}
+        return {"base": 0.72, "span": 0.30, "sat": 0.78, "val_bias": -0.08, "gamma": 1.0 / 1.22}
     base = ((phash % 360) / 360.0 + 0.74) % 1.0
-    return {"base": base, "span": 0.28, "sat": 0.80, "val_bias": 0.02, "gamma": 1.0 / 1.16}
+    return {"base": base, "span": 0.26, "sat": 0.78, "val_bias": -0.08, "gamma": 1.0 / 1.22}
+
+
+def _texture_style_for_seed(seed: int) -> str:
+    styles = ("diagonal_hatch", "diamond_wave", "spiral")
+    return styles[abs(int(seed)) % len(styles)]
+
+
+def _metallic_profile(profile: Optional[str]) -> dict[str, float]:
+    p = (profile or "").strip().lower()
+    base = {"background_dim": 0.60, "outline_boost": 0.48, "metal_desat": 0.18, "specular_strength": 0.34}
+    if p in {"peaceful", "serene", "tranquil", "meditative", "calm"}:
+        return {**base, "background_dim": 0.58, "outline_boost": 0.42, "metal_desat": 0.16, "specular_strength": 0.30}
+    if p in {"angry", "rage", "ominous"}:
+        return {**base, "background_dim": 0.55, "outline_boost": 0.56, "metal_desat": 0.14, "specular_strength": 0.38}
+    if p in {"joyful", "joy", "radiant"}:
+        return {**base, "background_dim": 0.68, "outline_boost": 0.40, "metal_desat": 0.12, "specular_strength": 0.26}
+    if p in {"void", "dark", "shadow", "abyss"}:
+        return {**base, "background_dim": 0.42, "outline_boost": 0.60, "metal_desat": 0.24, "specular_strength": 0.42}
+    if p in {"cosmic", "nebula", "mysterious", "quantum", "crystalline", "fractured"}:
+        return {**base, "background_dim": 0.52, "outline_boost": 0.58, "metal_desat": 0.20, "specular_strength": 0.40}
+    return base
+
+
+def _clamp01(value: float) -> float:
+    return max(0.0, min(1.0, value))
+
+
+def _texture_pattern(nx: float, ny: float, style: str, phase: float) -> float:
+    if style == "diagonal_hatch":
+        diag_a = abs(math.sin((nx + ny) * math.pi * 24.0 + phase))
+        diag_b = abs(math.sin((nx + ny) * math.pi * 52.0 + phase * 0.6))
+        grid = abs(math.sin(nx * math.pi * 16.0 - phase * 0.3) * math.sin(ny * math.pi * 16.0 + phase * 0.2))
+        return _clamp01(0.55 * diag_a + 0.30 * diag_b + 0.15 * grid)
+    if style == "diamond_wave":
+        diamond = abs(nx) + abs(ny)
+        ridges = 0.5 + 0.5 * math.sin(diamond * math.pi * 18.0 - phase)
+        cross = 0.5 + 0.5 * math.sin((nx - ny) * math.pi * 14.0 + phase * 0.5)
+        return _clamp01(0.72 * ridges + 0.28 * cross)
+    r = math.sqrt(nx * nx + ny * ny) + 1e-9
+    t = math.atan2(ny, nx)
+    spiral = 0.5 + 0.5 * math.sin(20.0 * r - 5.0 * t + phase)
+    hatch = abs(math.sin((nx + ny) * math.pi * 28.0 + phase * 0.35))
+    return _clamp01(0.78 * spiral + 0.22 * hatch)
 
 
 def _sierpinski_mask(nx: float, ny: float, scale: int = 1024) -> float:
@@ -192,6 +235,9 @@ def fractal_fusion_rgb(
 
     palette_shift = (int(palette_index) % 24) / 24.0
     pal = _palette_params(palette_profile, phash)
+    metal = _metallic_profile(palette_profile)
+    texture_style = _texture_style_for_seed(seed)
+    texture_phase = ((phash >> 7) % 360) * math.pi / 180.0
     base_hue = (pal["base"] + palette_shift) % 1.0
     hue_span = pal["span"]
     sat_base = pal["sat"]
@@ -330,18 +376,33 @@ def fractal_fusion_rgb(
             k_mask = _koch_like_mask(nx, ny)
             grid = _quantum_grid(nx, ny, freq=7.0 + (phash % 7), phase=q_phase)
             geo = (s_mask * sierpinski_weight + k_mask * koch_weight + grid * grid_weight) * edge
+            texture = _texture_pattern(nx, ny, texture_style, texture_phase)
+            texture_mix = 0.34 + 0.40 * texture
+            metallic_edge = _clamp01(edge * (metal["outline_boost"] + 0.35 * texture))
 
-            hue = (base_hue + v * hue_span * 2.2 + geo * 0.08) % 1.0
-            sat = min(1.0, sat_base + 0.22 * (1.0 - v) + geo * 0.10)
-            val = min(1.0, max(0.0, (0.26 + 0.86 * v + val_bias) * (0.92 + 0.18 * geo)))
+            hue = (base_hue + v * hue_span * (1.6 + 0.32 * texture) + geo * 0.05 + texture * 0.04) % 1.0
+            sat = min(1.0, max(0.0, sat_base + 0.16 * (1.0 - v) + geo * 0.08 - metal["metal_desat"] * metallic_edge))
+            val = _clamp01((0.14 + 0.62 * v + val_bias) * metal["background_dim"] * (0.84 + 0.14 * geo + 0.12 * texture_mix))
 
             r, g, b = _hsv_to_rgb(hue, sat, val)
             rf, gf, bf = r / 255.0, g / 255.0, b / 255.0
+            cool_metal = (0.46 + 0.30 * texture, 0.50 + 0.24 * texture, 0.58 + 0.18 * texture)
+            rf *= 0.82 + 0.12 * texture_mix
+            gf *= 0.84 + 0.10 * texture_mix
+            bf *= 0.92 + 0.08 * texture_mix
 
-            glow = (0.10 + 0.42 * geo) * (0.35 + 0.65 * v)
-            rf += glow * 0.62
-            gf += glow * 0.44
-            bf += glow * 0.88
+            light = _clamp01(0.5 + 0.5 * ((dx * 0.72 - dy * 0.54) / (abs(dx) + abs(dy) + 1e-9)))
+            specular = (metallic_edge ** 1.45) * (0.28 + metal["specular_strength"] * light)
+            metal_blend = metallic_edge * (0.40 + 0.26 * texture)
+
+            rf = rf * (1.0 - metal_blend) + cool_metal[0] * metal_blend + specular * 0.90
+            gf = gf * (1.0 - metal_blend) + cool_metal[1] * metal_blend + specular * 0.96
+            bf = bf * (1.0 - metal_blend) + cool_metal[2] * metal_blend + specular * 1.08
+
+            glow = (0.04 + 0.20 * geo + 0.10 * texture) * (0.24 + 0.56 * v)
+            rf += glow * 0.18
+            gf += glow * 0.14
+            bf += glow * 0.34
 
             rf = min(1.0, rf) ** gamma
             gf = min(1.0, gf) ** gamma
@@ -458,6 +519,7 @@ async def generate_image(payload: GenerateRequest):
             "width": width,
             "height": height,
             "palette_profile": payload.palette_profile,
+            "texture_style": _texture_style_for_seed(seed),
             "wormhole": {
                 "strength": payload.wormhole_strength,
                 "swirl": payload.wormhole_swirl,
@@ -589,4 +651,3 @@ async def brain_roulette(payload: BrainRouletteRequest):
     buf = BytesIO()
     img.save(buf, format="PNG")
     return Response(content=buf.getvalue(), media_type="image/png")
-

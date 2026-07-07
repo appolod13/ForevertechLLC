@@ -10,7 +10,13 @@ function ratioForPlatform(p: Platform) {
 function svgPlaceholder(text: string, w: number, h: number) {
   const bg = '#111827';
   const fg = '#60a5fa';
-  const t = encodeURIComponent(text.slice(0, 80));
+  const t = text
+    .slice(0, 80)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'>
   <rect width='100%' height='100%' fill='${bg}'/>
   <g font-family='system-ui, -apple-system, Segoe UI' fill='${fg}' text-anchor='middle'>

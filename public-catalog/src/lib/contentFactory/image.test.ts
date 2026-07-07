@@ -26,4 +26,13 @@ describe('contentFactory/image', () => {
     expect(r.image_url.startsWith('data:image/svg+xml')).toBe(true);
     expect(r.meta.provider).toBe('dalle');
   });
+
+  it('renders readable fallback text instead of percent-encoded labels', async () => {
+    const r = await mod.generateImageForPlatform('mock', 'hello', 'linkedin' as never);
+    const encoded = r.image_url.split(',')[1];
+    const svg = Buffer.from(encoded, 'base64').toString('utf8');
+    expect(svg).toContain('linkedin ~1.91:1');
+    expect(svg).not.toContain('linkedin%20');
+    expect(svg).not.toContain('%3A1');
+  });
 });
