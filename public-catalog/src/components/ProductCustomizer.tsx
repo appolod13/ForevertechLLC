@@ -6,7 +6,7 @@ import { ArrowLeft, ShoppingCart, Shirt } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCart } from '@/context/CartContext';
 
-type PreviewSurface = 'front' | 'back' | 'overview' | 'spin360';
+type PreviewSurface = 'front' | 'back' | 'overview' | 'spin360' | 'finished';
 
 interface Product {
   id: string;
@@ -23,6 +23,7 @@ interface Product {
   previewMode?: 'flat' | 'aop';
   placementMode?: 'single_front_with_back_optional' | 'all_over_print';
   templateProductId?: string;
+  printifyPreviewUrl?: string;
 }
 
 export function ProductCustomizer({ initialImageUrl, promptOverride }: { initialImageUrl: string | null; promptOverride?: string | null }) {
@@ -72,7 +73,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
               colors: ['Black', 'White'],
               image: '',
               printType: 'standard' as const,
-              surfaces: ['front', 'back', 'overview', 'spin360'] as PreviewSurface[],
+              surfaces: ['front', 'back', 'overview', 'spin360', 'finished'] as PreviewSurface[],
               previewMode: 'flat' as const,
               placementMode: 'single_front_with_back_optional' as const,
             }
@@ -418,7 +419,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
 
   if (loading) return <div className="animate-pulse h-96 bg-zinc-900 rounded-xl"></div>;
 
-  const selectedSurfaces = selectedProduct?.surfaces || ['front', 'back', 'overview', 'spin360'];
+  const selectedSurfaces = selectedProduct?.surfaces || ['front', 'back', 'overview', 'spin360', 'finished'];
   const isAopProduct = selectedProduct?.printType === 'all_over_print';
   const isBackView = view === 'back';
   const frontArtClass = isAopProduct
@@ -433,7 +434,12 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
     back: 'Back',
     overview: 'Overview',
     spin360: '360 Preview',
+    finished: 'Finished Product',
   };
+  const printifySampleUrl =
+    typeof selectedProduct?.printifyPreviewUrl === 'string' && selectedProduct.printifyPreviewUrl.trim()
+      ? selectedProduct.printifyPreviewUrl.trim()
+      : '';
 
   return (
     <div className="space-y-8">
@@ -497,10 +503,84 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
             </div>
          </div>
 
-         <div className="relative mt-6 aspect-square overflow-hidden rounded-[24px] border border-white/5 bg-black/25">
+          <div className="relative mt-6 aspect-square overflow-hidden rounded-[24px] border border-white/5 bg-black/25">
            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08),transparent_52%)]" />
 
-           {view === 'overview' ? (
+           {view === 'finished' ? (
+             <div className="relative z-10 flex h-full items-center justify-center p-5">
+               <div className="grid w-full max-w-5xl gap-5 lg:grid-cols-[1.15fr_0.85fr]">
+                 <div className="relative overflow-hidden rounded-[28px] border border-zinc-800 bg-gradient-to-br from-zinc-950 via-zinc-900 to-black p-6 shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
+                   <div className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">Buyer Preview</div>
+                   <div className="mt-4 text-sm leading-6 text-zinc-400">
+                     See a closer finished-product sample before checkout, with the artwork framed like a real storefront mockup.
+                   </div>
+                   <div className="relative mt-8 flex h-[360px] items-center justify-center rounded-[24px] border border-white/5 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.16),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.06),rgba(0,0,0,0.24))]">
+                     <div className="absolute bottom-6 h-10 w-52 rounded-full bg-black/50 blur-2xl" />
+                     <div className="relative flex h-[92%] w-[82%] items-center justify-center">
+                       <Shirt strokeWidth={1} className={cn("drop-shadow-[0_35px_65px_rgba(0,0,0,0.6)]", isAopProduct ? "h-[112%] w-[112%] text-zinc-500" : "h-[108%] w-[108%] text-zinc-500")} />
+                       {initialImageUrl ? (
+                         <div className={cn(
+                           "absolute overflow-hidden rounded-[22px] border border-white/10 bg-zinc-950/65 shadow-[0_25px_60px_rgba(0,0,0,0.45)]",
+                           isAopProduct ? "h-[46%] w-[52%] -mt-[1%]" : "h-[30%] w-[30%] -mt-[11%]"
+                         )}>
+                           <img
+                             src={initialImageUrl}
+                             alt="Finished product mockup"
+                             className={cn("h-full w-full", isAopProduct ? "object-cover" : "object-contain p-2")}
+                             loading="eager"
+                             decoding="async"
+                           />
+                         </div>
+                       ) : null}
+                     </div>
+                   </div>
+                 </div>
+
+                 <div className="space-y-4">
+                   <div className="rounded-[28px] border border-zinc-800 bg-zinc-950/75 p-5 shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
+                     <div className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">Product Card</div>
+                     <div className="mt-3 text-2xl font-semibold text-white">{selectedProduct?.name}</div>
+                     <div className="mt-2 text-sm leading-6 text-zinc-400">
+                       {isAopProduct
+                         ? 'All-over-print mode wraps the generated artwork across a broader garment surface for a more complete final look.'
+                         : 'Standard mode keeps the design focused on the front and shows a cleaner production-ready tee presentation.'}
+                     </div>
+                     <div className="mt-4 flex flex-wrap gap-2 text-xs text-zinc-300">
+                       <span className="rounded-full border border-zinc-700 bg-black/30 px-3 py-1">{selectedVariant}</span>
+                       <span className="rounded-full border border-zinc-700 bg-black/30 px-3 py-1">{selectedColor}</span>
+                       <span className="rounded-full border border-zinc-700 bg-black/30 px-3 py-1">{isAopProduct ? 'AOP Ready' : 'Front Print Ready'}</span>
+                     </div>
+                   </div>
+
+                   <div className="rounded-[28px] border border-zinc-800 bg-zinc-950/75 p-5 shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
+                     <div className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">Printify Sample</div>
+                     {printifySampleUrl ? (
+                       <div className="mt-4 space-y-3">
+                         <a
+                           href={printifySampleUrl}
+                           target="_blank"
+                           rel="noreferrer"
+                           className="inline-flex rounded-xl border border-white/10 bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200"
+                         >
+                           Open Printify sample
+                         </a>
+                         <div className="overflow-hidden rounded-2xl border border-white/5 bg-black/30 p-3">
+                           <img src={printifySampleUrl} alt="Printify sample preview" className="h-full w-full rounded-xl object-cover" loading="eager" decoding="async" />
+                         </div>
+                       </div>
+                     ) : (
+                       <div className="mt-4 rounded-2xl border border-dashed border-zinc-700 bg-black/30 p-4 text-sm leading-6 text-zinc-400">
+                         Printify Sample
+                         <div className="mt-2">
+                           A production sample preview will appear here when a Printify preview image is linked for this product.
+                         </div>
+                       </div>
+                     )}
+                   </div>
+                 </div>
+               </div>
+             </div>
+           ) : view === 'overview' ? (
              <div className="relative z-10 grid h-full grid-cols-1 gap-4 p-5 md:grid-cols-2">
                <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Front</div>
@@ -628,6 +708,32 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
             <p className="mt-2 text-sm leading-6 text-zinc-400">
               Choose your shirt type, refine the preview, and prepare a cleaner production-ready order card for checkout.
             </p>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-zinc-800 bg-zinc-950/50 p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">Printify Sample</div>
+              <div className="mt-2 text-sm leading-6 text-zinc-400">
+                Use this section to check whether a linked Printify sample is available before the shirt is bought.
+              </div>
+            </div>
+            {printifySampleUrl ? (
+              <a
+                href={printifySampleUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex rounded-xl border border-white/10 bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200"
+              >
+                Open Printify sample
+              </a>
+            ) : null}
+          </div>
+          <div className="mt-4 rounded-2xl border border-zinc-800 bg-black/25 p-4 text-sm text-zinc-400">
+            {printifySampleUrl
+              ? 'A linked Printify sample is available for this product.'
+              : 'No Printify sample image is linked yet. The finished product mockup above still shows the buyer what the shirt looks like before purchase.'}
           </div>
         </div>
 
