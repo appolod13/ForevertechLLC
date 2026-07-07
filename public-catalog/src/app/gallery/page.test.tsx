@@ -49,6 +49,7 @@ describe('GalleryPage creator tab', () => {
                 id: 'gallery-1',
                 imageUrl: 'https://example.com/1.png',
                 prompt: 'quantum skyline',
+                printifyPreviewUrl: 'https://printify.example/gallery-sample.png',
                 userName: 'Test User',
                 catalogName: 'Test Catalog',
                 userId: 'user-1',
@@ -113,5 +114,31 @@ describe('GalleryPage creator tab', () => {
     expect(screen.getByText(/premium creator is active/i)).toBeInTheDocument();
     expect(screen.getByText('Stripe Express connected')).toBeInTheDocument();
     expect(screen.getByText('acct_123')).toBeInTheDocument();
+  });
+
+  it('opens an in-app merch preview for a gallery item and shows the Printify sample link', async () => {
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'user-1',
+        name: 'Test User',
+        email: 'test@example.com',
+        premiumCreator: false,
+      },
+    });
+
+    render(<GalleryPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Preview Product' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Product' }));
+
+    expect(screen.getByText('Buyer Preview')).toBeInTheDocument();
+    expect(screen.getByText('Printify Sample')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Printify sample' })).toHaveAttribute(
+      'href',
+      'https://printify.example/gallery-sample.png',
+    );
   });
 });

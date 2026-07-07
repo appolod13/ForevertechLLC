@@ -3,16 +3,18 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
-import { Heart, RefreshCw, User, BookOpen, Shirt, ShoppingCart, Zap, Key, Send } from 'lucide-react';
+import { Heart, RefreshCw, User, BookOpen, Shirt, ShoppingCart, Zap, Key, Send, Eye, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import PixelQryptModal from '@/components/PixelQryptModal';
+import { MerchPreviewPanel } from '@/components/MerchPreviewPanel';
 import { getCreatorAccess } from '@/lib/creatorAccess';
 
 interface GalleryItem {
   id: string;
   imageUrl: string;
   prompt: string;
+  printifyPreviewUrl?: string;
   userName: string;
   catalogName: string;
   userId?: string;
@@ -35,6 +37,7 @@ export default function GalleryPage() {
   const [premiumCheckoutError, setPremiumCheckoutError] = useState('');
   const [connectStatus, setConnectStatus] = useState<'idle' | 'starting' | 'redirecting' | 'error'>('idle');
   const [connectError, setConnectError] = useState('');
+  const [previewItem, setPreviewItem] = useState<GalleryItem | null>(null);
   const creatorAccess = getCreatorAccess(user);
 
   const fetchGallery = async () => {
@@ -410,6 +413,12 @@ export default function GalleryPage() {
                     <span className="text-xs truncate">{item.catalogName}</span>
                   </div>
                   <div className="flex gap-2 mb-3">
+                    <button
+                      onClick={() => setPreviewItem(item)}
+                      className="flex-1 flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-2 rounded-lg text-sm transition-colors"
+                    >
+                      <Eye className="w-4 h-4" /> Preview Product
+                    </button>
                     <button 
                       onClick={() => router.push(customizeHrefFor(item))}
                       className="flex-1 flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-2 rounded-lg text-sm transition-colors"
@@ -456,6 +465,50 @@ export default function GalleryPage() {
           </div>
         )}
       </main>
+      {previewItem ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true" aria-label="Product preview">
+          <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[32px] border border-zinc-800 bg-zinc-950 shadow-[0_40px_120px_rgba(0,0,0,0.7)]">
+            <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">Gallery Preview</div>
+                <div className="mt-1 text-lg font-semibold text-white">Preview Product</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewItem(null)}
+                className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-black/40 px-3 py-2 text-sm font-medium text-zinc-200 hover:bg-black/60"
+              >
+                <X className="h-4 w-4" />
+                Close
+              </button>
+            </div>
+            <div className="space-y-6 p-5">
+              <MerchPreviewPanel
+                imageUrl={previewItem.imageUrl}
+                productName="Premium Tee"
+                printType="standard"
+                printifyPreviewUrl={previewItem.printifyPreviewUrl || ''}
+              />
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => router.push(customizeHrefFor(previewItem))}
+                  className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200"
+                >
+                  Open Full Customizer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewItem(null)}
+                  className="inline-flex items-center justify-center rounded-xl border border-zinc-700 bg-black/30 px-4 py-2 text-sm font-semibold text-zinc-200 hover:bg-black/50"
+                >
+                  Keep Browsing Gallery
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <PixelQryptModal 
         isOpen={pixelQryptModalOpen} 
         onClose={() => setPixelQryptModalOpen(false)} 

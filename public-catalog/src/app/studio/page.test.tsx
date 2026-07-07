@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom/vitest';
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import StudioPage from './page';
@@ -21,7 +22,19 @@ vi.mock('../../components/FusionAI', () => ({
 }));
 
 vi.mock('../../components/LatestAIImage', () => ({
-  LatestAIImage: () => <div>LatestAIImage</div>,
+  LatestAIImage: ({
+    overrideUrl,
+    onResolvedUrl,
+  }: {
+    overrideUrl?: string;
+    onResolvedUrl?: (url: string | null) => void;
+  }) => {
+    React.useEffect(() => {
+      onResolvedUrl?.(overrideUrl || 'https://example.com/latest-build.png');
+    }, [overrideUrl, onResolvedUrl]);
+
+    return <div>LatestAIImage</div>;
+  },
 }));
 
 vi.mock('next/navigation', async () => {
@@ -129,5 +142,28 @@ describe('StudioPage calendar date range', () => {
       'href',
       '/profile?upgrade=premium-creator',
     );
+  });
+
+  it('shows the approved merch buyer preview for the latest generated image', async () => {
+    localStorage.setItem(
+      'foreverteck.studio.lastImage',
+      JSON.stringify({
+        imageUrl: 'https://example.com/latest-build.png',
+        prompt: 'quantum skyline tee',
+      }),
+    );
+
+    await renderStudioPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Buyer Preview')).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText('Printify Sample').length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        'No Printify sample image is linked yet. The finished product mockup above still shows the buyer what the shirt looks like before purchase.',
+      ),
+    ).toBeInTheDocument();
   });
 });
