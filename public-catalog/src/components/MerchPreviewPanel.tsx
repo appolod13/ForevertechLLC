@@ -34,13 +34,18 @@ export function MerchPreviewPanel({
   const isAopProduct = printType === 'all_over_print';
   const sampleUrl = typeof printifyPreviewUrl === 'string' ? printifyPreviewUrl.trim() : '';
   const normalizedProductName = typeof productName === 'string' && productName.trim() ? productName.trim() : 'Premium Tee';
-  const [mockupView, setMockupView] = useState<'front' | 'back' | 'left' | 'right'>('front');
+  const [mockupView, setMockupView] = useState<'front' | 'back' | 'left' | 'right' | 'sample'>(() => (sampleUrl ? 'sample' : 'front'));
   const [localMockups, setLocalMockups] = useState<PrintifyMockups | undefined>(() => printifyMockups);
   const [localDesignHash, setLocalDesignHash] = useState('');
 
   const normalizedPrompt = typeof prompt === 'string' ? prompt.trim() : '';
   const normalizedImageUrl = typeof imageUrl === 'string' ? imageUrl.trim() : '';
   const effectiveMockups = printifyMockups || localMockups;
+
+  useEffect(() => {
+    if (!sampleUrl) return;
+    setMockupView((prev) => (prev === 'front' ? 'sample' : prev));
+  }, [sampleUrl]);
 
   useEffect(() => {
     if (printifyMockups) setLocalMockups(printifyMockups);
@@ -145,6 +150,7 @@ export function MerchPreviewPanel({
   }, [effectiveMockups?.status, enablePrintifyMockups, localDesignHash]);
 
   const heroMockupUrl = useMemo(() => {
+    if (mockupView === 'sample') return sampleUrl;
     if (!enablePrintifyMockups || !effectiveMockups || effectiveMockups.status !== 'ready') return '';
     const v = mockupView;
     const byView =
@@ -156,7 +162,7 @@ export function MerchPreviewPanel({
             ? effectiveMockups.leftUrl
             : effectiveMockups.rightUrl;
     return typeof byView === 'string' ? byView.trim() : '';
-  }, [effectiveMockups, enablePrintifyMockups, mockupView]);
+  }, [effectiveMockups, enablePrintifyMockups, mockupView, sampleUrl]);
 
   return (
     <div className={cn('relative z-10 w-full', className)}>
@@ -166,8 +172,22 @@ export function MerchPreviewPanel({
           <div className="mt-3 text-sm leading-6 text-zinc-400 sm:mt-4">
             See a closer finished-product sample before checkout, with the artwork framed like a real storefront mockup.
           </div>
-          {enablePrintifyMockups && effectiveMockups?.status === 'ready' ? (
+          {sampleUrl || (enablePrintifyMockups && effectiveMockups?.status === 'ready') ? (
             <div className="mt-4 flex flex-wrap gap-2">
+              {sampleUrl ? (
+                <button
+                  type="button"
+                  onClick={() => setMockupView('sample')}
+                  className={cn(
+                    'rounded-full border px-3 py-1 text-xs font-semibold',
+                    mockupView === 'sample'
+                      ? 'border-white/20 bg-white text-black'
+                      : 'border-white/10 bg-black/30 text-zinc-200 hover:bg-black/50',
+                  )}
+                >
+                  Sample
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setMockupView('front')}
@@ -181,9 +201,14 @@ export function MerchPreviewPanel({
               <button
                 type="button"
                 onClick={() => setMockupView('back')}
+                disabled={!enablePrintifyMockups || effectiveMockups?.status !== 'ready'}
                 className={cn(
                   'rounded-full border px-3 py-1 text-xs font-semibold',
-                  mockupView === 'back' ? 'border-white/20 bg-white text-black' : 'border-white/10 bg-black/30 text-zinc-200 hover:bg-black/50',
+                  !enablePrintifyMockups || effectiveMockups?.status !== 'ready'
+                    ? 'cursor-not-allowed border-white/5 bg-black/20 text-zinc-600'
+                    : mockupView === 'back'
+                      ? 'border-white/20 bg-white text-black'
+                      : 'border-white/10 bg-black/30 text-zinc-200 hover:bg-black/50',
                 )}
               >
                 Back
@@ -191,9 +216,14 @@ export function MerchPreviewPanel({
               <button
                 type="button"
                 onClick={() => setMockupView('left')}
+                disabled={!enablePrintifyMockups || effectiveMockups?.status !== 'ready'}
                 className={cn(
                   'rounded-full border px-3 py-1 text-xs font-semibold',
-                  mockupView === 'left' ? 'border-white/20 bg-white text-black' : 'border-white/10 bg-black/30 text-zinc-200 hover:bg-black/50',
+                  !enablePrintifyMockups || effectiveMockups?.status !== 'ready'
+                    ? 'cursor-not-allowed border-white/5 bg-black/20 text-zinc-600'
+                    : mockupView === 'left'
+                      ? 'border-white/20 bg-white text-black'
+                      : 'border-white/10 bg-black/30 text-zinc-200 hover:bg-black/50',
                 )}
               >
                 Left
@@ -201,9 +231,14 @@ export function MerchPreviewPanel({
               <button
                 type="button"
                 onClick={() => setMockupView('right')}
+                disabled={!enablePrintifyMockups || effectiveMockups?.status !== 'ready'}
                 className={cn(
                   'rounded-full border px-3 py-1 text-xs font-semibold',
-                  mockupView === 'right' ? 'border-white/20 bg-white text-black' : 'border-white/10 bg-black/30 text-zinc-200 hover:bg-black/50',
+                  !enablePrintifyMockups || effectiveMockups?.status !== 'ready'
+                    ? 'cursor-not-allowed border-white/5 bg-black/20 text-zinc-600'
+                    : mockupView === 'right'
+                      ? 'border-white/20 bg-white text-black'
+                      : 'border-white/10 bg-black/30 text-zinc-200 hover:bg-black/50',
                 )}
               >
                 Right

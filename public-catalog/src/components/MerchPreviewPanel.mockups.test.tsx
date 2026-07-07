@@ -6,6 +6,13 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MerchPreviewPanel } from './MerchPreviewPanel';
 
 describe('MerchPreviewPanel Printify mockups', () => {
+  it('shows the Printify sample image when provided', () => {
+    render(<MerchPreviewPanel productName="Premium Tee" printType="standard" printifyPreviewUrl="https://printify.example/sample.png" />);
+
+    const hero = screen.getByTestId('printify-mockup-hero');
+    expect(hero).toHaveAttribute('src', 'https://printify.example/sample.png');
+  });
+
   it('switches hero image between front/back/left/right when mockups are ready', () => {
     render(
       <MerchPreviewPanel
@@ -13,6 +20,7 @@ describe('MerchPreviewPanel Printify mockups', () => {
         productName="AOP Tee"
         printType="all_over_print"
         enablePrintifyMockups
+        printifyPreviewUrl="https://printify.example/sample.png"
         printifyMockups={{
           status: 'ready',
           frontUrl: 'https://printify.example/front.png',
@@ -24,6 +32,9 @@ describe('MerchPreviewPanel Printify mockups', () => {
     );
 
     const hero = screen.getByTestId('printify-mockup-hero');
+    expect(hero).toHaveAttribute('src', 'https://printify.example/sample.png');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Front' }));
     expect(hero).toHaveAttribute('src', 'https://printify.example/front.png');
 
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
