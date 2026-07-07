@@ -21,12 +21,34 @@ describe('products route', () => {
         expect.objectContaining({
           id: 'tee',
           printType: 'standard',
+          surfaces: expect.arrayContaining(['finished']),
         }),
         expect.objectContaining({
           id: 'tee-aop',
           printType: 'all_over_print',
           placementMode: 'all_over_print',
-          surfaces: expect.arrayContaining(['front', 'back', 'overview', 'spin360']),
+          surfaces: expect.arrayContaining(['front', 'back', 'overview', 'spin360', 'finished']),
+        }),
+      ]),
+    );
+  });
+
+  it('includes optional Printify preview URLs from product env metadata', async () => {
+    process.env.PRINTIFY_TEE_PREVIEW_URL = 'https://printify.example/tee.png';
+    process.env.PRINTIFY_AOP_PREVIEW_URL = 'https://printify.example/aop.png';
+
+    const res = await GET();
+    const json = await res.json();
+
+    expect(json.products).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'tee',
+          printifyPreviewUrl: 'https://printify.example/tee.png',
+        }),
+        expect.objectContaining({
+          id: 'tee-aop',
+          printifyPreviewUrl: 'https://printify.example/aop.png',
         }),
       ]),
     );
