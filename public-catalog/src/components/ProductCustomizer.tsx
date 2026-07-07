@@ -518,9 +518,11 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
              <MerchPreviewPanel
                className="h-full p-5"
                imageUrl={initialImageUrl}
+               prompt={resolvedPrompt}
                productName={selectedProduct?.name}
                printType={selectedProduct?.printType || 'standard'}
                printifyPreviewUrl={printifySampleUrl}
+               enablePrintifyMockups
                selectedVariant={selectedVariant}
                selectedColor={selectedColor}
              />

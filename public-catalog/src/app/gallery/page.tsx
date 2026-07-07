@@ -485,9 +485,11 @@ export default function GalleryPage() {
             <div className="space-y-6 p-5">
               <MerchPreviewPanel
                 imageUrl={previewItem.imageUrl}
+                prompt={previewItem.prompt}
                 productName="Premium Tee"
                 printType="standard"
                 printifyPreviewUrl={previewItem.printifyPreviewUrl || ''}
+                enablePrintifyMockups
               />
               <div className="flex flex-wrap gap-3">
                 <button

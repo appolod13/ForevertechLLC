@@ -56,6 +56,13 @@ async function renderStudioPage() {
   await waitFor(() => {
     expect(screen.getByText('AI Asset Generator')).toBeInTheDocument();
   });
+  await waitFor(() => {
+    expect(
+      (global.fetch as unknown as { mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> } }).mock.calls.some((c) =>
+        String(c[0]).includes('/api/printify/mockups'),
+      ),
+    ).toBe(true);
+  });
 }
 
 class EventSourceMock {
@@ -85,6 +92,17 @@ describe('StudioPage calendar date range', () => {
       }
       if (url.includes('/api/catalog/posts')) {
         return { ok: true, json: async () => ({ posts: [] }) } as Response;
+      }
+      if (url.includes('/api/printify/mockups')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            designHash: 'hash_test',
+            status: 'pending',
+            mockups: { frontUrl: undefined, backUrl: undefined, leftUrl: undefined, rightUrl: undefined },
+          }),
+        } as Response;
       }
       return { ok: true, json: async () => ({ success: true }) } as Response;
     }) as typeof fetch;

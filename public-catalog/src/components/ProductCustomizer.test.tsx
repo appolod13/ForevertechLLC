@@ -100,30 +100,47 @@ describe('ProductCustomizer', () => {
   });
 
   it('shows a finished product preview and a Printify sample section before checkout', async () => {
-    global.fetch = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({
-        success: true,
-        products: [
-          {
-            id: 'tee',
-            name: 'Premium Tee',
-            description: 'Premium cotton tee printed on-demand.',
-            basePrice: 59.99,
-            currency: 'usd',
-            variants: ['S', 'M', 'L'],
-            colors: ['Black', 'White'],
-            image: '',
-            printType: 'standard',
-            previewMode: 'flat',
-            placementMode: 'single_front_with_back_optional',
-            surfaces: ['front', 'back', 'overview', 'spin360', 'finished'],
-            printifyPreviewUrl: 'https://printify.example/mockup.png',
-            printifySkus: { S: 'sku-standard-s', M: 'sku-standard-m', L: 'sku-standard-l' },
-          },
-        ],
-      }),
-    }) as Response) as typeof fetch;
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/api/products')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            products: [
+              {
+                id: 'tee',
+                name: 'Premium Tee',
+                description: 'Premium cotton tee printed on-demand.',
+                basePrice: 59.99,
+                currency: 'usd',
+                variants: ['S', 'M', 'L'],
+                colors: ['Black', 'White'],
+                image: '',
+                printType: 'standard',
+                previewMode: 'flat',
+                placementMode: 'single_front_with_back_optional',
+                surfaces: ['front', 'back', 'overview', 'spin360', 'finished'],
+                printifyPreviewUrl: 'https://printify.example/mockup.png',
+                printifySkus: { S: 'sku-standard-s', M: 'sku-standard-m', L: 'sku-standard-l' },
+              },
+            ],
+          }),
+        } as Response;
+      }
+      if (url.includes('/api/printify/mockups')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            designHash: 'hash_test',
+            status: 'pending',
+            mockups: { frontUrl: undefined, backUrl: undefined, leftUrl: undefined, rightUrl: undefined },
+          }),
+        } as Response;
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch;
 
     render(<ProductCustomizer initialImageUrl="https://example.com/design.png" promptOverride="quantum wormhole tee" />);
 
@@ -143,29 +160,46 @@ describe('ProductCustomizer', () => {
   });
 
   it('uses a taller mobile preview shell for the finished product view', async () => {
-    global.fetch = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({
-        success: true,
-        products: [
-          {
-            id: 'tee',
-            name: 'Premium Tee',
-            description: 'Premium cotton tee printed on-demand.',
-            basePrice: 59.99,
-            currency: 'usd',
-            variants: ['S', 'M', 'L'],
-            colors: ['Black', 'White'],
-            image: '',
-            printType: 'standard',
-            previewMode: 'flat',
-            placementMode: 'single_front_with_back_optional',
-            surfaces: ['front', 'back', 'overview', 'spin360', 'finished'],
-            printifySkus: { S: 'sku-standard-s', M: 'sku-standard-m', L: 'sku-standard-l' },
-          },
-        ],
-      }),
-    }) as Response) as typeof fetch;
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/api/products')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            products: [
+              {
+                id: 'tee',
+                name: 'Premium Tee',
+                description: 'Premium cotton tee printed on-demand.',
+                basePrice: 59.99,
+                currency: 'usd',
+                variants: ['S', 'M', 'L'],
+                colors: ['Black', 'White'],
+                image: '',
+                printType: 'standard',
+                previewMode: 'flat',
+                placementMode: 'single_front_with_back_optional',
+                surfaces: ['front', 'back', 'overview', 'spin360', 'finished'],
+                printifySkus: { S: 'sku-standard-s', M: 'sku-standard-m', L: 'sku-standard-l' },
+              },
+            ],
+          }),
+        } as Response;
+      }
+      if (url.includes('/api/printify/mockups')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            designHash: 'hash_test',
+            status: 'pending',
+            mockups: { frontUrl: undefined, backUrl: undefined, leftUrl: undefined, rightUrl: undefined },
+          }),
+        } as Response;
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch;
 
     render(<ProductCustomizer initialImageUrl="https://example.com/design.png" promptOverride="quantum wormhole tee" />);
 

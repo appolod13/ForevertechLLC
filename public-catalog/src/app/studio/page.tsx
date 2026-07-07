@@ -1341,7 +1341,13 @@ function StudioPageInner() {
                       See how the latest generation looks as a buyer-ready shirt before opening the full merch editor.
                     </div>
                   </div>
-                  <MerchPreviewPanel imageUrl={latestDropImageUrl} productName="Premium Tee" printType="standard" />
+                  <MerchPreviewPanel
+                    imageUrl={latestDropImageUrl}
+                    prompt={(prompt || generatedTextContent).trim()}
+                    productName="Premium Tee"
+                    printType="standard"
+                    enablePrintifyMockups
+                  />
                 </div>
               ) : null}
               {latestDropImageUrl ? (

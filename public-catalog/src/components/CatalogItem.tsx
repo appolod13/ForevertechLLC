@@ -406,9 +406,11 @@ export function CatalogItem({
             </div>
             <MerchPreviewPanel
               imageUrl={imgSrc}
+              prompt={customizePrompt}
               productName={previewProductName}
               printType="standard"
               printifyPreviewUrl={printifyPreviewUrl}
+              enablePrintifyMockups
             />
             <div className="mt-5 flex justify-end">
               <Link
