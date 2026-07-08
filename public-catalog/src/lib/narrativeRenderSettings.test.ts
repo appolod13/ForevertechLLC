@@ -26,9 +26,22 @@ describe('buildNarrativeRenderSettings', () => {
     });
 
     expect(settings.story_mode).toMatch(/diamond|ring|diagonal|spiral/);
-    expect(settings.mandelbrot_weight).toBeLessThanOrEqual(0.18);
+    expect(settings.mandelbrot_weight).toBeLessThanOrEqual(0.12);
     expect(settings.brightness_floor).toBeGreaterThanOrEqual(0.34);
     expect(settings.palette_motion).toBeGreaterThan(0);
+  });
+
+  it('never selects Mandelbrot-heavy backgrounds for non-mandelbrot prompts', () => {
+    let max = 0;
+    for (let seed = 1; seed <= 400; seed++) {
+      const settings = buildNarrativeRenderSettings({
+        prompt: 'clean electric cyan magenta fractal story field',
+        seed,
+        paletteProfile: 'joyful',
+      });
+      if (settings.mandelbrot_weight > max) max = settings.mandelbrot_weight;
+    }
+    expect(max).toBeLessThanOrEqual(0.12);
   });
 
   it('allows darker prompts to opt into a moodier floor without going black-first by default', () => {

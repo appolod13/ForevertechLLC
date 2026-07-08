@@ -340,11 +340,18 @@ def fractal_fusion_rgb(
     inv_fw = 1.0 / max(1, fw - 1)
     inv_fh = 1.0 / max(1, fh - 1)
 
+    accent_cx = (rng.random() - 0.5) * 0.52
+    accent_cy = (rng.random() - 0.5) * 0.52
+    accent_outer = 0.16 + rng.random() * 0.22
+    accent_inner = accent_outer * (0.55 + rng.random() * 0.12)
+
     for y in range(fh):
         base_y = (y * inv_fh - 0.5) * span_y
+        my = y * inv_fh - 0.5
         row = y * fw
         for x in range(fw):
             base_x = (x * inv_fw - 0.5) * span_x
+            mx = x * inv_fw - 0.5
             rot_x = base_x * rot_cos - base_y * rot_sin
             rot_y = base_x * rot_sin + base_y * rot_cos
             wx, wy = _wormhole_warp(rot_x, rot_y, w_cx, w_cy, w_strength, w_swirl)
@@ -390,10 +397,14 @@ def fractal_fusion_rgb(
                 (ix * (5.0 + string_flow_strength * 5.0) + iy * (2.5 + diagonal_filament_strength * 6.0)) * math.pi
                 + q_phase
             )
-            base_weight = max(0.0, 1.0 - julia_weight - mandelbrot_weight)
+            accent_dist = math.sqrt((mx - accent_cx) * (mx - accent_cx) + (my - accent_cy) * (my - accent_cy))
+            mand_mask = 1.0 - _smoothstep(accent_inner, accent_outer, accent_dist)
+            mand_mask = _clamp01(mand_mask)
+            local_mandelbrot_weight = mandelbrot_weight * mand_mask
+            base_weight = max(0.0, 1.0 - julia_weight - local_mandelbrot_weight)
             fused = (
                 j_norm * julia_weight
-                + m_norm * mandelbrot_weight
+                + m_norm * local_mandelbrot_weight
                 + flow_band * base_weight
             ) * (0.78 + 0.22 * interference)
             field[row + x] = fused

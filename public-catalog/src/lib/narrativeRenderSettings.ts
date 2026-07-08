@@ -72,13 +72,15 @@ export function buildNarrativeRenderSettings({
   ];
   const story_mode = storyModes[Math.floor(rand() * storyModes.length)] || 'diamond_resonance';
   const explicitMandelbrot = normalizedPrompt.includes('mandelbrot');
-  const rareMandelbrot = explicitMandelbrot || rand() < 0.12;
-  const mandelbrot_weight = rareMandelbrot
+  const rareMandelbrot = explicitMandelbrot || rand() < 0.07;
+  const mandelbrot_weight = explicitMandelbrot
     ? clamp(0.14 + rand() * 0.04, 0.1, 0.18)
-    : clamp(0.03 + rand() * 0.06, 0.03, 0.09);
+    : rareMandelbrot
+      ? clamp(0.08 + rand() * 0.05, 0.06, 0.12)
+      : clamp(0.02 + rand() * 0.04, 0.02, 0.06);
   const brightness_floor = darkPalette
     ? clamp(0.22 + rand() * 0.06, 0.2, 0.32)
-    : clamp(0.36 + rand() * 0.12, 0.34, 0.5);
+    : clamp(0.38 + rand() * 0.12, 0.36, 0.52);
   const baseRing = story_mode === 'ring_memory' ? 0.78 : 0.34 + rand() * 0.24;
   const baseDiamond = story_mode === 'diamond_resonance' ? 0.82 : 0.32 + rand() * 0.26;
 
@@ -107,6 +109,6 @@ export function buildNarrativeRenderSettings({
     detail_density: Number(clamp(0.58 + rand() * 0.24, 0.55, 0.88).toFixed(4)),
     brightness_floor: Number(brightness_floor.toFixed(4)),
     metallic_outline_strength: Number(clamp(0.44 + rand() * 0.24, 0.4, 0.82).toFixed(4)),
-    palette_motion: Number(clamp(0.4 + rand() * 0.34, 0.35, 0.82).toFixed(4)),
+    palette_motion: Number(clamp(0.52 + rand() * 0.30, 0.5, 0.86).toFixed(4)),
   };
 }
