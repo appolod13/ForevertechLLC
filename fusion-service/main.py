@@ -124,6 +124,8 @@ def _palette_params(profile: Optional[str], phash: int) -> dict[str, float]:
         return {"base": 0.56, "span": 0.26, "sat": 0.68, "val_bias": 0.02, "gamma": 1.0 / 1.14}
     if p in {"angry", "rage", "ominous"}:
         return {"base": 0.98, "span": 0.22, "sat": 0.82, "val_bias": -0.02, "gamma": 1.0 / 1.18}
+    if p in {"magma", "lava", "fire", "heat"}:
+        return {"base": 0.06, "span": 0.36, "sat": 0.90, "val_bias": 0.08, "gamma": 1.0 / 1.08}
     if p in {"joyful", "joy", "radiant"}:
         return {"base": 0.10, "span": 0.34, "sat": 0.80, "val_bias": 0.08, "gamma": 1.0 / 1.10}
     if p in {"void", "dark", "shadow", "abyss"}:
@@ -314,7 +316,7 @@ def fractal_fusion_rgb(
     w_cy = wormhole_center_y if wormhole_center_y is not None else (cy_center + (rng.random() - 0.5) * 0.25)
     story_phase_bias = story_phase_bias or [0.24, 0.28, 0.28, 0.20]
     brightness_floor = _clamp(brightness_floor, 0.18, 0.58)
-    mandelbrot_weight = _clamp(mandelbrot_weight, 0.02, 0.18)
+    mandelbrot_weight = _clamp(mandelbrot_weight, 0.0, 0.10)
     julia_weight = _clamp(julia_weight, 0.45, 0.9)
     ring_bias = _clamp(ring_bias, 0.15, 0.95)
     diamond_bias = _clamp(diamond_bias, 0.15, 0.95)
@@ -345,8 +347,8 @@ def fractal_fusion_rgb(
 
     accent_cx = (rng.random() - 0.5) * 0.52
     accent_cy = (rng.random() - 0.5) * 0.52
-    accent_outer = 0.16 + rng.random() * 0.22
-    accent_inner = accent_outer * (0.55 + rng.random() * 0.12)
+    accent_outer = 0.06 + rng.random() * 0.10
+    accent_inner = accent_outer * (0.25 + rng.random() * 0.12)
 
     for y in range(fh):
         base_y = (y * inv_fh - 0.5) * span_y
@@ -403,7 +405,8 @@ def fractal_fusion_rgb(
             accent_dist = math.sqrt((mx - accent_cx) * (mx - accent_cx) + (my - accent_cy) * (my - accent_cy))
             mand_mask = 1.0 - _smoothstep(accent_inner, accent_outer, accent_dist)
             mand_mask = _clamp01(mand_mask)
-            local_mandelbrot_weight = mandelbrot_weight * mand_mask
+            mand_mask = mand_mask * mand_mask * mand_mask
+            local_mandelbrot_weight = mandelbrot_weight * mand_mask * 0.55
             base_weight = max(0.0, 1.0 - julia_weight - local_mandelbrot_weight)
             fused = (
                 j_norm * julia_weight
@@ -474,6 +477,11 @@ def fractal_fusion_rgb(
                 + story_phase_bias[3] * _smoothstep(0.65, 1.0, story_geo)
             )
             electric_anchor = (0.56 + 0.28 * (0.5 + 0.5 * math.sin((story_geo * 3.4 + diagonal_shimmer * 1.7 + texture * 1.2) * math.pi))) % 1.0
+            band_freq = 6.0 + 16.0 * detail_density
+            t = v * band_freq + 0.22 * texture + 0.30 * story_geo + 0.18 * diagonal_shimmer
+            frac = t - math.floor(t)
+            dist = frac if frac < 0.5 else 1.0 - frac
+            ridge = 1.0 - _smoothstep(0.02, 0.11, dist)
 
             hue = (
                 base_hue * (1.0 - 0.34)
@@ -482,11 +490,13 @@ def fractal_fusion_rgb(
                 + story_geo * 0.08
                 + texture * 0.04
                 + diagonal_filament_strength * 0.02
+                + ridge * 0.03
             ) % 1.0
-            sat = min(1.0, max(0.0, sat_base + 0.14 * (1.0 - v) + geo * 0.05 + story_geo * 0.10 + 0.05 * diagonal_shimmer - metal["metal_desat"] * metallic_edge))
+            sat = min(1.0, max(0.0, sat_base + 0.14 * (1.0 - v) + geo * 0.05 + story_geo * 0.10 + 0.05 * diagonal_shimmer + ridge * 0.08 - metal["metal_desat"] * metallic_edge))
             val = _clamp01(
                 brightness_floor
                 + (0.20 + 0.48 * v + val_bias) * metal["background_dim"] * (0.88 + 0.10 * geo + 0.16 * texture_layer + 0.22 * story_geo)
+                + ridge * (0.06 + 0.18 * metallic_edge)
             )
 
             r, g, b = _hsv_to_rgb(hue, sat, val)

@@ -204,7 +204,8 @@ export async function POST(req: NextRequest) {
     const platform = asPlatform(body.platform);
     const provider = typeof body.provider === "string" ? body.provider.trim() : "";
     const fallbackProvider = asProvider(provider);
-    const palette_profile = paletteProfileFromPrompt(prompt);
+    const derivedPalette = paletteProfileFromPrompt(prompt);
+    const palette_profile = derivedPalette === "quantum" ? "magma" : derivedPalette;
     const seed: number = typeof body.seed === "number" ? body.seed : generateSeed();
     const narrativeSettings = buildNarrativeRenderSettings({
       prompt,

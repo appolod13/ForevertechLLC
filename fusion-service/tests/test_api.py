@@ -123,6 +123,12 @@ def test_fractal_fusion_rgb_render_params_change_output():
     assert base != rotation_variant
     assert base != modified
 
+
+def test_fractal_fusion_rgb_allows_zero_mandelbrot_weight_to_change_output():
+    zero = fusion_main.fractal_fusion_rgb(48, 48, "same prompt", 123, mandelbrot_weight=0.0)
+    nonzero = fusion_main.fractal_fusion_rgb(48, 48, "same prompt", 123, mandelbrot_weight=0.02)
+    assert zero != nonzero
+
 def test_texture_style_for_seed_is_deterministic_and_supported():
     style = fusion_main._texture_style_for_seed(123)
     assert style == fusion_main._texture_style_for_seed(123)
@@ -133,6 +139,12 @@ def test_metallic_profile_dims_background_and_boosts_edges():
     assert 0.35 <= profile["background_dim"] <= 0.8
     assert profile["outline_boost"] > 0.2
     assert profile["metal_desat"] > 0.05
+
+def test_palette_params_magma_is_warm_and_saturated():
+    pal = fusion_main._palette_params("magma", 123)
+    assert 0.0 <= pal["base"] <= 0.14
+    assert pal["span"] >= 0.24
+    assert pal["sat"] >= 0.85
 
 def test_brain_img2img_invalid_image_rejected():
     response = client.post(

@@ -79,4 +79,21 @@ describe("image route (direct)", () => {
     expect(firstBody.story_mode).toBeDefined();
     expect(secondBody.story_mode).toBeUndefined();
   });
+
+  it("defaults palette profile to magma for prompts without emotion keywords", async () => {
+    const fetchMock = vi.fn<() => Promise<JsonResponseMock>>(async () => {
+      return {
+        ok: true,
+        json: async () => ({ success: true, imageUrl: "/uploads/test.png", meta: { provider: "fusion" } }),
+      };
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const req = makeReq({ prompt: "abstract fractal story", width: 512, height: 512 });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+
+    const calledBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body || "{}")) as Record<string, unknown>;
+    expect(calledBody.palette_profile).toBe("magma");
+  });
 });

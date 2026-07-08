@@ -100,11 +100,11 @@ export function buildNarrativeRenderSettings({
   const darkPalette = isDarkPalette(paletteProfile, normalizedPrompt);
   const story_mode = pickStoryMode(rand, normalizedPrompt);
   const explicitMandelbrot = normalizedPrompt.includes('mandelbrot');
-  const rareMandelbrot = explicitMandelbrot || rand() < 0.07;
+  const rareMandelbrot = explicitMandelbrot || rand() < 0.04;
   const mandelbrot_weight = explicitMandelbrot
-    ? clamp(0.14 + rand() * 0.04, 0.1, 0.18)
+    ? clamp(0.08 + rand() * 0.04, 0.08, 0.12)
     : rareMandelbrot
-      ? clamp(0.08 + rand() * 0.05, 0.06, 0.12)
+      ? clamp(0.03 + rand() * 0.03, 0.02, 0.06)
       : clamp(0.02 + rand() * 0.04, 0.02, 0.06);
   const brightness_floor = darkPalette
     ? clamp(0.22 + rand() * 0.06, 0.2, 0.32)

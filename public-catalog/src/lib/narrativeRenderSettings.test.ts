@@ -41,7 +41,7 @@ describe('buildNarrativeRenderSettings', () => {
       });
       if (settings.mandelbrot_weight > max) max = settings.mandelbrot_weight;
     }
-    expect(max).toBeLessThanOrEqual(0.12);
+    expect(max).toBeLessThanOrEqual(0.06);
   });
 
   it('prefers diamond and ring storytelling modes for electric abstract prompts', () => {
