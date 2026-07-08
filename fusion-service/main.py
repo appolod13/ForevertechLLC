@@ -121,21 +121,21 @@ def _wormhole_warp(
 def _palette_params(profile: Optional[str], phash: int) -> dict[str, float]:
     p = (profile or "").strip().lower()
     if p in {"peaceful", "serene", "tranquil", "meditative", "calm"}:
-        return {"base": 0.56, "span": 0.26, "sat": 0.68, "val_bias": -0.10, "gamma": 1.0 / 1.22}
+        return {"base": 0.56, "span": 0.26, "sat": 0.68, "val_bias": 0.02, "gamma": 1.0 / 1.14}
     if p in {"angry", "rage", "ominous"}:
-        return {"base": 0.98, "span": 0.20, "sat": 0.80, "val_bias": -0.12, "gamma": 1.0 / 1.28}
+        return {"base": 0.98, "span": 0.22, "sat": 0.82, "val_bias": -0.02, "gamma": 1.0 / 1.18}
     if p in {"joyful", "joy", "radiant"}:
-        return {"base": 0.10, "span": 0.30, "sat": 0.76, "val_bias": -0.04, "gamma": 1.0 / 1.18}
+        return {"base": 0.10, "span": 0.34, "sat": 0.80, "val_bias": 0.08, "gamma": 1.0 / 1.10}
     if p in {"void", "dark", "shadow", "abyss"}:
-        return {"base": 0.70, "span": 0.16, "sat": 0.58, "val_bias": -0.18, "gamma": 1.0 / 1.42}
+        return {"base": 0.70, "span": 0.18, "sat": 0.62, "val_bias": -0.08, "gamma": 1.0 / 1.24}
     if p in {"cosmic", "nebula", "mysterious"}:
-        return {"base": 0.80, "span": 0.28, "sat": 0.76, "val_bias": -0.08, "gamma": 1.0 / 1.24}
+        return {"base": 0.80, "span": 0.30, "sat": 0.80, "val_bias": 0.02, "gamma": 1.0 / 1.14}
     if p in {"ethereal", "dreamlike"}:
-        return {"base": 0.76, "span": 0.24, "sat": 0.70, "val_bias": -0.08, "gamma": 1.0 / 1.20}
+        return {"base": 0.76, "span": 0.28, "sat": 0.76, "val_bias": 0.04, "gamma": 1.0 / 1.12}
     if p in {"quantum", "crystalline", "fractured"}:
-        return {"base": 0.72, "span": 0.30, "sat": 0.78, "val_bias": -0.08, "gamma": 1.0 / 1.22}
+        return {"base": 0.72, "span": 0.32, "sat": 0.84, "val_bias": 0.06, "gamma": 1.0 / 1.10}
     base = ((phash % 360) / 360.0 + 0.74) % 1.0
-    return {"base": base, "span": 0.26, "sat": 0.78, "val_bias": -0.08, "gamma": 1.0 / 1.22}
+    return {"base": base, "span": 0.30, "sat": 0.82, "val_bias": 0.04, "gamma": 1.0 / 1.12}
 
 
 def _texture_style_for_seed(seed: int) -> str:
@@ -161,6 +161,43 @@ def _metallic_profile(profile: Optional[str]) -> dict[str, float]:
 
 def _clamp01(value: float) -> float:
     return max(0.0, min(1.0, value))
+
+
+def _clamp(value: float, minimum: float, maximum: float) -> float:
+    return max(minimum, min(maximum, value))
+
+
+def _smoothstep(a: float, b: float, value: float) -> float:
+    if a == b:
+        return 0.0
+    t = _clamp01((value - a) / (b - a))
+    return t * t * (3.0 - 2.0 * t)
+
+
+def _ring_field(nx: float, ny: float, phase: float, density: float) -> float:
+    radius = math.sqrt(nx * nx + ny * ny)
+    return 0.5 + 0.5 * math.cos(radius * density * math.pi - phase)
+
+
+def _diamond_field(nx: float, ny: float, phase: float, density: float) -> float:
+    diamond = abs(nx) + abs(ny)
+    return 0.5 + 0.5 * math.cos(diamond * density * math.pi - phase)
+
+
+def _story_geometry(nx: float, ny: float, story_mode: str, q_phase: float, ring_bias: float, diamond_bias: float) -> float:
+    ring = _ring_field(nx, ny, q_phase, 12.0 + ring_bias * 10.0)
+    diamond = _diamond_field(nx, ny, q_phase * 0.8, 11.0 + diamond_bias * 10.0)
+    radius = math.sqrt(nx * nx + ny * ny) + 1e-9
+    theta = math.atan2(ny, nx)
+    diagonal = 0.5 + 0.5 * math.sin((nx + ny) * math.pi * 17.0 + q_phase * 0.7)
+    spiral = 0.5 + 0.5 * math.sin(radius * 26.0 - theta * 4.0 + q_phase)
+    if story_mode == "ring_memory":
+        return _clamp01(0.62 * ring + 0.24 * diamond + 0.14 * diagonal)
+    if story_mode == "diamond_resonance":
+        return _clamp01(0.58 * diamond + 0.22 * ring + 0.20 * diagonal)
+    if story_mode == "diagonal_current":
+        return _clamp01(0.52 * diagonal + 0.28 * diamond + 0.20 * ring)
+    return _clamp01(0.52 * spiral + 0.24 * ring + 0.24 * diagonal)
 
 
 def _texture_pattern(nx: float, ny: float, style: str, phase: float) -> float:
@@ -222,6 +259,20 @@ def fractal_fusion_rgb(
     sierpinski_weight: float = 0.10,
     koch_weight: float = 0.08,
     grid_weight: float = 0.12,
+    story_mode: str = "diamond_resonance",
+    story_phase_bias: Optional[list[float]] = None,
+    mandelbrot_weight: float = 0.08,
+    julia_weight: float = 0.74,
+    ring_bias: float = 0.72,
+    diamond_bias: float = 0.72,
+    string_flow_strength: float = 0.68,
+    diagonal_filament_strength: float = 0.58,
+    texture_style: Optional[str] = None,
+    texture_mix: float = 0.62,
+    detail_density: float = 0.7,
+    brightness_floor: float = 0.36,
+    metallic_outline_strength: float = 0.58,
+    palette_motion: float = 0.58,
 ) -> bytes:
     rng = random.Random(seed)
     angle = (seed % 100000) / 100000.0 * 2.0 * math.pi
@@ -236,7 +287,7 @@ def fractal_fusion_rgb(
     palette_shift = (int(palette_index) % 24) / 24.0
     pal = _palette_params(palette_profile, phash)
     metal = _metallic_profile(palette_profile)
-    texture_style = _texture_style_for_seed(seed)
+    texture_style = texture_style or _texture_style_for_seed(seed)
     texture_phase = ((phash >> 7) % 360) * math.pi / 180.0
     base_hue = (pal["base"] + palette_shift) % 1.0
     hue_span = pal["span"]
@@ -258,6 +309,18 @@ def fractal_fusion_rgb(
     w_swirl = wormhole_swirl if wormhole_swirl is not None else (0.85 + rng.random() * 0.55)
     w_cx = wormhole_center_x if wormhole_center_x is not None else (cx_center + (rng.random() - 0.5) * 0.25)
     w_cy = wormhole_center_y if wormhole_center_y is not None else (cy_center + (rng.random() - 0.5) * 0.25)
+    story_phase_bias = story_phase_bias or [0.24, 0.28, 0.28, 0.20]
+    brightness_floor = _clamp(brightness_floor, 0.18, 0.58)
+    mandelbrot_weight = _clamp(mandelbrot_weight, 0.02, 0.18)
+    julia_weight = _clamp(julia_weight, 0.45, 0.9)
+    ring_bias = _clamp(ring_bias, 0.15, 0.95)
+    diamond_bias = _clamp(diamond_bias, 0.15, 0.95)
+    string_flow_strength = _clamp(string_flow_strength, 0.15, 0.95)
+    diagonal_filament_strength = _clamp(diagonal_filament_strength, 0.15, 0.95)
+    texture_mix = _clamp(texture_mix, 0.15, 0.95)
+    detail_density = _clamp(detail_density, 0.15, 0.95)
+    metallic_outline_strength = _clamp(metallic_outline_strength, 0.1, 0.95)
+    palette_motion = _clamp(palette_motion, 0.05, 0.95)
 
     log2 = math.log(2.0)
     bailout = 16.0
@@ -323,7 +386,16 @@ def fractal_fusion_rgb(
             m_norm = m_val / max_iter
 
             interference = 0.5 + 0.5 * math.sin(q_freq * (ix + iy) * math.pi + q_phase)
-            fused = (j_norm * 0.62 + m_norm * 0.38) * (0.74 + 0.26 * interference)
+            flow_band = 0.5 + 0.5 * math.sin(
+                (ix * (5.0 + string_flow_strength * 5.0) + iy * (2.5 + diagonal_filament_strength * 6.0)) * math.pi
+                + q_phase
+            )
+            base_weight = max(0.0, 1.0 - julia_weight - mandelbrot_weight)
+            fused = (
+                j_norm * julia_weight
+                + m_norm * mandelbrot_weight
+                + flow_band * base_weight
+            ) * (0.78 + 0.22 * interference)
             field[row + x] = fused
 
     def sample(fx: float, fy: float) -> float:
@@ -376,33 +448,49 @@ def fractal_fusion_rgb(
             k_mask = _koch_like_mask(nx, ny)
             grid = _quantum_grid(nx, ny, freq=7.0 + (phash % 7), phase=q_phase)
             geo = (s_mask * sierpinski_weight + k_mask * koch_weight + grid * grid_weight) * edge
+            story_geo = _story_geometry(nx, ny, story_mode, q_phase, ring_bias, diamond_bias)
             texture = _texture_pattern(nx, ny, texture_style, texture_phase)
-            texture_mix = 0.34 + 0.40 * texture
-            metallic_edge = _clamp01(edge * (metal["outline_boost"] + 0.35 * texture))
+            texture_layer = texture_mix * (0.55 + 0.45 * texture)
+            metallic_edge = _clamp01(edge * (metal["outline_boost"] + metallic_outline_strength * (0.24 + 0.35 * texture)))
+            phase_drive = (
+                story_phase_bias[0] * _smoothstep(0.0, 0.33, story_geo)
+                + story_phase_bias[1] * _smoothstep(0.15, 0.55, story_geo)
+                + story_phase_bias[2] * _smoothstep(0.35, 0.82, story_geo)
+                + story_phase_bias[3] * _smoothstep(0.65, 1.0, story_geo)
+            )
 
-            hue = (base_hue + v * hue_span * (1.6 + 0.32 * texture) + geo * 0.05 + texture * 0.04) % 1.0
-            sat = min(1.0, max(0.0, sat_base + 0.16 * (1.0 - v) + geo * 0.08 - metal["metal_desat"] * metallic_edge))
-            val = _clamp01((0.14 + 0.62 * v + val_bias) * metal["background_dim"] * (0.84 + 0.14 * geo + 0.12 * texture_mix))
+            hue = (
+                base_hue
+                + v * hue_span * (1.1 + palette_motion + 0.22 * texture)
+                + story_geo * 0.07
+                + texture * 0.05
+                + diagonal_filament_strength * 0.03
+            ) % 1.0
+            sat = min(1.0, max(0.0, sat_base + 0.12 * (1.0 - v) + geo * 0.06 + story_geo * 0.08 - metal["metal_desat"] * metallic_edge))
+            val = _clamp01(
+                brightness_floor
+                + (0.18 + 0.50 * v + val_bias) * metal["background_dim"] * (0.84 + 0.12 * geo + 0.14 * texture_layer + 0.18 * story_geo)
+            )
 
             r, g, b = _hsv_to_rgb(hue, sat, val)
             rf, gf, bf = r / 255.0, g / 255.0, b / 255.0
             cool_metal = (0.46 + 0.30 * texture, 0.50 + 0.24 * texture, 0.58 + 0.18 * texture)
-            rf *= 0.82 + 0.12 * texture_mix
-            gf *= 0.84 + 0.10 * texture_mix
-            bf *= 0.92 + 0.08 * texture_mix
+            rf *= 0.86 + 0.10 * texture_layer
+            gf *= 0.88 + 0.10 * texture_layer
+            bf *= 0.94 + 0.08 * texture_layer
 
             light = _clamp01(0.5 + 0.5 * ((dx * 0.72 - dy * 0.54) / (abs(dx) + abs(dy) + 1e-9)))
-            specular = (metallic_edge ** 1.45) * (0.28 + metal["specular_strength"] * light)
-            metal_blend = metallic_edge * (0.40 + 0.26 * texture)
+            specular = (metallic_edge ** 1.45) * (0.22 + metal["specular_strength"] * light + 0.12 * phase_drive)
+            metal_blend = metallic_edge * (0.34 + 0.22 * texture + 0.18 * story_geo)
 
             rf = rf * (1.0 - metal_blend) + cool_metal[0] * metal_blend + specular * 0.90
             gf = gf * (1.0 - metal_blend) + cool_metal[1] * metal_blend + specular * 0.96
             bf = bf * (1.0 - metal_blend) + cool_metal[2] * metal_blend + specular * 1.08
 
-            glow = (0.04 + 0.20 * geo + 0.10 * texture) * (0.24 + 0.56 * v)
+            glow = (0.06 + 0.18 * geo + 0.12 * texture + 0.18 * story_geo) * (0.30 + 0.48 * v)
             rf += glow * 0.18
-            gf += glow * 0.14
-            bf += glow * 0.34
+            gf += glow * 0.18
+            bf += glow * 0.30
 
             rf = min(1.0, rf) ** gamma
             gf = min(1.0, gf) ** gamma
@@ -466,6 +554,21 @@ class GenerateRequest(BaseModel):
     sierpinski_weight: float = 0.10
     koch_weight: float = 0.08
     grid_weight: float = 0.12
+    story_mode: str = "diamond_resonance"
+    story_phase_bias: list[float] = Field(default_factory=lambda: [0.24, 0.28, 0.28, 0.20])
+    mandelbrot_mode: str = "rare"
+    mandelbrot_weight: float = 0.08
+    julia_weight: float = 0.74
+    ring_bias: float = 0.72
+    diamond_bias: float = 0.72
+    string_flow_strength: float = 0.68
+    diagonal_filament_strength: float = 0.58
+    texture_style: Optional[str] = None
+    texture_mix: float = 0.62
+    detail_density: float = 0.70
+    brightness_floor: float = 0.36
+    metallic_outline_strength: float = 0.58
+    palette_motion: float = 0.58
 
 
 @app.post("/generate")
@@ -500,6 +603,20 @@ async def generate_image(payload: GenerateRequest):
         sierpinski_weight=payload.sierpinski_weight,
         koch_weight=payload.koch_weight,
         grid_weight=payload.grid_weight,
+        story_mode=payload.story_mode,
+        story_phase_bias=payload.story_phase_bias,
+        mandelbrot_weight=payload.mandelbrot_weight,
+        julia_weight=payload.julia_weight,
+        ring_bias=payload.ring_bias,
+        diamond_bias=payload.diamond_bias,
+        string_flow_strength=payload.string_flow_strength,
+        diagonal_filament_strength=payload.diagonal_filament_strength,
+        texture_style=payload.texture_style,
+        texture_mix=payload.texture_mix,
+        detail_density=payload.detail_density,
+        brightness_floor=payload.brightness_floor,
+        metallic_outline_strength=payload.metallic_outline_strength,
+        palette_motion=payload.palette_motion,
     )
 
     filename = f"gen_{job_id}_{width}x{height}.png"
@@ -530,6 +647,23 @@ async def generate_image(payload: GenerateRequest):
                 "sierpinski_weight": payload.sierpinski_weight,
                 "koch_weight": payload.koch_weight,
                 "grid_weight": payload.grid_weight,
+            },
+            "narrative_settings": {
+                "story_mode": payload.story_mode,
+                "story_phase_bias": payload.story_phase_bias,
+                "mandelbrot_mode": payload.mandelbrot_mode,
+                "mandelbrot_weight": payload.mandelbrot_weight,
+                "julia_weight": payload.julia_weight,
+                "ring_bias": payload.ring_bias,
+                "diamond_bias": payload.diamond_bias,
+                "string_flow_strength": payload.string_flow_strength,
+                "diagonal_filament_strength": payload.diagonal_filament_strength,
+                "texture_style": payload.texture_style,
+                "texture_mix": payload.texture_mix,
+                "detail_density": payload.detail_density,
+                "brightness_floor": payload.brightness_floor,
+                "metallic_outline_strength": payload.metallic_outline_strength,
+                "palette_motion": payload.palette_motion,
             },
         },
     }

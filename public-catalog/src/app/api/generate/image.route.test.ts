@@ -2,6 +2,11 @@ import { describe, it, expect, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { POST } from "./image/route";
 
+type JsonResponseMock = {
+  ok: boolean;
+  json: () => Promise<Record<string, unknown>>;
+};
+
 describe("image route (direct)", () => {
   const originalFetch = globalThis.fetch;
   function makeReq(body: unknown) {
@@ -18,13 +23,13 @@ describe("image route (direct)", () => {
     expect(res.status).toBe(400);
   });
   it("generates image", async () => {
-    const fetchMock = vi.fn(async () => {
+    const fetchMock = vi.fn<() => Promise<JsonResponseMock>>(async () => {
       return {
         ok: true,
         json: async () => ({ success: true, imageUrl: "/uploads/test.png", meta: { provider: "fusion" } }),
-      } as any;
+      };
     });
-    globalThis.fetch = fetchMock as any;
+    globalThis.fetch = fetchMock as typeof fetch;
 
     const req = makeReq({ prompt: "peaceful ocean", width: 512, height: 512 });
     const res = await POST(req);
@@ -32,7 +37,11 @@ describe("image route (direct)", () => {
     const json = await res.json();
     expect(json.success).toBe(true);
     expect(typeof json.image_url === "string" || typeof json.imageUrl === "string").toBe(true);
-    const calledBody = JSON.parse((fetchMock.mock.calls[0]?.[1] as any).body);
+    const calledBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body || "{}")) as Record<string, unknown>;
     expect(calledBody.palette_profile).toBe("peaceful");
+    expect(calledBody.story_mode).toBeDefined();
+    expect(calledBody.mandelbrot_weight).toBeLessThanOrEqual(0.18);
+    expect(calledBody.brightness_floor).toBeGreaterThanOrEqual(0.2);
+    expect(json.meta?.narrative_settings?.story_mode).toBe(calledBody.story_mode);
   });
 });

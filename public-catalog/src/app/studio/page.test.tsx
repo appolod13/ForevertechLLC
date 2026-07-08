@@ -23,6 +23,18 @@ vi.mock('../../components/FusionAI', () => ({
   FusionAI: () => <div>FusionAI</div>,
 }));
 
+vi.mock('../../components/MerchPreviewPanel', () => ({
+  MerchPreviewPanel: () => (
+    <div>
+      <div>Buyer Preview</div>
+      <div>Printify Sample</div>
+      <div>
+        No Printify sample image is linked yet. The finished product mockup above still shows the buyer what the shirt looks like before purchase.
+      </div>
+    </div>
+  ),
+}));
+
 vi.mock('../../components/LatestAIImage', () => ({
   LatestAIImage: ({
     overrideUrl,
@@ -57,13 +69,6 @@ async function renderStudioPage() {
   renderWithProviders(<StudioPage />);
   await waitFor(() => {
     expect(screen.getByText('AI Asset Generator')).toBeInTheDocument();
-  });
-  await waitFor(() => {
-    expect(
-      (global.fetch as unknown as { mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> } }).mock.calls.some((c) =>
-        String(c[0]).includes('/api/printify/mockups'),
-      ),
-    ).toBe(true);
   });
 }
 
@@ -129,6 +134,16 @@ describe('StudioPage calendar date range', () => {
     expect(screen.getByText('Creator Studio')).toBeDefined();
     expect(screen.getByText('AI Asset Generator')).toBeDefined();
     expect(screen.getByPlaceholderText('Describe the image and post content you want to generate...')).toBeDefined();
+  });
+
+  it('keeps the main creation flow and hides dashboard-style secondary sections', async () => {
+    await renderStudioPage();
+
+    expect(screen.getByText('Latest Build Preview')).toBeInTheDocument();
+    expect(screen.queryByText('Multi-Channel Poster')).not.toBeInTheDocument();
+    expect(screen.queryByText('Live Chat')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Post to All Channels' })).not.toBeInTheDocument();
+    expect(screen.queryByText('@reddit_user')).not.toBeInTheDocument();
   });
 
   it('disables generate button until prompt is entered', async () => {
@@ -199,14 +214,6 @@ describe('StudioPage calendar date range', () => {
         'No Printify sample image is linked yet. The finished product mockup above still shows the buyer what the shirt looks like before purchase.',
       ),
     ).toBeInTheDocument();
-  });
-
-  it('shows Reddit, Discord, and RSS inside the Multi-Channel Poster', async () => {
-    await renderStudioPage();
-
-    expect(screen.getByText('@reddit_user')).toBeInTheDocument();
-    expect(screen.getByText('@Discord connected')).toBeInTheDocument();
-    expect(screen.getByText('@RSS feed')).toBeInTheDocument();
   });
 
   it('keeps the real generated image when LatestAIImage resolves to a placeholder svg', async () => {

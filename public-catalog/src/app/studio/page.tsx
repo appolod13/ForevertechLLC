@@ -46,6 +46,8 @@ export default function StudioPage() {
 }
 
 function StudioPageInner() {
+  const showPromptOptimizer = false;
+  const showDistributionTools = false;
   const searchParams = useSearchParams();
   const testMode = (searchParams?.get('test') || '') === '1';
   const scannedBackText = (searchParams?.get('back') || '').trim();
@@ -1153,7 +1155,7 @@ function StudioPageInner() {
       <main className="max-w-6xl mx-auto p-4 sm:p-6 md:p-8">
         <h1 className="text-3xl sm:text-4xl font-bold mb-6 sm:mb-8">Creator Studio</h1>
         
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-12">
+        <div className={`grid grid-cols-1 gap-6 md:gap-12 ${showDistributionTools ? 'lg:grid-cols-2' : ''}`}>
           <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-4 sm:p-6 lg:p-8 rounded-xl border border-gray-700">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
@@ -1170,34 +1172,38 @@ function StudioPageInner() {
                 value={prompt}
                 onChange={e => setPrompt(e.target.value)}
               />
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={crossOptimizePrompt}
-                  disabled={crossOptimizeLoading || !prompt || isGenerating}
-                  className={`px-4 py-2 rounded-lg font-semibold text-sm border ${crossOptimizeLoading || !prompt || isGenerating ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 border-blue-500/30 text-white'}`}
-                >
-                  {crossOptimizeLoading ? 'Optimizing...' : 'Optimize Prompt (Cross-Agent)'}
-                </button>
-                {crossOptimizeError && (
-                  <div className="text-sm text-yellow-300">
-                    {crossOptimizeError}
-                  </div>
-                )}
-              </div>
-              {crossOptimizeReports && (
-                <div className="rounded-lg border border-gray-700 bg-gray-900 p-3 text-xs text-gray-300 space-y-2">
-                  {crossOptimizeReports.map((r, idx) => (
-                    <div key={`${r.model}-${idx}`} className="border-b border-gray-800 pb-2 last:border-b-0 last:pb-0">
-                      <div className="text-gray-400">
-                        {String(r.role)} • {String(r.model)}{r.error ? ` • error=${String(r.error)}` : ''}
+              {showPromptOptimizer ? (
+                <>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={crossOptimizePrompt}
+                      disabled={crossOptimizeLoading || !prompt || isGenerating}
+                      className={`px-4 py-2 rounded-lg font-semibold text-sm border ${crossOptimizeLoading || !prompt || isGenerating ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 border-blue-500/30 text-white'}`}
+                    >
+                      {crossOptimizeLoading ? 'Optimizing...' : 'Optimize Prompt (Cross-Agent)'}
+                    </button>
+                    {crossOptimizeError && (
+                      <div className="text-sm text-yellow-300">
+                        {crossOptimizeError}
                       </div>
-                      {!r.error && (
-                        <div className="mt-1 whitespace-pre-wrap">{String(r.output).slice(0, 1200)}</div>
-                      )}
+                    )}
+                  </div>
+                  {crossOptimizeReports && (
+                    <div className="rounded-lg border border-gray-700 bg-gray-900 p-3 text-xs text-gray-300 space-y-2">
+                      {crossOptimizeReports.map((r, idx) => (
+                        <div key={`${r.model}-${idx}`} className="border-b border-gray-800 pb-2 last:border-b-0 last:pb-0">
+                          <div className="text-gray-400">
+                            {String(r.role)} • {String(r.model)}{r.error ? ` • error=${String(r.error)}` : ''}
+                          </div>
+                          {!r.error && (
+                            <div className="mt-1 whitespace-pre-wrap">{String(r.output).slice(0, 1200)}</div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
+                  )}
+                </>
+              ) : null}
               <div className="grid gap-3 md:grid-cols-2">
                 <label className={`rounded-lg border p-3 transition-all cursor-pointer ${!quantumMode ? 'border-white bg-white/5 shadow-[0_0_15px_rgba(255,255,255,0.08)]' : 'border-gray-700 hover:border-gray-600'}`}>
                   <div className="flex items-start gap-3">
@@ -1422,7 +1428,7 @@ function StudioPageInner() {
                   </div>
                 </div>
               ) : null}
-              {generatedImage && generatedTextContent && (
+              {showDistributionTools && generatedImage && generatedTextContent && (
                 <button
                   onClick={() => {
                     setPostContent(generatedTextContent);
@@ -1431,13 +1437,13 @@ function StudioPageInner() {
                   }}
                   className="mt-4 w-full py-3 rounded-lg font-bold bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center gap-2"
                 >
-                  <Send className="w-5 h-5" />
                   Send to Multi-Channel Poster
                 </button>
               )}
             </div>
           </div>
 
+          {showDistributionTools ? (
           <div
             id="multi-channel-poster"
             className="bg-gradient-to-b from-gray-800 to-gray-900 p-4 sm:p-6 lg:p-8 rounded-xl border border-gray-700"
@@ -1840,6 +1846,7 @@ function StudioPageInner() {
               })()}
             </div>
           </div>
+          ) : null}
         </div>
       </main>
     </div>

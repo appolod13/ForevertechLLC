@@ -19,6 +19,7 @@ import { processFractalPromo, recommendFractalSettings, previewPromoRecommendati
 import { getQuantumSeed } from "@/lib/quantum-seed";
 import { calculateFractalDimension } from "@/lib/fractal-dimension";
 import { paletteProfileFromPrompt } from "@/lib/paletteProfile";
+import { buildNarrativeRenderSettings, type NarrativeRenderSettings } from "@/lib/narrativeRenderSettings";
 
 // === HELPERS ===
 function isLocalHostUrl(value: string): boolean {
@@ -71,6 +72,7 @@ async function tryQuantumHybridGenerate(
   use_fractal_fusion: boolean = true,
   palette_profile?: string,
   seed?: number,
+  narrativeSettings?: NarrativeRenderSettings,
 ) {
   const cfg = getAiGeneratorsConfig();
   const base = cfg.quantum?.internalBaseUrl?.trim().replace(/\/$/, "");
@@ -93,6 +95,7 @@ async function tryQuantumHybridGenerate(
         use_fractal_fusion,
         palette_profile,
         seed,
+        ...narrativeSettings,
       }),
       cache: "no-store",
       signal: controller.signal,
@@ -130,6 +133,7 @@ async function tryFusionGenerate(
   timeoutMs: number,
   palette_profile: string,
   seed: number,
+  narrativeSettings: NarrativeRenderSettings,
 ) {
   const cfg = getAiGeneratorsConfig();
   const base = cfg.fusion?.internalBaseUrl?.trim().replace(/\/$/, "");
@@ -152,6 +156,7 @@ async function tryFusionGenerate(
         seed,
         palette_profile,
         quality: 2,
+        ...narrativeSettings,
       }),
       cache: "no-store",
       signal: controller.signal,
@@ -201,6 +206,11 @@ export async function POST(req: NextRequest) {
     const provider = (body.provider || "") as string;
     const palette_profile = paletteProfileFromPrompt(prompt);
     const seed: number = typeof body.seed === "number" ? body.seed : generateSeed();
+    const narrativeSettings = buildNarrativeRenderSettings({
+      prompt,
+      seed,
+      paletteProfile: palette_profile,
+    });
 
     let result: any = null;
 
@@ -218,7 +228,8 @@ export async function POST(req: NextRequest) {
         negative_prompt,
         45000,
         palette_profile,
-        seed
+        seed,
+        narrativeSettings,
       );
     } catch (quantumErr) {
       logError("quantum.hybrid.failed", quantumErr);
@@ -235,7 +246,8 @@ export async function POST(req: NextRequest) {
           45000,
           use_fractal_fusion,
           palette_profile,
-          seed
+          seed,
+          narrativeSettings,
         );
       } catch (fallbackErr) {
         logError("fallback.generate.failed", fallbackErr);
@@ -282,6 +294,11 @@ export async function POST(req: NextRequest) {
         value: parseFloat(dim.value.toFixed(4)),
         method: dim.method,
         label: dim.label
+      };
+      result.meta = {
+        ...(isRecord(result.meta) ? result.meta : {}),
+        palette_profile,
+        narrative_settings: narrativeSettings,
       };
     }
 
