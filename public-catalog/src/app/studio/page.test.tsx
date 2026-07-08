@@ -244,4 +244,50 @@ describe('StudioPage calendar date range', () => {
     expect(customizeLink).toHaveAttribute('href', expect.stringContaining(encodeURIComponent('https://example.com/real-generated.png')));
     expect(customizeLink).not.toHaveAttribute('href', expect.stringContaining(encodeURIComponent('data:image/svg+xml')));
   });
+
+  it('shows free session count from stored generation session', async () => {
+    localStorage.setItem(
+      'foreverteck.studio.generationSession',
+      JSON.stringify({
+        generation_count: 7,
+        reset_version: 1,
+        family_bias_seed: 123,
+        bad_output_streak: 0,
+      }),
+    );
+
+    await renderStudioPage();
+
+    expect(screen.getByText('Free session: 7/20')).toBeInTheDocument();
+  });
+
+  it('shows reset generator action at the free limit and clears preview state when clicked', async () => {
+    localStorage.setItem(
+      'foreverteck.studio.lastImage',
+      JSON.stringify({
+        imageUrl: 'https://example.com/latest-build.png',
+        prompt: 'quantum skyline tee',
+      }),
+    );
+    localStorage.setItem(
+      'foreverteck.studio.generationSession',
+      JSON.stringify({
+        generation_count: 20,
+        reset_version: 2,
+        family_bias_seed: 123,
+        bad_output_streak: 1,
+      }),
+    );
+
+    await renderStudioPage();
+
+    const resetButton = screen.getByRole('button', { name: 'Reset Generator' });
+    expect(resetButton).toBeInTheDocument();
+    fireEvent.click(resetButton);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('link', { name: 'Customize Your Gear' })).not.toBeInTheDocument();
+    });
+    expect(localStorage.getItem('foreverteck.studio.lastImage')).toBeNull();
+  });
 });

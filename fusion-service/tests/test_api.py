@@ -102,6 +102,15 @@ def test_generate_endpoint_forwards_render_params_to_fractal_fusion(monkeypatch)
     assert captured["kwargs"]["center_x"] == -0.42
     assert captured["kwargs"]["center_y"] == 0.18
 
+def test_generate_endpoint_returns_quality_gate_and_wormhole_meta():
+    response = client.post("/generate", json={"prompt": "magma rainbow wormhole", "width": 96, "height": 96, "seed": 123})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert "quality_gate" in data["meta"]
+    assert "family_mix" in data["meta"]
+    assert "wormhole_depth" in data["meta"]
+
 def test_fractal_fusion_rgb_render_params_change_output():
     base = fusion_main.fractal_fusion_rgb(48, 48, "same prompt", 123)
     quality_variant = fusion_main.fractal_fusion_rgb(48, 48, "same prompt", 123, quality=2)

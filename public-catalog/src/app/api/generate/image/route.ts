@@ -33,6 +33,12 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 type Platform = "linkedin" | "instagram" | "twitter";
 type Provider = "mock" | "dalle" | "stablediffusion" | "midjourney";
 type GenerationResult = Record<string, unknown> & { image_url?: string; meta?: Record<string, unknown> };
+type GenerationSession = {
+  generation_count: number;
+  reset_version: number;
+  family_bias_seed: number;
+  bad_output_streak: number;
+};
 
 function asPlatform(v: unknown): Platform {
   return v === "instagram" ? "instagram" : v === "twitter" ? "twitter" : "linkedin";
@@ -44,6 +50,41 @@ function asProvider(v: unknown): Provider {
 
 function generateSeed(): number {
   return randomInt(0, 0x7fffffff);
+}
+
+function coerceGenerationSession(value: unknown): GenerationSession {
+  const obj = isRecord(value) ? value : {};
+  const generation_count = typeof obj.generation_count === "number" ? Math.max(0, Math.floor(obj.generation_count)) : 0;
+  const reset_version = typeof obj.reset_version === "number" ? Math.max(0, Math.floor(obj.reset_version)) : 0;
+  const family_bias_seed = typeof obj.family_bias_seed === "number" ? Math.max(0, Math.floor(obj.family_bias_seed)) : 0;
+  const bad_output_streak = typeof obj.bad_output_streak === "number" ? Math.max(0, Math.floor(obj.bad_output_streak)) : 0;
+  return { generation_count, reset_version, family_bias_seed, bad_output_streak };
+}
+
+function resetGenerationSession(current: GenerationSession): GenerationSession {
+  return {
+    generation_count: 0,
+    reset_version: current.reset_version + 1,
+    family_bias_seed: generateSeed(),
+    bad_output_streak: 0,
+  };
+}
+
+function describeFamilyMix(paletteProfile: string, storyMode: string): {
+  primary: string;
+  secondary: string;
+  accent: string;
+  wormhole: string;
+} {
+  const primary = paletteProfile === "magma" ? "magma_ribbon" : paletteProfile === "peaceful" ? "pastel_lace" : "rainbow_scallop";
+  const secondary = storyMode.includes("ring") || storyMode.includes("diamond") ? "rainbow_scallop" : "pastel_lace";
+  const accent = primary === "pastel_lace" ? "magma_ribbon" : "pastel_lace";
+  return {
+    primary,
+    secondary,
+    accent,
+    wormhole: "dimensional_drift_wormhole",
+  };
 }
 
 // === QUANTUM HYBRID GENERATOR ===
@@ -189,6 +230,18 @@ async function tryFusionGenerate(
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
+    const currentSession = coerceGenerationSession(isRecord(body) ? body.generation_session : undefined);
+
+    if (isRecord(body) && body.reset_generation === true) {
+      const nextSession = resetGenerationSession(currentSession);
+      return NextResponse.json({
+        success: true,
+        reset: true,
+        meta: {
+          generation_session: nextSession,
+        },
+      });
+    }
 
     if (!body.prompt || typeof body.prompt !== "string") {
       return NextResponse.json({ success: false, error: "Prompt is required" }, { status: 400 });
@@ -206,7 +259,8 @@ export async function POST(req: NextRequest) {
     const fallbackProvider = asProvider(provider);
     const derivedPalette = paletteProfileFromPrompt(prompt);
     const palette_profile = derivedPalette === "quantum" ? "magma" : derivedPalette;
-    const seed: number = typeof body.seed === "number" ? body.seed : generateSeed();
+    const requestedSeed = typeof body.seed === "number" ? body.seed : generateSeed();
+    const seed: number = requestedSeed + currentSession.family_bias_seed + currentSession.reset_version * 1009;
     const narrativeSettings = buildNarrativeRenderSettings({
       prompt,
       seed,
@@ -286,6 +340,12 @@ export async function POST(req: NextRequest) {
 
     // 5. Add Fractal Dimension (NEW)
     if (result) {
+      const nextSession: GenerationSession = {
+        generation_count: currentSession.generation_count + 1,
+        reset_version: currentSession.reset_version,
+        family_bias_seed: currentSession.family_bias_seed,
+        bad_output_streak: 0,
+      };
       const dim = calculateFractalDimension(prompt);
       result.fractal_dimension = {
         value: parseFloat(dim.value.toFixed(4)),
@@ -296,6 +356,8 @@ export async function POST(req: NextRequest) {
         ...(isRecord(result.meta) ? result.meta : {}),
         palette_profile,
         narrative_settings: narrativeSettings,
+        generation_session: nextSession,
+        family_mix: describeFamilyMix(palette_profile, narrativeSettings.story_mode),
       };
     }
 

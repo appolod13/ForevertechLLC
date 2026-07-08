@@ -244,6 +244,80 @@ def _quantum_grid(nx: float, ny: float, freq: float, phase: float) -> float:
     return 0.5 + 0.5 * (a * b)
 
 
+def _describe_family_mix(palette_profile: Optional[str], story_mode: str) -> dict[str, str]:
+    profile = (palette_profile or "").strip().lower()
+    primary = "magma_ribbon" if profile in {"magma", "lava", "fire", "heat"} else "pastel_lace" if profile in {"peaceful", "serene", "ethereal", "dreamlike"} else "rainbow_scallop"
+    secondary = "rainbow_scallop" if "ring" in story_mode or "diamond" in story_mode else "pastel_lace"
+    accent = "pastel_lace" if primary != "pastel_lace" else "magma_ribbon"
+    return {
+        "primary": primary,
+        "secondary": secondary,
+        "accent": accent,
+        "wormhole": "dimensional_drift_wormhole",
+    }
+
+
+def _score_render_quality(width: int, height: int, rgb: bytes) -> dict[str, float | bool]:
+    if width <= 1 or height <= 1 or not rgb:
+        return {
+            "edge_density": 0.0,
+            "local_variance": 0.0,
+            "flat_area": 1.0,
+            "score": 0.0,
+            "passed": False,
+        }
+
+    step = max(1, min(width, height) // 48)
+    sample_count = 0
+    edge_hits = 0
+    luminance_sum = 0.0
+    luminance_sq_sum = 0.0
+    flat_hits = 0
+    for y in range(0, height - 1, step):
+        for x in range(0, width - 1, step):
+            idx = (y * width + x) * 3
+            idx_r = (y * width + min(width - 1, x + step)) * 3
+            idx_d = (min(height - 1, y + step) * width + x) * 3
+            r = rgb[idx]
+            g = rgb[idx + 1]
+            b = rgb[idx + 2]
+            lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
+            dx = (
+                abs(r - rgb[idx_r])
+                + abs(g - rgb[idx_r + 1])
+                + abs(b - rgb[idx_r + 2])
+            ) / (255.0 * 3.0)
+            dy = (
+                abs(r - rgb[idx_d])
+                + abs(g - rgb[idx_d + 1])
+                + abs(b - rgb[idx_d + 2])
+            ) / (255.0 * 3.0)
+            grad = max(dx, dy)
+            if grad > 0.14:
+                edge_hits += 1
+            if grad < 0.04 and 0.12 < lum < 0.88:
+                flat_hits += 1
+            luminance_sum += lum
+            luminance_sq_sum += lum * lum
+            sample_count += 1
+
+    if sample_count == 0:
+        sample_count = 1
+    edge_density = edge_hits / sample_count
+    flat_area = flat_hits / sample_count
+    mean_lum = luminance_sum / sample_count
+    local_variance = max(0.0, luminance_sq_sum / sample_count - mean_lum * mean_lum)
+    score = edge_density * 0.55 + min(0.25, local_variance) * 1.1 + (1.0 - flat_area) * 0.20
+    passed = edge_density >= 0.16 and flat_area <= 0.62 and local_variance >= 0.008 and score >= 0.24
+    return {
+        "edge_density": round(edge_density, 4),
+        "local_variance": round(local_variance, 4),
+        "flat_area": round(flat_area, 4),
+        "score": round(score, 4),
+        "passed": passed,
+    }
+
+
 def fractal_fusion_rgb(
     width: int,
     height: int,
@@ -663,41 +737,66 @@ async def generate_image(payload: GenerateRequest):
 
     seed = payload.seed if isinstance(payload.seed, int) and payload.seed != -1 else (abs(hash(payload.prompt)) % (2**31))
 
-    rgb = fractal_fusion_rgb(
-        width,
-        height,
-        payload.prompt,
-        seed,
-        quality=payload.quality,
-        iterations=payload.iterations,
-        palette_index=payload.palette_index,
-        rotation=payload.rotation,
-        zoom_level=payload.zoom_level,
-        center_x=payload.center_x,
-        center_y=payload.center_y,
-        palette_profile=payload.palette_profile,
-        wormhole_strength=payload.wormhole_strength,
-        wormhole_swirl=payload.wormhole_swirl,
-        wormhole_center_x=payload.wormhole_center_x,
-        wormhole_center_y=payload.wormhole_center_y,
-        sierpinski_weight=payload.sierpinski_weight,
-        koch_weight=payload.koch_weight,
-        grid_weight=payload.grid_weight,
-        story_mode=payload.story_mode,
-        story_phase_bias=payload.story_phase_bias,
-        mandelbrot_weight=payload.mandelbrot_weight,
-        julia_weight=payload.julia_weight,
-        ring_bias=payload.ring_bias,
-        diamond_bias=payload.diamond_bias,
-        string_flow_strength=payload.string_flow_strength,
-        diagonal_filament_strength=payload.diagonal_filament_strength,
-        texture_style=payload.texture_style,
-        texture_mix=payload.texture_mix,
-        detail_density=payload.detail_density,
-        brightness_floor=payload.brightness_floor,
-        metallic_outline_strength=payload.metallic_outline_strength,
-        palette_motion=payload.palette_motion,
-    )
+    retry_count = 0
+    quality_gate: dict[str, float | bool] = {}
+    rgb = b""
+    current_detail_density = payload.detail_density
+    current_texture_mix = payload.texture_mix
+    current_brightness_floor = payload.brightness_floor
+    current_diagonal_filament_strength = payload.diagonal_filament_strength
+    current_ring_bias = payload.ring_bias
+    current_diamond_bias = payload.diamond_bias
+    current_wormhole_strength = payload.wormhole_strength
+    current_wormhole_swirl = payload.wormhole_swirl
+
+    for attempt in range(3):
+        retry_count = attempt
+        rgb = fractal_fusion_rgb(
+            width,
+            height,
+            payload.prompt,
+            seed,
+            quality=payload.quality,
+            iterations=payload.iterations,
+            palette_index=payload.palette_index,
+            rotation=payload.rotation,
+            zoom_level=payload.zoom_level,
+            center_x=payload.center_x,
+            center_y=payload.center_y,
+            palette_profile=payload.palette_profile,
+            wormhole_strength=current_wormhole_strength,
+            wormhole_swirl=current_wormhole_swirl,
+            wormhole_center_x=payload.wormhole_center_x,
+            wormhole_center_y=payload.wormhole_center_y,
+            sierpinski_weight=payload.sierpinski_weight,
+            koch_weight=payload.koch_weight,
+            grid_weight=payload.grid_weight,
+            story_mode=payload.story_mode,
+            story_phase_bias=payload.story_phase_bias,
+            mandelbrot_weight=payload.mandelbrot_weight,
+            julia_weight=payload.julia_weight,
+            ring_bias=current_ring_bias,
+            diamond_bias=current_diamond_bias,
+            string_flow_strength=payload.string_flow_strength,
+            diagonal_filament_strength=current_diagonal_filament_strength,
+            texture_style=payload.texture_style,
+            texture_mix=current_texture_mix,
+            detail_density=current_detail_density,
+            brightness_floor=current_brightness_floor,
+            metallic_outline_strength=payload.metallic_outline_strength,
+            palette_motion=payload.palette_motion,
+        )
+        quality_gate = _score_render_quality(width, height, rgb)
+        if quality_gate["passed"]:
+            break
+        current_detail_density = min(0.95, current_detail_density + 0.08)
+        current_texture_mix = min(0.95, current_texture_mix + 0.06)
+        current_brightness_floor = max(0.22, current_brightness_floor - 0.03)
+        current_diagonal_filament_strength = min(0.95, current_diagonal_filament_strength + 0.06)
+        current_ring_bias = min(0.95, current_ring_bias + 0.04)
+        current_diamond_bias = min(0.95, current_diamond_bias + 0.04)
+        current_wormhole_strength = 0.52 if current_wormhole_strength is None else min(0.9, current_wormhole_strength + 0.08)
+        current_wormhole_swirl = 1.18 if current_wormhole_swirl is None else min(1.8, current_wormhole_swirl + 0.10)
 
     filename = f"gen_{job_id}_{width}x{height}.png"
     out_path = os.path.join("uploads", filename)
@@ -717,9 +816,19 @@ async def generate_image(payload: GenerateRequest):
             "height": height,
             "palette_profile": payload.palette_profile,
             "texture_style": _texture_style_for_seed(seed),
+            "family_mix": _describe_family_mix(payload.palette_profile, payload.story_mode),
+            "quality_gate": {
+                **quality_gate,
+                "retry_count": retry_count,
+            },
+            "wormhole_depth": {
+                "strength": current_wormhole_strength if current_wormhole_strength is not None else payload.wormhole_strength,
+                "swirl": current_wormhole_swirl if current_wormhole_swirl is not None else payload.wormhole_swirl,
+                "depth_bias": round(min(1.0, 0.45 + current_detail_density * 0.35 + payload.palette_motion * 0.20), 4),
+            },
             "wormhole": {
-                "strength": payload.wormhole_strength,
-                "swirl": payload.wormhole_swirl,
+                "strength": current_wormhole_strength if current_wormhole_strength is not None else payload.wormhole_strength,
+                "swirl": current_wormhole_swirl if current_wormhole_swirl is not None else payload.wormhole_swirl,
                 "center_x": payload.wormhole_center_x,
                 "center_y": payload.wormhole_center_y,
             },

@@ -17,6 +17,17 @@ import {
   type StoredGenerationRecord,
 } from '@/lib/creatorArtifacts';
 
+type GenerationSession = {
+  generation_count: number;
+  reset_version: number;
+  family_bias_seed: number;
+  bad_output_streak: number;
+};
+
+const GENERATION_SESSION_KEY = 'foreverteck.studio.generationSession';
+const LAST_IMAGE_KEY = 'foreverteck.studio.lastImage';
+const GENERATION_LIMIT = 20;
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
 }
@@ -32,6 +43,16 @@ function pickPreferredImageUrl(primary: string | null | undefined, secondary: st
   if (first && !isFallbackImageUrl(first)) return first;
   if (second && !isFallbackImageUrl(second)) return second;
   return first || second || null;
+}
+
+function coerceGenerationSession(value: unknown): GenerationSession {
+  const obj = isRecord(value) ? value : {};
+  return {
+    generation_count: typeof obj.generation_count === 'number' ? Math.max(0, Math.floor(obj.generation_count)) : 0,
+    reset_version: typeof obj.reset_version === 'number' ? Math.max(0, Math.floor(obj.reset_version)) : 0,
+    family_bias_seed: typeof obj.family_bias_seed === 'number' ? Math.max(0, Math.floor(obj.family_bias_seed)) : 0,
+    bad_output_streak: typeof obj.bad_output_streak === 'number' ? Math.max(0, Math.floor(obj.bad_output_streak)) : 0,
+  };
 }
 
 export default function StudioPage() {
@@ -74,6 +95,13 @@ function StudioPageInner() {
     metadata: Record<string, unknown>;
   } | null>(null);
   const [lastGenTimestamp, setLastGenTimestamp] = useState<number>(Date.now());
+  const [previewDismissed, setPreviewDismissed] = useState(false);
+  const [generationSession, setGenerationSession] = useState<GenerationSession>({
+    generation_count: 0,
+    reset_version: 0,
+    family_bias_seed: 0,
+    bad_output_streak: 0,
+  });
 
   const [pipelineStage, setPipelineStage] = useState<string>('');
   const [progress, setProgress] = useState<number>(0);
@@ -82,7 +110,10 @@ function StudioPageInner() {
   const [logs, setLogs] = useState<
     { time: string; msg: string; code?: string; type: 'info' | 'error' | 'warn' | 'success' }[]
   >([]);
-  const previewImageUrl = useMemo(() => pickPreferredImageUrl(generatedImage, latestDropImageUrl), [generatedImage, latestDropImageUrl]);
+  const previewImageUrl = useMemo(() => {
+    if (previewDismissed && !generatedImage.trim()) return null;
+    return pickPreferredImageUrl(generatedImage, latestDropImageUrl);
+  }, [generatedImage, latestDropImageUrl, previewDismissed]);
 
   const addLog = (msg: string, type: 'info' | 'error' | 'warn' | 'success' = 'info', code?: string) => {
     const t = new Date();
@@ -118,13 +149,14 @@ function StudioPageInner() {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem('foreverteck.studio.lastImage');
+      const raw = localStorage.getItem(LAST_IMAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw) as unknown;
       if (!parsed || typeof parsed !== 'object') return;
       const rec = parsed as { imageUrl?: unknown; meta?: unknown; prompt?: unknown; quantumMode?: unknown };
       if (typeof rec.imageUrl === 'string' && rec.imageUrl.trim()) {
         setGeneratedImage(rec.imageUrl);
+        setPreviewDismissed(false);
       }
       if (typeof rec.prompt === 'string') {
         const restored = rec.prompt.trim();
@@ -156,12 +188,22 @@ function StudioPageInner() {
   }, []);
 
   useEffect(() => {
+    try {
+      const raw = localStorage.getItem(GENERATION_SESSION_KEY);
+      if (!raw) return;
+      setGenerationSession(coerceGenerationSession(JSON.parse(raw) as unknown));
+    } catch {
+    }
+  }, []);
+
+  useEffect(() => {
     if (!quantumMode && quantumUnlocked) {
       setQuantumUnlocked(false);
     }
   }, [quantumMode, quantumUnlocked]);
 
   const generationMode = quantumMode ? 'real_quantum' : 'standard';
+  const freeSessionFull = generationSession.generation_count >= GENERATION_LIMIT;
 
   const generationButtonLabel = (() => {
     if (isGenerating) return 'Dreaming...';
@@ -235,7 +277,8 @@ function StudioPageInner() {
         width: 1024, 
         height: 1024,
         quantum_mode: quantumMode,
-        ipfs_upload: ipfsEnabled
+        ipfs_upload: ipfsEnabled,
+        generation_session: generationSession,
       };
 
       const maxAttempts = testMode
@@ -395,6 +438,7 @@ function StudioPageInner() {
       }
 
       setGeneratedImage(imageUrl);
+      setPreviewDismissed(false);
       
       // Generate associated content automatically
       try {
@@ -496,6 +540,9 @@ function StudioPageInner() {
         ...metaObj
       };
 
+      const nextSession = coerceGenerationSession(metaObj.generation_session);
+      setGenerationSession(nextSession);
+
       setGenerationMetadata({
         timestamp: new Date().toISOString(),
         model: String(meta.model),
@@ -504,9 +551,10 @@ function StudioPageInner() {
 
       try {
         localStorage.setItem(
-          'foreverteck.studio.lastImage',
+          LAST_IMAGE_KEY,
           JSON.stringify({ imageUrl, meta, prompt, quantumMode }),
         );
+        localStorage.setItem(GENERATION_SESSION_KEY, JSON.stringify(nextSession));
       } catch {}
 
       try {
@@ -587,6 +635,30 @@ function StudioPageInner() {
     }
   };
 
+  const handleResetGenerator = () => {
+    const nextSession: GenerationSession = {
+      generation_count: 0,
+      reset_version: generationSession.reset_version + 1,
+      family_bias_seed: Date.now(),
+      bad_output_streak: 0,
+    };
+    setGeneratedImage('');
+    setLatestDropImageUrl(null);
+    setPreviewDismissed(true);
+    setGeneratedTextContent('');
+    setGenerationMetadata(undefined);
+    setGenerationError(null);
+    setQuantumRecord(null);
+    setGenerationSession(nextSession);
+    setLastGenTimestamp(Date.now());
+    try {
+      localStorage.removeItem(LAST_IMAGE_KEY);
+      localStorage.setItem(GENERATION_SESSION_KEY, JSON.stringify(nextSession));
+    } catch {
+    }
+    addLog('Generator reset. Starting a fresh free session.', 'success', 'I_RESET');
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 text-white" data-hydrated={hydrated ? '1' : '0'}>
       <Header />
@@ -604,6 +676,23 @@ function StudioPageInner() {
             </div>
             
             <div className="space-y-4">
+              <div className="rounded-lg border border-gray-700 bg-gray-900/70 px-3 py-2 text-sm text-gray-300">
+                <div className="flex items-center justify-between gap-3">
+                  <span>{`Free session: ${generationSession.generation_count}/${GENERATION_LIMIT}`}</span>
+                  {freeSessionFull ? (
+                    <button
+                      type="button"
+                      onClick={handleResetGenerator}
+                      className="rounded-md border border-purple-400/40 bg-purple-500/10 px-3 py-1 text-xs font-semibold text-purple-200 hover:bg-purple-500/20"
+                    >
+                      Reset Generator
+                    </button>
+                  ) : null}
+                </div>
+                <div className="mt-1 text-xs text-gray-500">
+                  Reset clears the latest preview and starts a fresh free generation cycle.
+                </div>
+              </div>
               <textarea 
                 className="w-full bg-gray-900 border border-gray-600 rounded-lg p-4 h-32 focus:ring-2 focus:ring-purple-500 outline-none"
                 placeholder="Describe the image and post content you want to generate..."
@@ -677,7 +766,7 @@ function StudioPageInner() {
               </div>
               <button 
                 onClick={handleGenerationAction}
-                disabled={isGenerating || !prompt}
+                disabled={isGenerating || !prompt || freeSessionFull}
                 className={`w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2 ${isGenerating || !prompt ? 'bg-gray-700 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-500'}`}
               >
                 {generationButtonLabel}
@@ -760,6 +849,7 @@ function StudioPageInner() {
                   key={lastGenTimestamp}
                   overrideUrl={generatedImage}
                   onResolvedUrl={(url) => {
+                    if (previewDismissed && !generatedImage.trim()) return;
                     setLatestDropImageUrl((prev) => pickPreferredImageUrl(generatedImage, url) || pickPreferredImageUrl(generatedImage, prev));
                   }}
                 />

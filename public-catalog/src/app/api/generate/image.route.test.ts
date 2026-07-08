@@ -96,4 +96,69 @@ describe("image route (direct)", () => {
     const calledBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body || "{}")) as Record<string, unknown>;
     expect(calledBody.palette_profile).toBe("magma");
   });
+
+  it("increments generation session metadata on successful generation", async () => {
+    const fetchMock = vi.fn<() => Promise<JsonResponseMock>>(async () => {
+      return {
+        ok: true,
+        json: async () => ({ success: true, imageUrl: "/uploads/test.png", meta: { provider: "fusion" } }),
+      };
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const req = makeReq({
+      prompt: "fractal ribbons",
+      width: 512,
+      height: 512,
+      generation_session: {
+        generation_count: 2,
+        reset_version: 1,
+        family_bias_seed: 77,
+        bad_output_streak: 0,
+      },
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.meta?.generation_session).toEqual({
+      generation_count: 3,
+      reset_version: 1,
+      family_bias_seed: 77,
+      bad_output_streak: 0,
+    });
+    expect(json.meta?.family_mix).toEqual(
+      expect.objectContaining({
+        primary: expect.any(String),
+        secondary: expect.any(String),
+        accent: expect.any(String),
+        wormhole: "dimensional_drift_wormhole",
+      }),
+    );
+  });
+
+  it("resets generation session without calling render providers", async () => {
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const req = makeReq({
+      reset_generation: true,
+      generation_session: {
+        generation_count: 20,
+        reset_version: 4,
+        family_bias_seed: 99,
+        bad_output_streak: 2,
+      },
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.reset).toBe(true);
+    expect(json.meta?.generation_session?.generation_count).toBe(0);
+    expect(json.meta?.generation_session?.reset_version).toBe(5);
+    expect(json.meta?.generation_session?.bad_output_streak).toBe(0);
+    expect(typeof json.meta?.generation_session?.family_bias_seed).toBe("number");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
