@@ -313,7 +313,12 @@ export async function POST(req: NextRequest) {
     // Optional IPFS upload
     if (body.ipfs_upload) {
       try {
-        const ipfs = await uploadToIpfs(result.image_url);
+        const safeFilename = `${orderId}`.replace(/[^a-z0-9_.-]+/gi, "_") + ".png";
+        const ipfs = await uploadToIpfs({
+          imageUrl: result.image_url,
+          filename: safeFilename,
+          internalBaseUrl: req.nextUrl.origin,
+        });
         result.ipfs = ipfs;
       } catch (ipfsErr) {
         logError("ipfs.upload.failed", ipfsErr);
