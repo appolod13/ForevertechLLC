@@ -55,6 +55,40 @@ function isDarkPalette(profile?: string | null, prompt?: string) {
   return /(void|dark|shadow|abyss|ominous|grief)/.test(source);
 }
 
+function pickStoryMode(
+  rand: () => number,
+  prompt: string,
+): NarrativeRenderSettings['story_mode'] {
+  const weights: Array<[NarrativeRenderSettings['story_mode'], number]> = [
+    ['diamond_resonance', 1],
+    ['ring_memory', 1],
+    ['diagonal_current', 1],
+    ['spiral_filament', 1],
+  ];
+
+  if (/(diamond|ring|concentric|textile|woven|fabric|electric|cyan|magenta|violet|abstract)/.test(prompt)) {
+    weights[0][1] += 1.25;
+    weights[1][1] += 1.05;
+    weights[2][1] -= 0.2;
+    weights[3][1] -= 0.1;
+  }
+  if (/(diagonal|current|filament)/.test(prompt)) {
+    weights[2][1] += 0.8;
+  }
+  if (/(spiral|swirl|vortex)/.test(prompt)) {
+    weights[3][1] += 0.8;
+  }
+
+  const total = weights.reduce((sum, [, weight]) => sum + Math.max(0.1, weight), 0);
+  let cursor = rand() * total;
+  for (const [mode, rawWeight] of weights) {
+    const weight = Math.max(0.1, rawWeight);
+    cursor -= weight;
+    if (cursor <= 0) return mode;
+  }
+  return 'diamond_resonance';
+}
+
 export function buildNarrativeRenderSettings({
   prompt,
   seed,
@@ -64,13 +98,7 @@ export function buildNarrativeRenderSettings({
   const combinedSeed = hashString(`${normalizedPrompt}::${seed}::${paletteProfile || ''}`);
   const rand = createSeededRandom(combinedSeed);
   const darkPalette = isDarkPalette(paletteProfile, normalizedPrompt);
-  const storyModes: NarrativeRenderSettings['story_mode'][] = [
-    'diamond_resonance',
-    'ring_memory',
-    'diagonal_current',
-    'spiral_filament',
-  ];
-  const story_mode = storyModes[Math.floor(rand() * storyModes.length)] || 'diamond_resonance';
+  const story_mode = pickStoryMode(rand, normalizedPrompt);
   const explicitMandelbrot = normalizedPrompt.includes('mandelbrot');
   const rareMandelbrot = explicitMandelbrot || rand() < 0.07;
   const mandelbrot_weight = explicitMandelbrot
@@ -81,8 +109,17 @@ export function buildNarrativeRenderSettings({
   const brightness_floor = darkPalette
     ? clamp(0.22 + rand() * 0.06, 0.2, 0.32)
     : clamp(0.38 + rand() * 0.12, 0.36, 0.52);
-  const baseRing = story_mode === 'ring_memory' ? 0.78 : 0.34 + rand() * 0.24;
-  const baseDiamond = story_mode === 'diamond_resonance' ? 0.82 : 0.32 + rand() * 0.26;
+  const textilePrompt = /(diamond|ring|concentric|textile|woven|fabric)/.test(normalizedPrompt);
+  const baseRing = story_mode === 'ring_memory'
+    ? 0.84 + rand() * 0.08
+    : textilePrompt
+      ? 0.48 + rand() * 0.22
+      : 0.34 + rand() * 0.24;
+  const baseDiamond = story_mode === 'diamond_resonance'
+    ? 0.86 + rand() * 0.08
+    : textilePrompt
+      ? 0.5 + rand() * 0.22
+      : 0.32 + rand() * 0.26;
 
   return {
     story_mode,
@@ -105,10 +142,10 @@ export function buildNarrativeRenderSettings({
         : story_mode === 'spiral_filament'
           ? 'spiral'
           : 'diamond_wave',
-    texture_mix: Number(clamp(0.48 + rand() * 0.22, 0.45, 0.78).toFixed(4)),
-    detail_density: Number(clamp(0.58 + rand() * 0.24, 0.55, 0.88).toFixed(4)),
+    texture_mix: Number(clamp((textilePrompt ? 0.58 : 0.48) + rand() * 0.20, 0.5, 0.82).toFixed(4)),
+    detail_density: Number(clamp((textilePrompt ? 0.66 : 0.58) + rand() * 0.22, 0.58, 0.9).toFixed(4)),
     brightness_floor: Number(brightness_floor.toFixed(4)),
-    metallic_outline_strength: Number(clamp(0.44 + rand() * 0.24, 0.4, 0.82).toFixed(4)),
+    metallic_outline_strength: Number(clamp((textilePrompt ? 0.52 : 0.44) + rand() * 0.22, 0.44, 0.84).toFixed(4)),
     palette_motion: Number(clamp(0.52 + rand() * 0.30, 0.5, 0.86).toFixed(4)),
   };
 }

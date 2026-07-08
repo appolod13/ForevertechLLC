@@ -44,6 +44,23 @@ describe('buildNarrativeRenderSettings', () => {
     expect(max).toBeLessThanOrEqual(0.12);
   });
 
+  it('prefers diamond and ring storytelling modes for electric abstract prompts', () => {
+    let diamondOrRing = 0;
+    let total = 0;
+    for (let seed = 1; seed <= 240; seed++) {
+      const settings = buildNarrativeRenderSettings({
+        prompt: 'electric abstract textile fractal with cyan magenta diamond rings',
+        seed,
+        paletteProfile: 'joyful',
+      });
+      total += 1;
+      if (settings.story_mode === 'diamond_resonance' || settings.story_mode === 'ring_memory') {
+        diamondOrRing += 1;
+      }
+    }
+    expect(diamondOrRing).toBeGreaterThan(total / 2);
+  });
+
   it('allows darker prompts to opt into a moodier floor without going black-first by default', () => {
     const settings = buildNarrativeRenderSettings({
       prompt: 'shadow memory fractal with luminous metallic edges',

@@ -192,25 +192,28 @@ def _story_geometry(nx: float, ny: float, story_mode: str, q_phase: float, ring_
     diagonal = 0.5 + 0.5 * math.sin((nx + ny) * math.pi * 17.0 + q_phase * 0.7)
     spiral = 0.5 + 0.5 * math.sin(radius * 26.0 - theta * 4.0 + q_phase)
     if story_mode == "ring_memory":
-        return _clamp01(0.62 * ring + 0.24 * diamond + 0.14 * diagonal)
+        return _clamp01(0.74 * ring + 0.18 * diamond + 0.08 * diagonal)
     if story_mode == "diamond_resonance":
-        return _clamp01(0.58 * diamond + 0.22 * ring + 0.20 * diagonal)
+        return _clamp01(0.72 * diamond + 0.18 * ring + 0.10 * diagonal)
     if story_mode == "diagonal_current":
-        return _clamp01(0.52 * diagonal + 0.28 * diamond + 0.20 * ring)
-    return _clamp01(0.52 * spiral + 0.24 * ring + 0.24 * diagonal)
+        return _clamp01(0.48 * diagonal + 0.30 * diamond + 0.22 * ring)
+    return _clamp01(0.46 * spiral + 0.30 * ring + 0.24 * diagonal)
 
 
 def _texture_pattern(nx: float, ny: float, style: str, phase: float) -> float:
     if style == "diagonal_hatch":
-        diag_a = abs(math.sin((nx + ny) * math.pi * 24.0 + phase))
-        diag_b = abs(math.sin((nx + ny) * math.pi * 52.0 + phase * 0.6))
-        grid = abs(math.sin(nx * math.pi * 16.0 - phase * 0.3) * math.sin(ny * math.pi * 16.0 + phase * 0.2))
-        return _clamp01(0.55 * diag_a + 0.30 * diag_b + 0.15 * grid)
+        diag_a = abs(math.sin((nx + ny) * math.pi * 26.0 + phase))
+        diag_b = abs(math.sin((nx + ny) * math.pi * 58.0 + phase * 0.6))
+        cross = abs(math.sin((nx - ny) * math.pi * 34.0 - phase * 0.4))
+        grid = abs(math.sin(nx * math.pi * 18.0 - phase * 0.3) * math.sin(ny * math.pi * 18.0 + phase * 0.2))
+        return _clamp01(0.42 * diag_a + 0.28 * diag_b + 0.18 * cross + 0.12 * grid)
     if style == "diamond_wave":
         diamond = abs(nx) + abs(ny)
         ridges = 0.5 + 0.5 * math.sin(diamond * math.pi * 18.0 - phase)
-        cross = 0.5 + 0.5 * math.sin((nx - ny) * math.pi * 14.0 + phase * 0.5)
-        return _clamp01(0.72 * ridges + 0.28 * cross)
+        bands = 0.5 + 0.5 * math.sin(diamond * math.pi * 34.0 + phase * 0.45)
+        weave_a = abs(math.sin((nx + ny) * math.pi * 46.0 + phase * 0.55))
+        weave_b = abs(math.sin((nx - ny) * math.pi * 44.0 - phase * 0.42))
+        return _clamp01(0.42 * ridges + 0.18 * bands + 0.20 * weave_a + 0.20 * weave_b)
     r = math.sqrt(nx * nx + ny * ny) + 1e-9
     t = math.atan2(ny, nx)
     spiral = 0.5 + 0.5 * math.sin(20.0 * r - 5.0 * t + phase)
@@ -461,26 +464,29 @@ def fractal_fusion_rgb(
             geo = (s_mask * sierpinski_weight + k_mask * koch_weight + grid * grid_weight) * edge
             story_geo = _story_geometry(nx, ny, story_mode, q_phase, ring_bias, diamond_bias)
             texture = _texture_pattern(nx, ny, texture_style, texture_phase)
-            texture_layer = texture_mix * (0.55 + 0.45 * texture)
-            metallic_edge = _clamp01(edge * (metal["outline_boost"] + metallic_outline_strength * (0.24 + 0.35 * texture)))
+            diagonal_shimmer = 0.5 + 0.5 * math.sin((nx + ny) * math.pi * (22.0 + 10.0 * diagonal_filament_strength) + q_phase * 0.9)
+            texture_layer = texture_mix * (0.48 + 0.34 * texture + 0.18 * diagonal_shimmer)
+            metallic_edge = _clamp01(edge * (metal["outline_boost"] + metallic_outline_strength * (0.28 + 0.32 * texture + 0.12 * story_geo)))
             phase_drive = (
                 story_phase_bias[0] * _smoothstep(0.0, 0.33, story_geo)
                 + story_phase_bias[1] * _smoothstep(0.15, 0.55, story_geo)
                 + story_phase_bias[2] * _smoothstep(0.35, 0.82, story_geo)
                 + story_phase_bias[3] * _smoothstep(0.65, 1.0, story_geo)
             )
+            electric_anchor = (0.56 + 0.28 * (0.5 + 0.5 * math.sin((story_geo * 3.4 + diagonal_shimmer * 1.7 + texture * 1.2) * math.pi))) % 1.0
 
             hue = (
-                base_hue
-                + v * hue_span * (1.1 + palette_motion + 0.22 * texture)
-                + story_geo * 0.07
-                + texture * 0.05
-                + diagonal_filament_strength * 0.03
+                base_hue * (1.0 - 0.34)
+                + electric_anchor * 0.34
+                + v * hue_span * (0.95 + palette_motion + 0.18 * texture)
+                + story_geo * 0.08
+                + texture * 0.04
+                + diagonal_filament_strength * 0.02
             ) % 1.0
-            sat = min(1.0, max(0.0, sat_base + 0.12 * (1.0 - v) + geo * 0.06 + story_geo * 0.08 - metal["metal_desat"] * metallic_edge))
+            sat = min(1.0, max(0.0, sat_base + 0.14 * (1.0 - v) + geo * 0.05 + story_geo * 0.10 + 0.05 * diagonal_shimmer - metal["metal_desat"] * metallic_edge))
             val = _clamp01(
                 brightness_floor
-                + (0.18 + 0.50 * v + val_bias) * metal["background_dim"] * (0.84 + 0.12 * geo + 0.14 * texture_layer + 0.18 * story_geo)
+                + (0.20 + 0.48 * v + val_bias) * metal["background_dim"] * (0.88 + 0.10 * geo + 0.16 * texture_layer + 0.22 * story_geo)
             )
 
             r, g, b = _hsv_to_rgb(hue, sat, val)
@@ -491,17 +497,17 @@ def fractal_fusion_rgb(
             bf *= 0.94 + 0.08 * texture_layer
 
             light = _clamp01(0.5 + 0.5 * ((dx * 0.72 - dy * 0.54) / (abs(dx) + abs(dy) + 1e-9)))
-            specular = (metallic_edge ** 1.45) * (0.22 + metal["specular_strength"] * light + 0.12 * phase_drive)
-            metal_blend = metallic_edge * (0.34 + 0.22 * texture + 0.18 * story_geo)
+            specular = (metallic_edge ** 1.45) * (0.20 + metal["specular_strength"] * light + 0.14 * phase_drive)
+            metal_blend = metallic_edge * (0.30 + 0.20 * texture + 0.24 * story_geo)
 
             rf = rf * (1.0 - metal_blend) + cool_metal[0] * metal_blend + specular * 0.90
             gf = gf * (1.0 - metal_blend) + cool_metal[1] * metal_blend + specular * 0.96
             bf = bf * (1.0 - metal_blend) + cool_metal[2] * metal_blend + specular * 1.08
 
-            glow = (0.06 + 0.18 * geo + 0.12 * texture + 0.18 * story_geo) * (0.30 + 0.48 * v)
+            glow = (0.05 + 0.16 * geo + 0.12 * texture + 0.22 * story_geo + 0.08 * diagonal_shimmer) * (0.32 + 0.44 * v)
             rf += glow * 0.18
-            gf += glow * 0.18
-            bf += glow * 0.30
+            gf += glow * 0.20
+            bf += glow * 0.28
 
             rf = min(1.0, rf) ** gamma
             gf = min(1.0, gf) ** gamma
