@@ -1,21 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
-import { createHash, randomInt } from "crypto";
+import { randomInt } from "crypto";
 
 // Serverless limits
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
-// === IMPORTS ===
-import { getApiKey, validateApiKey } from "@/lib/api/auth";
-import { rateLimitKey, consume } from "@/lib/api/rate-limit";
-import { ok, fail } from "@/lib/api/response";
-import { logInfo, logError } from "@/lib/api/logger";
+import { logError } from "@/lib/api/logger";
 import { generateImageForPlatform } from "@/lib/contentFactory/image";
 import { uploadToIpfs } from "@/lib/ipfs/upload";
 import { getAiGeneratorsConfig } from "@/lib/aiGeneratorsConfig";
-import { processFractalPromo, recommendFractalSettings, previewPromoRecommendations } from "./fractal-fusion";
+import { previewPromoRecommendations } from "./fractal-fusion";
 import { getQuantumSeed } from "@/lib/quantum-seed";
 import { calculateFractalDimension } from "@/lib/fractal-dimension";
 import { paletteProfileFromPrompt } from "@/lib/paletteProfile";
@@ -36,26 +30,16 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
 
-// === CACHE ===
-const cache = new Map<string, any>();
-const CACHE_TTL_MS = 10 * 60 * 1000;
+type Platform = "linkedin" | "instagram" | "twitter";
+type Provider = "mock" | "dalle" | "stablediffusion" | "midjourney";
+type GenerationResult = Record<string, unknown> & { image_url?: string; meta?: Record<string, unknown> };
 
-function cacheKeyFor(v: any): string {
-  return createHash("sha256").update(JSON.stringify(v)).digest("hex");
+function asPlatform(v: unknown): Platform {
+  return v === "instagram" ? "instagram" : v === "twitter" ? "twitter" : "linkedin";
 }
 
-function getCache(key: string) {
-  const entry = cache.get(key);
-  if (!entry) return null;
-  if (Date.now() - entry.createdAt > CACHE_TTL_MS) {
-    cache.delete(key);
-    return null;
-  }
-  return entry;
-}
-
-function setCache(key: string, value: any) {
-  cache.set(key, { ...value, createdAt: Date.now() });
+function asProvider(v: unknown): Provider {
+  return v === "dalle" || v === "stablediffusion" || v === "midjourney" ? v : "mock";
 }
 
 function generateSeed(): number {
@@ -103,9 +87,9 @@ async function tryQuantumHybridGenerate(
 
     if (!res.ok) return null;
 
-    const data: any = await res.json();
+    const data: unknown = await res.json();
 
-    if (data.success === true && typeof data.imageUrl === "string") {
+    if (isRecord(data) && data.success === true && typeof data.imageUrl === "string") {
       const raw = data.imageUrl.trim();
       const imageUrl = raw.startsWith("/images/")
         ? `/api/images/${encodeURIComponent(raw.slice(8))}`
@@ -145,31 +129,46 @@ async function tryFusionGenerate(
   const timer = setTimeout(() => controller.abort(), Math.max(1000, timeoutMs));
 
   try {
+    const basePayload = {
+      prompt,
+      width,
+      height,
+      negative_prompt: negative_prompt || "",
+      seed,
+      palette_profile,
+      quality: 2,
+    };
+
     const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        prompt,
-        width,
-        height,
-        negative_prompt: negative_prompt || "",
-        seed,
-        palette_profile,
-        quality: 2,
+        ...basePayload,
         ...narrativeSettings,
       }),
       cache: "no-store",
       signal: controller.signal,
     });
 
-    if (!res.ok) return null;
+    let finalRes = res;
+    if (!finalRes.ok && (finalRes.status === 400 || finalRes.status === 422)) {
+      finalRes = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(basePayload),
+        cache: "no-store",
+        signal: controller.signal,
+      });
+    }
 
-    const data: any = await res.json();
+    if (!finalRes.ok) return null;
 
-    if (data.success === true && typeof data.imageUrl === "string") {
+    const data: unknown = await finalRes.json();
+
+    if (isRecord(data) && data.success === true && typeof data.imageUrl === "string") {
       const raw = data.imageUrl.trim();
-      const imageUrl = raw.startsWith("/") && cfg.fusion.publicBaseUrl.trim()
-        ? `${cfg.fusion.publicBaseUrl.trim().replace(/\/$/, "")}${raw}`
+      const imageUrl = raw.startsWith("/")
+        ? `/api/fusion-image?path=${encodeURIComponent(raw)}`
         : raw;
 
       return {
@@ -202,8 +201,9 @@ export async function POST(req: NextRequest) {
     const use_fractal_fusion: boolean = body.use_fractal_fusion !== false;
     const useQuantumSeed: boolean = body.use_quantum_seed === true;
     const orderId: string = body.orderId || `gen_${Date.now()}`;
-    const platform = (body.platform || "linkedin") as any;
-    const provider = (body.provider || "") as string;
+    const platform = asPlatform(body.platform);
+    const provider = typeof body.provider === "string" ? body.provider.trim() : "";
+    const fallbackProvider = asProvider(provider);
     const palette_profile = paletteProfileFromPrompt(prompt);
     const seed: number = typeof body.seed === "number" ? body.seed : generateSeed();
     const narrativeSettings = buildNarrativeRenderSettings({
@@ -212,10 +212,10 @@ export async function POST(req: NextRequest) {
       paletteProfile: palette_profile,
     });
 
-    let result: any = null;
+    let result: GenerationResult | null = null;
 
     if (provider === "mock") {
-      const mock = await (generateImageForPlatform as any)("mock", prompt, platform);
+      const mock = await generateImageForPlatform("mock", prompt, platform);
       return NextResponse.json({ success: true, ...mock });
     }
 
@@ -257,11 +257,7 @@ export async function POST(req: NextRequest) {
     // 3. Fallback (final type fix)
     if (!result) {
       try {
-        result = await (generateImageForPlatform as any)(
-          provider || "mock",
-          prompt,
-          platform
-        );
+        result = await generateImageForPlatform(fallbackProvider, prompt, platform);
       } catch (fallbackErr) {
         logError("fallback.generate.failed", fallbackErr);
       }
@@ -326,12 +322,16 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, ...result });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     logError("image.generate.critical", error);
     console.error("Critical error in /api/generate/image:", error);
+    const message =
+      typeof error === "object" && error !== null && "message" in error && typeof (error as { message?: unknown }).message === "string"
+        ? (error as { message: string }).message
+        : "Internal server error";
     return NextResponse.json({ 
       success: false, 
-      error: error.message || "Internal server error" 
+      error: message 
     }, { status: 500 });
   }
 }
