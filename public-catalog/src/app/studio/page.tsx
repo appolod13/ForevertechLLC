@@ -8,14 +8,12 @@ import { DataDashboardButton } from '../../components/DataDashboardButton';
 import { FusionAI } from '../../components/FusionAI';
 import { LatestAIImage } from '../../components/LatestAIImage';
 import { MerchPreviewPanel } from '../../components/MerchPreviewPanel';
-import { Send, Sparkles } from 'lucide-react';
-import styles from './page.module.css';
-
-import { MIRROR_API_URL } from '@/lib/utils';
+import { Sparkles } from 'lucide-react';
 import { buildQuantumSourceLinks, getCreatorAccess } from '@/lib/creatorAccess';
 import {
   saveStoredGeneration,
   upsertSourceRecord,
+  type SourceRecordLike,
   type SourceRecordLike,
   type StoredGenerationRecord,
 } from '@/lib/creatorArtifacts';
@@ -46,8 +44,6 @@ export default function StudioPage() {
 }
 
 function StudioPageInner() {
-  const showPromptOptimizer = false;
-  const showDistributionTools = false;
   const searchParams = useSearchParams();
   const testMode = (searchParams?.get('test') || '') === '1';
   const scannedBackText = (searchParams?.get('back') || '').trim();
@@ -56,13 +52,9 @@ function StudioPageInner() {
   const sharedPrompt = (searchParams?.get('sharePrompt') || '').trim();
   const [hydrated, setHydrated] = useState(false);
   const [prompt, setPrompt] = useState('');
-  const [crossOptimizeLoading, setCrossOptimizeLoading] = useState(false);
-  const [crossOptimizeError, setCrossOptimizeError] = useState<string | null>(null);
-  const [crossOptimizeReports, setCrossOptimizeReports] = useState<Array<{ model: string; role: string; output: string; error?: string }> | null>(null);
   const [generatedImage, setGeneratedImage] = useState('');
   const [latestDropImageUrl, setLatestDropImageUrl] = useState<string | null>(null);
   const [generatedTextContent, setGeneratedTextContent] = useState('');
-  const [draftImage, setDraftImage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [generationAttempt, setGenerationAttempt] = useState(0);
@@ -71,17 +63,9 @@ function StudioPageInner() {
     model: string;
     params: Record<string, unknown>;
   } | undefined>(undefined);
-  const [catalogPosts, setCatalogPosts] = useState<Array<{ id: string; content: string }>>([]);
-  const [importing, setImporting] = useState(false);
-  const [importProgress, setImportProgress] = useState(0);
-  const [importStatus, setImportStatus] = useState<string | null>(null);
-  const [postContent, setPostContent] = useState('');
-  const [isPosting, setIsPosting] = useState(false);
-  const [scheduleAt, setScheduleAt] = useState<string>('');
   const [ipfsEnabled, setIpfsEnabled] = useState<boolean>(false);
   const [quantumMode, setQuantumMode] = useState<boolean>(false);
   const [quantumUnlocked, setQuantumUnlocked] = useState<boolean>(false);
-  const [postingStatus, setPostingStatus] = useState<string | null>(null);
   const [quantumRecord, setQuantumRecord] = useState<{
     id: string;
     createdAt: string;
@@ -90,33 +74,7 @@ function StudioPageInner() {
     model: string;
     metadata: Record<string, unknown>;
   } | null>(null);
-  
-  type SocialAccount = { authenticated: boolean; screenName?: string };
-  const [socialAccounts, setSocialAccounts] = useState<Record<string, SocialAccount | null>>({
-    twitter: null,
-    telegram: null,
-    instagram: null,
-    tiktok: null,
-    youtube: null,
-    reddit: null,
-    discord: null,
-    rss: null,
-  });
-
-  const [posterAttachedImage, setPosterAttachedImage] = useState<string | null>(null);
-
-  const [calendarMonth, setCalendarMonth] = useState<number>(new Date().getMonth());
-  const [calendarYear, setCalendarYear] = useState<number>(new Date().getFullYear());
-  const [rangeStart, setRangeStart] = useState<string>('');
-  const [rangeEnd, setRangeEnd] = useState<string>('');
-  const [rangeError, setRangeError] = useState<string | null>(null);
-  const [selectedDates, setSelectedDates] = useState<string[]>([]);
-  const [rangeMode, setRangeMode] = useState<boolean>(false);
   const [lastGenTimestamp, setLastGenTimestamp] = useState<number>(Date.now());
-  const [chatUser, setChatUser] = useState<string>('Guest');
-  const [chatInput, setChatInput] = useState<string>('');
-  const [chatConnected, setChatConnected] = useState<boolean>(false);
-  const [chatMessages, setChatMessages] = useState<Array<{ id: string; time: string; user: string; text: string; assetUrl?: string }>>([]);
 
   const [pipelineStage, setPipelineStage] = useState<string>('');
   const [progress, setProgress] = useState<number>(0);
@@ -137,7 +95,6 @@ function StudioPageInner() {
     if (!hydrated) return;
     if (!scannedBackText) return;
     setGeneratedTextContent(scannedBackText);
-    setPostContent((prev) => (prev && prev.trim() ? prev : scannedBackText));
     addLog(`Scanned back text: ${scannedBackText}`, 'success', 'qr_scan');
   }, [hydrated, scannedBackText]);
 
@@ -145,100 +102,20 @@ function StudioPageInner() {
     if (!hydrated) return;
     if (!sharedImage && !sharedText && !sharedPrompt) return;
     if (sharedImage) {
-      setPosterAttachedImage((prev) => prev || sharedImage);
       setGeneratedImage((prev) => prev || sharedImage);
     }
     if (sharedText) {
-      setPostContent((prev) => (prev && prev.trim() ? prev : sharedText));
+      setGeneratedTextContent((prev) => (prev && prev.trim() ? prev : sharedText));
     }
     if (sharedPrompt) {
       setPrompt((prev) => (prev && prev.trim() ? prev : sharedPrompt));
     }
-    addLog('Imported item into Multi-Channel Poster', 'success', 'share_in');
+    addLog('Imported shared item into Studio', 'success', 'share_in');
   }, [hydrated, sharedImage, sharedPrompt, sharedText]);
 
   useEffect(() => {
     setHydrated(true);
-    fetch('/api/auth/session')
-      .then(r => r.json())
-      .then(data => setSocialAccounts(data))
-      .catch(() => setSocialAccounts({
-        twitter: { authenticated: false },
-        telegram: { authenticated: false },
-        instagram: { authenticated: false },
-        tiktok: { authenticated: false },
-        youtube: { authenticated: false },
-        reddit: { authenticated: false },
-        discord: { authenticated: false },
-        rss: { authenticated: false },
-      }));
   }, []);
-
-  useEffect(() => {
-    let isMounted = true;
-    let es: EventSource | null = null;
-
-    const bootstrap = async () => {
-      try {
-        const res = await fetch('/api/chat/history', { cache: 'no-store' });
-        const json = await res.json();
-        if (isMounted && json?.success && Array.isArray(json.data?.messages)) {
-          setChatMessages(json.data.messages);
-        }
-      } catch {
-      }
-
-      try {
-        es = new EventSource('/api/chat/stream');
-        es.addEventListener('open', () => {
-          if (isMounted) setChatConnected(true);
-        });
-        es.addEventListener('error', () => {
-          if (isMounted) setChatConnected(false);
-        });
-        es.addEventListener('history', (evt) => {
-          try {
-            const parsed = JSON.parse((evt as MessageEvent).data);
-            if (isMounted && parsed && Array.isArray(parsed.messages)) setChatMessages(parsed.messages);
-          } catch {
-          }
-        });
-        es.addEventListener('message', (evt) => {
-          try {
-            const msg = JSON.parse((evt as MessageEvent).data);
-            if (!isMounted || !msg) return;
-            setChatMessages((prev) => [...prev, msg].slice(-200));
-          } catch {
-          }
-        });
-      } catch {
-        if (isMounted) setChatConnected(false);
-      }
-    };
-
-    bootstrap();
-
-    return () => {
-      isMounted = false;
-      if (es) es.close();
-    };
-  }, []);
-
-  const sendChat = async (assetUrl?: string) => {
-    const text = chatInput.trim();
-    if (!text && !assetUrl) return;
-    setChatInput('');
-    try {
-      await fetch('/api/chat/message', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ user: chatUser || 'Guest', text, assetUrl }),
-      });
-    } catch {
-    }
-  };
-
-  const chatPreview = useMemo(() => chatMessages.slice(-50), [chatMessages]);
 
   useEffect(() => {
     try {
@@ -284,166 +161,6 @@ function StudioPageInner() {
       setQuantumUnlocked(false);
     }
   }, [quantumMode, quantumUnlocked]);
-
-  useEffect(() => {
-    const fetchCatalog = async () => {
-      try {
-        const res = await fetch(`${MIRROR_API_URL}/api/catalog/posts`, { cache: 'no-store' });
-        const data: unknown = await res.json();
-        const d = (typeof data === 'object' && data !== null) ? (data as Record<string, unknown>) : {};
-        const items = Array.isArray(d.posts) ? d.posts : [];
-        setCatalogPosts(items.map((p) => {
-          const rec = (typeof p === 'object' && p !== null) ? (p as Record<string, unknown>) : {};
-          return { id: String(rec.id ?? Math.random()), content: String(rec.content ?? '') };
-        }));
-      } catch {
-        try {
-          const res = await fetch('/api/catalog/posts', { cache: 'no-store' });
-          const data: unknown = await res.json();
-          const d = (typeof data === 'object' && data !== null) ? (data as Record<string, unknown>) : {};
-          const items = Array.isArray(d.posts) ? d.posts : [];
-          setCatalogPosts(items.map((p) => {
-            const rec = (typeof p === 'object' && p !== null) ? (p as Record<string, unknown>) : {};
-            return { id: String(rec.id ?? Math.random()), content: String(rec.content ?? '') };
-          }));
-        } catch {
-          setCatalogPosts([]);
-        }
-      }
-    };
-    fetchCatalog();
-  }, []);
-
-  const buildDraftPreview = (text: string, w = 1024, h = 1024) => {
-    try {
-      if (typeof document === 'undefined') return '';
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return '';
-
-      let seed = 0;
-      for (let i = 0; i < text.length; i++) seed = (seed * 31 + text.charCodeAt(i)) >>> 0;
-      const rand = () => {
-        seed = (seed * 1664525 + 1013904223) >>> 0;
-        return seed / 0xffffffff;
-      };
-
-      const grad = ctx.createLinearGradient(0, 0, 0, h);
-      grad.addColorStop(0, '#7FAAE6');
-      grad.addColorStop(0.55, '#F1A487');
-      grad.addColorStop(1, '#0b0b12');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
-
-      ctx.fillStyle = 'rgba(255,255,255,0.12)';
-      ctx.beginPath();
-      ctx.ellipse(w * 0.32, h * 0.20, w * 0.42, h * 0.20, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      const horizon = Math.round(h * 0.52);
-      ctx.fillStyle = 'rgba(40,36,52,0.85)';
-      ctx.beginPath();
-      ctx.moveTo(0, h);
-      ctx.lineTo(0, horizon + h * 0.08);
-      const peakX = Math.round(w * 0.42);
-      const peakY = Math.round(horizon - h * 0.06);
-      for (let x = 0; x <= w; x += Math.max(8, Math.floor(w / 140))) {
-        const t = x / w;
-        const wave = Math.sin(t * Math.PI * 1.3) * (h * 0.03);
-        const jag = (rand() - 0.5) * (h * 0.04);
-        const y = horizon + h * 0.05 + wave + jag;
-        ctx.lineTo(x, y);
-      }
-      ctx.lineTo(peakX, peakY);
-      ctx.closePath();
-      ctx.fill();
-
-      const groundY = Math.round(h * 0.66);
-      ctx.fillStyle = '#0a0a12';
-      ctx.fillRect(0, groundY, w, h - groundY);
-
-      let x = 0;
-      while (x < w) {
-        const bw = Math.floor(w * 0.012 + rand() * w * 0.02);
-        const bh = Math.floor(h * 0.04 + rand() * h * 0.22);
-        const shade = Math.floor(10 + rand() * 18);
-        ctx.fillStyle = `rgb(${shade},${shade},${shade + 10})`;
-        ctx.fillRect(x, groundY - bh, bw, h - (groundY - bh));
-        x += bw + Math.floor(1 + rand() * 3);
-      }
-
-      const lightCount = Math.floor((w * h) / 380);
-      for (let i = 0; i < lightCount; i++) {
-        const px = Math.floor(rand() * w);
-        const py = Math.floor(groundY + rand() * (h - groundY));
-        const a = 0.35 + rand() * 0.55;
-        const g = 150 + Math.floor(rand() * 70);
-        const r = 220 + Math.floor(rand() * 35);
-        const b = 45 + Math.floor(rand() * 55);
-        ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
-        ctx.fillRect(px, py, 1, 1);
-        if (rand() < 0.15) ctx.fillRect(Math.min(w - 1, px + 1), py, 1, 1);
-      }
-
-      const clusterLeft = Math.round(w * 0.70);
-      const rightEdge = Math.round(w * 0.97);
-      const towerCount = 4 + Math.floor(rand() * 3);
-      for (let i = 0; i < towerCount; i++) {
-        const tw = Math.floor(w * 0.035 + rand() * w * 0.03);
-        const th = Math.floor(h * 0.38 + rand() * h * 0.28);
-        const tx = Math.floor(clusterLeft + rand() * Math.max(1, rightEdge - clusterLeft - tw));
-        const ty = groundY - th;
-        ctx.fillStyle = 'rgba(22,26,38,0.98)';
-        ctx.fillRect(tx, ty, tw, th + Math.floor(rand() * h * 0.03));
-        const seams = 2 + Math.floor(rand() * 3);
-        for (let s = 0; s < seams; s++) {
-          const sx = tx + Math.floor(((s + 1) * tw) / (seams + 1));
-          ctx.fillStyle = 'rgba(70,210,255,0.70)';
-          ctx.fillRect(sx, ty + Math.floor(th * 0.08), Math.max(2, Math.floor(tw / 18)), th);
-        }
-      }
-
-      ctx.fillStyle = 'rgba(255,200,170,0.10)';
-      ctx.fillRect(0, horizon - Math.floor(h * 0.02), w, Math.floor(h * 0.20));
-
-      return canvas.toDataURL('image/png');
-    } catch {
-      return '';
-    }
-  };
-
-  const crossOptimizePrompt = async () => {
-    if (!prompt || crossOptimizeLoading) return;
-    setCrossOptimizeLoading(true);
-    setCrossOptimizeError(null);
-    setCrossOptimizeReports(null);
-    try {
-      const res = await fetch('/api/agents/cross-optimize', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          prompt,
-          goals: ['maximize realism', 'clear composition', 'avoid watermarks/text'],
-          includeOpenClaw: true,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json?.success) {
-        setCrossOptimizeError(String(json?.error || 'cross_optimize_failed'));
-        return;
-      }
-      const optimized = String(json.data.optimizedPrompt || '').trim();
-      if (optimized) setPrompt(optimized);
-      const reports = Array.isArray(json.data.reports) ? json.data.reports : null;
-      setCrossOptimizeReports(reports);
-    } catch (e) {
-      setCrossOptimizeError(e instanceof Error ? e.message : 'cross_optimize_failed');
-    } finally {
-      setCrossOptimizeLoading(false);
-    }
-  };
 
   const generationMode = quantumMode ? 'real_quantum' : 'standard';
 
@@ -504,7 +221,6 @@ function StudioPageInner() {
     setGenerationError(null);
     setGeneratedImage('');
     setGeneratedTextContent('');
-    setDraftImage(buildDraftPreview(prompt));
     setGenerationAttempt(0);
     setLogs([]);
     setProgress(0);
@@ -680,7 +396,6 @@ function StudioPageInner() {
       }
 
       setGeneratedImage(imageUrl);
-      setDraftImage('');
       
       // Generate associated content automatically
       try {
@@ -873,289 +588,13 @@ function StudioPageInner() {
     }
   };
 
-  const postContentAction = async () => {
-    if (!postContent) return;
-    setIsPosting(true);
-    setPostingStatus(null);
-    try {
-      const mediaToPost = posterAttachedImage || generatedImage;
-      if (mediaToPost) {
-        await validatePosterImage(mediaToPost);
-      }
-      const platforms: string[] = [];
-      if (socialAccounts.twitter?.authenticated) platforms.push('twitter');
-      if (socialAccounts.telegram?.authenticated) platforms.push('telegram');
-      if (socialAccounts.instagram?.authenticated) platforms.push('instagram');
-      if (socialAccounts.tiktok?.authenticated) platforms.push('tiktok');
-      if (socialAccounts.youtube?.authenticated) platforms.push('youtube');
-      if (socialAccounts.reddit?.authenticated) platforms.push('reddit');
-      if (socialAccounts.discord?.authenticated) platforms.push('discord');
-      if (socialAccounts.rss?.authenticated) platforms.push('rss');
-      const res = await fetch('/api/post', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ 
-          content: postContent,
-          platforms,
-          metadata: { mediaUrl: mediaToPost || undefined },
-          userId: 'user-123',
-          scheduledFor: scheduleAt || undefined,
-          ipfs: ipfsEnabled
-        })
-      });
-      const contentType = res.headers.get('content-type') || '';
-      const data = contentType.includes('application/json') ? await res.json().catch(() => null) : null;
-      if (!data) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-
-      if (!res.ok) {
-        const errRaw =
-          (typeof data === 'object' && data !== null && 'error' in data)
-            ? (data as { error?: unknown }).error
-            : null;
-        const err = typeof errRaw === 'string' ? errRaw.trim() : '';
-        const resultsRaw =
-          (typeof data === 'object' && data !== null && 'results' in data)
-            ? (data as { results?: unknown }).results
-            : null;
-        const resultsText = resultsRaw ? (() => { try { return JSON.stringify(resultsRaw); } catch { return ''; } })() : '';
-        const suffix = err || resultsText;
-        throw new Error(suffix ? `HTTP ${res.status}: ${suffix}` : `HTTP ${res.status}`);
-      }
-
-      if (data.success) {
-        setPostingStatus('success');
-        setPostContent('');
-        setPosterAttachedImage(null);
-      } else {
-        const err = data.error;
-        setPostingStatus(typeof err === 'string' ? err : (err ? JSON.stringify(err) : 'error'));
-      }
-    } catch (e) {
-      console.error(e);
-      const msg =
-        (typeof e === 'object' && e !== null && 'message' in e && typeof (e as { message?: unknown }).message === 'string')
-          ? (e as { message: string }).message
-          : (e instanceof Error ? e.message : 'network-error');
-      setPostingStatus(msg || 'network-error');
-    } finally {
-      setIsPosting(false);
-    }
-  };
-
-  const resizeAndUpload = async (src: string, targetW: number, targetH: number, filename: string) => {
-    const img = document.createElement('img');
-    
-    let fetchSrc = src;
-    if (!src.startsWith('data:')) {
-      img.crossOrigin = 'anonymous';
-      // Route through local proxy to bypass CORS restrictions
-      fetchSrc = `/api/proxy-image?url=${encodeURIComponent(src)}`;
-    }
-    
-    const loaded = await new Promise<boolean>((resolve) => {
-      img.onload = () => resolve(true);
-      img.onerror = () => resolve(false);
-      img.src = fetchSrc;
-    });
-    if (!loaded) throw new Error('Image load failed');
-    const canvas = document.createElement('canvas');
-    canvas.width = targetW;
-    canvas.height = targetH;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Canvas ctx unavailable');
-    const srcRatio = img.width / img.height;
-    const dstRatio = targetW / targetH;
-    let drawW = targetW, drawH = targetH, dx = 0, dy = 0;
-    if (srcRatio > dstRatio) {
-      drawH = targetH;
-      drawW = Math.round(targetH * srcRatio);
-      dx = Math.round((targetW - drawW) / 2);
-    } else {
-      drawW = targetW;
-      drawH = Math.round(targetW / srcRatio);
-      dy = Math.round((targetH - drawH) / 2);
-    }
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, targetW, targetH);
-    ctx.drawImage(img, dx, dy, drawW, drawH);
-    const blob: Blob = await new Promise((resolve) => canvas.toBlob(b => resolve(b as Blob), 'image/jpeg', 0.92));
-    const fd = new FormData();
-    fd.append('image', blob, filename);
-    const res = await fetch(`${MIRROR_API_URL}/api/upload`, { method: 'POST', body: fd });
-    const data = await res.json();
-    if (!data.success) throw new Error('Upload failed');
-    return data.url || data.localUrl;
-  };
-
-  const validatePosterImage = async (url: string) => {
-    if (!url) {
-      throw new Error('Empty image URL');
-    }
-
-    const img = document.createElement('img');
-
-    const isData = url.startsWith('data:');
-    const isRelative = !isData && url.startsWith('/');
-    const isSameOriginAbsolute = (() => {
-      if (isData || isRelative) return false;
-      try {
-        const u = new URL(url);
-        return typeof window !== 'undefined' && u.origin === window.location.origin;
-      } catch {
-        return false;
-      }
-    })();
-
-    img.crossOrigin = 'anonymous';
-    const directUrl = url;
-    const proxiedUrl = isData ? url : `/api/proxy-image?url=${encodeURIComponent(url)}`;
-
-    const loaded = await new Promise<boolean>((resolve) => {
-      img.onload = () => resolve(true);
-      img.onerror = () => resolve(false);
-      img.src = isData || isRelative || isSameOriginAbsolute ? directUrl : proxiedUrl;
-    });
-
-    if (!loaded) {
-      if (isData) {
-        throw new Error('Image validation failed');
-      }
-      const fallbackLoaded = await new Promise<boolean>((resolve) => {
-        img.onload = () => resolve(true);
-        img.onerror = () => resolve(false);
-        img.src = proxiedUrl;
-      });
-      if (!fallbackLoaded) {
-        throw new Error('Image validation failed');
-      }
-    }
-
-    if (img.width < 300 || img.height < 300) {
-      throw new Error('Image too small for poster');
-    }
-  };
-
-  const handleImportToPoster = async () => {
-    if (!generatedImage || importing) return;
-    try {
-      setImporting(true);
-      setImportStatus(null);
-      setImportProgress(25);
-      if (testMode) {
-        setPosterAttachedImage(generatedImage);
-        setImportProgress(100);
-        setImportStatus('success');
-        setTimeout(() => setImporting(false), 200);
-        return;
-      }
-      const original = generatedImage;
-      const igUrl = await resizeAndUpload(original, 1080, 1080, `ig-${Date.now()}.jpg`);
-      const primaryUrl = igUrl || original;
-      await validatePosterImage(primaryUrl);
-      
-      setPosterAttachedImage(primaryUrl);
-      
-      setImportProgress(40);
-      const fbUrl = await resizeAndUpload(original, 1200, 630, `fb-${Date.now()}.jpg`);
-      const twUrl = await resizeAndUpload(original, 1200, 675, `tw-${Date.now()}.jpg`);
-      const thumbUrl = await resizeAndUpload(original, 200, 200, `thumb-${Date.now()}.jpg`);
-      setImportProgress(60);
-      const meta = {
-        title: 'AI Asset',
-        mediaUrl: primaryUrl,
-        platformMediaUrls: { facebook: fbUrl, instagram: igUrl, twitter: twUrl },
-        thumbnailUrl: thumbUrl,
-        prompt,
-        priceUsd: 59.99
-      };
-      // Note: We don't automatically POST to catalog here anymore to avoid double posting.
-      // The user will click "Post to All Channels" when they are ready.
-      setImportProgress(100);
-      setImportStatus('success');
-    } catch (e: unknown) {
-      setImportProgress(0);
-      setImportStatus('error');
-    } finally {
-      setTimeout(() => setImporting(false), 400);
-    }
-  };
-
-  const daysInMonth = (year: number, month: number) => {
-    return new Date(year, month + 1, 0).getDate();
-  };
-  const firstDayOfWeek = (year: number, month: number) => {
-    return new Date(year, month, 1).getDay();
-  };
-  const formatScheduled = (y: number, m: number, d: number) => {
-    const dt = new Date(y, m, d, 9, 0, 0);
-    const iso = dt.toISOString().slice(0,16);
-    setScheduleAt(iso);
-  };
-  const monthLabel = (y: number, m: number) => {
-    return new Date(y, m, 1).toLocaleString(undefined, { month: 'long', year: 'numeric' });
-  };
-  const visibleRangeStart = rangeStart;
-  const visibleRangeEnd = rangeEnd;
-  const inSelectedRange = (y: number, m: number, d: number) => {
-    if (!visibleRangeStart || !visibleRangeEnd) return false;
-    const start = new Date(visibleRangeStart);
-    const end = new Date(visibleRangeEnd);
-    const current = new Date(y, m, d);
-    return current >= start && current <= end;
-  };
-  const isStartDay = (y: number, m: number, d: number) => {
-    if (!visibleRangeStart) return false;
-    const start = new Date(visibleRangeStart);
-    return start.getFullYear() === y && start.getMonth() === m && start.getDate() === d;
-  };
-  const isEndDay = (y: number, m: number, d: number) => {
-    if (!visibleRangeEnd) return false;
-    const end = new Date(visibleRangeEnd);
-    return end.getFullYear() === y && end.getMonth() === m && end.getDate() === d;
-  };
-  const validateRange = (startISO: string, endISO: string) => {
-    if (startISO && endISO) {
-      const s = new Date(startISO);
-      const e = new Date(endISO);
-      if (e < s) {
-        setRangeError('End date must be after start date');
-        return false;
-      }
-    }
-    setRangeError(null);
-    return true;
-  };
-  const clearRange = () => {
-    setRangeStart('');
-    setRangeEnd('');
-    setRangeError(null);
-  };
-  const clearSelectedDates = () => {
-    setSelectedDates([]);
-  };
-  const isIndividuallySelected = (y: number, m: number, d: number) => {
-    const iso = new Date(y, m, d).toISOString();
-    return selectedDates.includes(iso);
-  };
-  const toggleIndividualDate = (iso: string) => {
-    setSelectedDates(prev => {
-      if (prev.includes(iso)) {
-        return prev.filter(x => x !== iso);
-      }
-      return [...prev, iso];
-    });
-  };
-
   return (
     <div className="min-h-screen bg-gray-900 text-white" data-hydrated={hydrated ? '1' : '0'}>
       <Header />
       <main className="max-w-6xl mx-auto p-4 sm:p-6 md:p-8">
         <h1 className="text-3xl sm:text-4xl font-bold mb-6 sm:mb-8">Creator Studio</h1>
         
-        <div className={`grid grid-cols-1 gap-6 md:gap-12 ${showDistributionTools ? 'lg:grid-cols-2' : ''}`}>
+        <div className="grid grid-cols-1 gap-6 md:gap-12">
           <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-4 sm:p-6 lg:p-8 rounded-xl border border-gray-700">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
@@ -1172,38 +611,6 @@ function StudioPageInner() {
                 value={prompt}
                 onChange={e => setPrompt(e.target.value)}
               />
-              {showPromptOptimizer ? (
-                <>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={crossOptimizePrompt}
-                      disabled={crossOptimizeLoading || !prompt || isGenerating}
-                      className={`px-4 py-2 rounded-lg font-semibold text-sm border ${crossOptimizeLoading || !prompt || isGenerating ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 border-blue-500/30 text-white'}`}
-                    >
-                      {crossOptimizeLoading ? 'Optimizing...' : 'Optimize Prompt (Cross-Agent)'}
-                    </button>
-                    {crossOptimizeError && (
-                      <div className="text-sm text-yellow-300">
-                        {crossOptimizeError}
-                      </div>
-                    )}
-                  </div>
-                  {crossOptimizeReports && (
-                    <div className="rounded-lg border border-gray-700 bg-gray-900 p-3 text-xs text-gray-300 space-y-2">
-                      {crossOptimizeReports.map((r, idx) => (
-                        <div key={`${r.model}-${idx}`} className="border-b border-gray-800 pb-2 last:border-b-0 last:pb-0">
-                          <div className="text-gray-400">
-                            {String(r.role)} • {String(r.model)}{r.error ? ` • error=${String(r.error)}` : ''}
-                          </div>
-                          {!r.error && (
-                            <div className="mt-1 whitespace-pre-wrap">{String(r.output).slice(0, 1200)}</div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
-              ) : null}
               <div className="grid gap-3 md:grid-cols-2">
                 <label className={`rounded-lg border p-3 transition-all cursor-pointer ${!quantumMode ? 'border-white bg-white/5 shadow-[0_0_15px_rgba(255,255,255,0.08)]' : 'border-gray-700 hover:border-gray-600'}`}>
                   <div className="flex items-start gap-3">
@@ -1276,6 +683,11 @@ function StudioPageInner() {
               >
                 {generationButtonLabel}
               </button>
+              {generationError ? (
+                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                  {generationError}
+                </div>
+              ) : null}
             </div>
 
             <div className="mt-8 w-full flex flex-col gap-4">
@@ -1314,17 +726,6 @@ function StudioPageInner() {
                        <span className="break-words">{log.msg}</span>
                      </div>
                    ))}
-                </div>
-              )}
-
-              {importStatus === 'success' && (
-                <div className="mt-3 rounded-lg bg-green-500/20 text-green-300 border border-green-500/30 px-3 py-2 text-sm">
-                  Imported successfully
-                </div>
-              )}
-              {importStatus === 'error' && (
-                <div className="mt-3 rounded-lg bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 px-3 py-2 text-sm">
-                  Partial failure. Retry import.
                 </div>
               )}
               {typeof generationMetadata?.params?.ipfs_url === 'string' && (
@@ -1428,425 +829,8 @@ function StudioPageInner() {
                   </div>
                 </div>
               ) : null}
-              {showDistributionTools && generatedImage && generatedTextContent && (
-                <button
-                  onClick={() => {
-                    setPostContent(generatedTextContent);
-                    setPosterAttachedImage(generatedImage);
-                    document.getElementById('multi-channel-poster')?.scrollIntoView({ behavior: 'smooth' });
-                  }}
-                  className="mt-4 w-full py-3 rounded-lg font-bold bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center gap-2"
-                >
-                  Send to Multi-Channel Poster
-                </button>
-              )}
             </div>
           </div>
-
-          {showDistributionTools ? (
-          <div
-            id="multi-channel-poster"
-            className="bg-gradient-to-b from-gray-800 to-gray-900 p-4 sm:p-6 lg:p-8 rounded-xl border border-gray-700"
-          >
-            <div className="flex items-center gap-3 mb-6">
-              <Send className="text-blue-400" />
-              <h2 className="text-2xl font-bold">Multi-Channel Poster</h2>
-            </div>
-
-            <div className="space-y-4">
-              <textarea 
-                className="w-full bg-gray-900 border border-gray-600 rounded-lg p-4 h-32 focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder="What's on your mind? #Web3"
-                value={postContent}
-                onChange={e => setPostContent(e.target.value)}
-              />
-              {posterAttachedImage && (
-                <div className="relative mt-2 rounded-lg border border-gray-700 overflow-hidden bg-black/50 aspect-video max-w-sm">
-                  <img 
-                    src={posterAttachedImage} 
-                    alt="Attached preview" 
-                    className="w-full h-full object-contain" 
-                  />
-                  <button 
-                    onClick={() => setPosterAttachedImage(null)}
-                    className="absolute top-2 right-2 bg-black/60 hover:bg-red-600/80 text-white rounded-full p-1.5 transition-colors"
-                    title="Remove attachment"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                  </button>
-                  <div className="absolute bottom-2 left-2 bg-black/60 text-xs text-white px-2 py-1 rounded">
-                    Attached to Post
-                  </div>
-                </div>
-              )}
-              <div className="rounded-xl border border-gray-700 bg-gray-900 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-semibold text-white">Live Chat</div>
-                  <div className={`text-xs ${chatConnected ? 'text-green-300' : 'text-yellow-300'}`}>
-                    {chatConnected ? 'Connected' : 'Reconnecting'}
-                  </div>
-                </div>
-                <div className="mt-3 max-h-48 overflow-y-auto space-y-2">
-                  {chatPreview.length === 0 && (
-                    <div className="text-xs text-gray-500">No messages yet</div>
-                  )}
-                  {chatPreview.map((m) => (
-                    <div key={m.id} className="text-xs text-gray-200 border-b border-gray-800 pb-2 last:border-b-0 last:pb-0">
-                      <div className="text-gray-400">{new Date(m.time).toLocaleTimeString()} • {m.user}</div>
-                      {m.text && <div className="whitespace-pre-wrap">{m.text}</div>}
-                      {m.assetUrl && (
-                        <a className="text-blue-400 hover:text-blue-300 break-all" href={m.assetUrl} target="_blank" rel="noreferrer">
-                          {m.assetUrl}
-                        </a>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 flex gap-2">
-                  <input
-                    value={chatUser}
-                    onChange={(e) => setChatUser(e.target.value)}
-                    className="w-28 bg-gray-950 border border-gray-700 rounded-lg px-2 py-2 text-xs text-gray-200"
-                    placeholder="Name"
-                  />
-                  <input
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        sendChat();
-                      }
-                    }}
-                    className="flex-1 bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200"
-                    placeholder="Discuss the generated asset..."
-                  />
-                  <button
-                    onClick={() => sendChat()}
-                    className="px-3 py-2 rounded-lg text-xs font-semibold border border-blue-500/30 bg-blue-600 hover:bg-blue-500 text-white"
-                  >
-                    Send
-                  </button>
-                </div>
-                <div className="mt-2 flex gap-2">
-                  <button
-                    disabled={!generatedImage}
-                    onClick={() => sendChat(generatedImage)}
-                    className={`px-3 py-2 rounded-lg text-xs font-semibold border ${generatedImage ? 'border-purple-500/30 bg-purple-600 hover:bg-purple-500 text-white' : 'border-gray-800 bg-gray-800 text-gray-500 cursor-not-allowed'}`}
-                  >
-                    Share Asset to Chat
-                  </button>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <input 
-                  type="datetime-local" 
-                  className="bg-gray-900 border border-gray-600 rounded-lg p-2 text-sm"
-                  value={scheduleAt}
-                  onChange={e => setScheduleAt(e.target.value)}
-                />
-                <span className="text-xs text-gray-400">Schedule (optional)</span>
-              </div>
-              
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 my-4">
-                {['twitter', 'telegram', 'instagram', 'tiktok', 'youtube', 'reddit', 'discord', 'rss'].map((platform) => {
-                  const account = socialAccounts[platform];
-                  const labels: Record<string, string> = {
-                    twitter: 'Twitter',
-                    telegram: 'Telegram',
-                    instagram: 'Instagram',
-                    tiktok: 'TikTok',
-                    youtube: 'YouTube',
-                    reddit: 'Reddit',
-                    discord: 'Discord',
-                    rss: 'RSS',
-                  };
-                  const colors: Record<string, string> = {
-                    twitter: 'bg-[#1DA1F2] border-[#1DA1F2]',
-                    telegram: 'bg-[#0088cc] border-[#0088cc]',
-                    instagram: 'bg-[#E1306C] border-[#E1306C]',
-                    tiktok: 'bg-[#000000] border-[#333333]',
-                    youtube: 'bg-[#FF0000] border-[#FF0000]',
-                    reddit: 'bg-[#FF4500] border-[#FF4500]',
-                    discord: 'bg-[#5865F2] border-[#5865F2]',
-                    rss: 'bg-[#f59e0b] border-[#f59e0b]',
-                  };
-                  
-                  if (account === null) {
-                    return <div key={platform} className="px-3 py-2 rounded-lg text-sm font-semibold border bg-gray-800 border-gray-700 animate-pulse text-transparent">Loading...</div>;
-                  }
-                  
-                  if (account.authenticated) {
-                    return (
-                      <div key={platform} className={`col-span-1 flex items-center justify-between px-3 py-2 rounded-lg text-sm border ${colors[platform]} bg-opacity-20`}>
-                        <span className="font-semibold truncate">@{account.screenName || platform}</span>
-                        <button 
-                          onClick={() => {
-                            fetch(`/api/auth/${platform}/logout`, { method: 'POST' }).then(() => {
-                              setSocialAccounts(prev => ({ ...prev, [platform]: { authenticated: false } }));
-                            });
-                          }} 
-                          className="text-xs text-gray-400 underline hover:text-gray-200 ml-2"
-                        >
-                          Logout
-                        </button>
-                      </div>
-                    );
-                  }
-                  
-                  return (
-                    <button
-                      key={platform}
-                      onClick={() => {
-                        if (platform === 'telegram') {
-                          alert('Telegram posting uses a Bot token + Chat ID. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID on the server, then refresh.');
-                          return;
-                        }
-                        if (platform === 'discord') {
-                          window.location.href = '/profile';
-                          return;
-                        }
-                        if (platform === 'rss') {
-                          window.open('/rss.xml', '_blank');
-                          return;
-                        }
-                        window.location.href = `/api/auth/${platform}/login`;
-                      }}
-                      className={`px-3 py-2 rounded-lg text-sm font-semibold border ${colors[platform]} text-white flex items-center justify-center gap-2 transition hover:opacity-80`}
-                    >
-                      {platform === 'telegram'
-                        ? 'Configure Telegram'
-                        : platform === 'discord'
-                          ? 'Configure Discord'
-                          : platform === 'rss'
-                            ? 'Open RSS feed'
-                            : `Sign in to ${labels[platform]}`}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="mt-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-sm text-gray-300 font-semibold">{monthLabel(calendarYear, calendarMonth)}</div>
-                  <div className="flex gap-2">
-                    <div className="hidden sm:flex items-center gap-2 mr-4">
-                      <button
-                        aria-label="Toggle range selection mode"
-                        aria-pressed={rangeMode}
-                        onClick={() => setRangeMode(v => !v)}
-                        className={`px-2 py-1 rounded border text-xs ${rangeMode ? 'border-blue-500 bg-blue-600 text-white' : 'border-gray-700 bg-gray-800 text-gray-200'}`}
-                      >
-                        {rangeMode ? 'Range Mode: On' : 'Range Mode: Off'}
-                      </button>
-                    </div>
-                    <div className="hidden sm:flex items-center gap-2 mr-4">
-                      <label htmlFor="range-start" className="text-xs text-gray-400">Start</label>
-                      <input
-                        id="range-start"
-                        aria-label="Start date"
-                        type="date"
-                        value={rangeStart ? rangeStart.slice(0,10) : ''}
-                        onChange={e => {
-                          const iso = e.target.value ? new Date(e.target.value).toISOString() : '';
-                          setRangeStart(iso);
-                          validateRange(iso, rangeEnd);
-                        }}
-                        className="bg-gray-900 border border-gray-700 rounded p-1 text-xs"
-                      />
-                      <label htmlFor="range-end" className="text-xs text-gray-400">End</label>
-                      <input
-                        id="range-end"
-                        aria-label="End date"
-                        type="date"
-                        value={rangeEnd ? rangeEnd.slice(0,10) : ''}
-                        onChange={e => {
-                          const iso = e.target.value ? new Date(e.target.value).toISOString() : '';
-                          setRangeEnd(iso);
-                          validateRange(rangeStart, iso);
-                        }}
-                        className="bg-gray-900 border border-gray-700 rounded p-1 text-xs"
-                      />
-                      <button
-                        aria-label="Clear date range"
-                        className="px-2 py-1 rounded border border-gray-700 bg-gray-800 text-xs"
-                        onClick={clearRange}
-                      >Clear</button>
-                      <button
-                        aria-label="Clear selected dates"
-                        className="px-2 py-1 rounded border border-gray-700 bg-gray-800 text-xs"
-                        onClick={clearSelectedDates}
-                      >Clear Dates</button>
-                    </div>
-                    <button
-                      className="px-2 py-1 rounded border border-gray-700 bg-gray-800 text-xs"
-                      onClick={() => {
-                        const prev = new Date(calendarYear, calendarMonth - 1, 1);
-                        setCalendarYear(prev.getFullYear());
-                        setCalendarMonth(prev.getMonth());
-                      }}
-                    >Prev</button>
-                    <button
-                      className="px-2 py-1 rounded border border-gray-700 bg-gray-800 text-xs"
-                      onClick={() => {
-                        const next = new Date(calendarYear, calendarMonth + 1, 1);
-                        setCalendarYear(next.getFullYear());
-                        setCalendarMonth(next.getMonth());
-                      }}
-                    >Next</button>
-                  </div>
-                </div>
-                <div className="grid grid-cols-7 gap-1 text-xs text-gray-400 mb-1" role="row">
-                  <div className="text-center">Sun</div>
-                  <div className="text-center">Mon</div>
-                  <div className="text-center">Tue</div>
-                  <div className="text-center">Wed</div>
-                  <div className="text-center">Thu</div>
-                  <div className="text-center">Fri</div>
-                  <div className="text-center">Sat</div>
-                </div>
-                <div className="grid grid-cols-7 gap-1" role="grid" aria-label="Calendar">
-                  {Array.from({ length: firstDayOfWeek(calendarYear, calendarMonth) }).map((_, i) => (
-                    <div key={`empty-${i}`} className={`${styles.calendarDay} border border-gray-800 h-10 rounded bg-gray-900`} role="gridcell" />
-                  ))}
-                  {Array.from({ length: daysInMonth(calendarYear, calendarMonth) }).map((_, i) => {
-                    const day = i + 1;
-                    const isSelected = scheduleAt && new Date(scheduleAt).getDate() === day &&
-                      new Date(scheduleAt).getMonth() === calendarMonth && new Date(scheduleAt).getFullYear() === calendarYear;
-                    const inRange = inSelectedRange(calendarYear, calendarMonth, day);
-                    const isStart = isStartDay(calendarYear, calendarMonth, day);
-                    const isEnd = isEndDay(calendarYear, calendarMonth, day);
-                    const ariaLabel = new Date(calendarYear, calendarMonth, day).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-                    const dateISO = new Date(calendarYear, calendarMonth, day).toISOString();
-                    const isSingleSelection = visibleRangeStart && visibleRangeEnd && visibleRangeStart === visibleRangeEnd && isStart;
-                    const individuallySelected = isIndividuallySelected(calendarYear, calendarMonth, day);
-                    return (
-                      <button
-                        key={`day-${day}`}
-                        onClick={() => {
-                          const iso = dateISO;
-                          if (rangeMode) {
-                            if (!rangeStart) {
-                              setRangeStart(iso);
-                              setRangeEnd('');
-                              setRangeError(null);
-                            } else {
-                              const a = new Date(rangeStart);
-                              const b = new Date(iso);
-                              const startISO = (a < b ? a : b).toISOString();
-                              const endISO = (a < b ? b : a).toISOString();
-                              setRangeStart(startISO);
-                              setRangeEnd(endISO);
-                              validateRange(startISO, endISO);
-                            }
-                          } else {
-                            toggleIndividualDate(iso);
-                          }
-                        }}
-                        className={`${styles.calendarDay} border h-10 rounded text-sm ${inRange ? styles.calendarDayInRange : 'border-gray-700 bg-gray-800 text-gray-200'} ${individuallySelected ? styles.calendarDayIndividuallySelected : ''} ${isStart ? styles.calendarDayRangeStart : ''} ${isEnd ? styles.calendarDayRangeEnd : ''}`}
-                        title={`${day}/${calendarMonth + 1}/${calendarYear}`}
-                        role="gridcell"
-                        aria-selected={inRange || individuallySelected || isSingleSelection ? true : undefined}
-                        aria-label={ariaLabel}
-                        id={`calendar-day-${day}`}
-                        onKeyDown={e => {
-                          const key = e.key;
-                          let targetDay = day;
-                          if (key === 'ArrowRight') targetDay = day + 1;
-                          if (key === 'ArrowLeft') targetDay = day - 1;
-                          if (key === 'ArrowUp') targetDay = day - 7;
-                          if (key === 'ArrowDown') targetDay = day + 7;
-                          if (key === 'Enter' || key === ' ') {
-                            const iso = dateISO;
-                            if (rangeMode) {
-                              if (!rangeStart) {
-                                setRangeStart(iso);
-                                setRangeEnd('');
-                                setRangeError(null);
-                              } else {
-                                const a = new Date(rangeStart);
-                                const b = new Date(iso);
-                                const startISO = (a < b ? a : b).toISOString();
-                                const endISO = (a < b ? b : a).toISOString();
-                                setRangeStart(startISO);
-                                setRangeEnd(endISO);
-                                validateRange(startISO, endISO);
-                              }
-                            } else {
-                              toggleIndividualDate(iso);
-                            }
-                          }
-                          if (targetDay >= 1 && targetDay <= daysInMonth(calendarYear, calendarMonth)) {
-                            const el = document.getElementById(`calendar-day-${targetDay}`);
-                            if (el) (el as HTMLElement).focus();
-                          }
-                        }}
-                      >
-                        <div className="flex flex-col items-center justify-center h-full">
-                          <span>{day}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="mt-2 text-xs text-gray-400">
-                  {scheduleAt ? `Scheduled for: ${new Date(scheduleAt).toLocaleString()}` : 'No schedule set'}
-                </div>
-                <div className="mt-1 text-xs">
-                  {rangeError && <span className="text-red-400">{rangeError}</span>}
-                  {!rangeError && rangeStart && rangeEnd && (
-                    <span className="text-gray-300">
-                      Selected: {new Date(rangeStart).toLocaleDateString()} – {new Date(rangeEnd).toLocaleDateString()}
-                    </span>
-                  )}
-                  {!rangeError && selectedDates.length > 0 && (
-                    <div className="text-gray-300 mt-1">
-                      Dates: {selectedDates.map(d => new Date(d).toLocaleDateString()).join(', ')}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <button 
-                onClick={postContentAction}
-                disabled={isPosting}
-                className={`w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2 ${isPosting ? 'bg-gray-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'}`}
-              >
-                {isPosting ? 'Broadcasting...' : 'Post to All Channels'}
-              </button>
-              <div className="mt-2 text-xs text-gray-400">
-                If a platform login page keeps resetting, try turning off ad/tracker blockers for the login domain, disabling privacy extensions, or using a Private/Incognito window.
-              </div>
-
-              {postingStatus === 'success' && (
-                <div className="mt-3 rounded-lg bg-green-500/20 text-green-300 border border-green-500/30 px-3 py-2 text-sm">
-                  Posted successfully
-                </div>
-              )}
-              {postingStatus && postingStatus !== 'success' && (
-                <div className="mt-3 rounded-lg bg-red-500/20 text-red-300 border border-red-500/30 px-3 py-2 text-sm">
-                  {postingStatus === 'network-error' ? 'Network error while posting' : `Posting failed: ${postingStatus}`}
-                </div>
-              )}
-            </div>
-            
-            <div className="mt-8 p-4 bg-gray-900 rounded-lg text-sm text-gray-400">
-              <p>Pro Tip: Use the Screenshot Manager service for capturing web assets.</p>
-              {(() => {
-                const base =
-                  process.env.NEXT_PUBLIC_SCREENSHOT_URL || (process.env.NODE_ENV !== 'production' ? 'http://localhost:4010' : '');
-                if (!base) {
-                  return <div className="mt-2 text-xs text-gray-500">Set NEXT_PUBLIC_SCREENSHOT_URL to enable Screenshot Manager.</div>;
-                }
-                return (
-                  <a href={`${base}/api/screenshots`} target="_blank" className="text-blue-400 hover:underline mt-2 inline-block">
-                    Open Screenshot Manager
-                  </a>
-                );
-              })()}
-            </div>
-          </div>
-          ) : null}
         </div>
       </main>
     </div>

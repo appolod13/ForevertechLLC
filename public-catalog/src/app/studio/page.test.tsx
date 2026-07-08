@@ -136,6 +136,17 @@ describe('StudioPage calendar date range', () => {
     expect(screen.getByPlaceholderText('Describe the image and post content you want to generate...')).toBeDefined();
   });
 
+  it('does not bootstrap social or chat integrations in the cleaned Studio view', async () => {
+    await renderStudioPage();
+
+    const calls = (global.fetch as unknown as { mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> } }).mock.calls;
+    const calledUrls = calls.map((c) => String(c[0]));
+
+    expect(calledUrls.some((url) => url.includes('/api/auth/session'))).toBe(false);
+    expect(calledUrls.some((url) => url.includes('/api/chat/history'))).toBe(false);
+    expect(calledUrls.some((url) => url.includes('/api/catalog/posts'))).toBe(false);
+  });
+
   it('keeps the main creation flow and hides dashboard-style secondary sections', async () => {
     await renderStudioPage();
 
