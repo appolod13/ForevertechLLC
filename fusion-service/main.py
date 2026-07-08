@@ -292,6 +292,7 @@ def fractal_fusion_rgb(
     palette_shift = (int(palette_index) % 24) / 24.0
     pal = _palette_params(palette_profile, phash)
     metal = _metallic_profile(palette_profile)
+    is_magma = (palette_profile or "").strip().lower() in {"magma", "lava", "fire", "heat"}
     texture_style = texture_style or _texture_style_for_seed(seed)
     texture_phase = ((phash >> 7) % 360) * math.pi / 180.0
     base_hue = (pal["base"] + palette_shift) % 1.0
@@ -341,7 +342,8 @@ def fractal_fusion_rgb(
         max_iter = user_iterations
     max_iter *= quality
 
-    field = [0.0] * (fw * fh)
+    field_main = [0.0] * (fw * fh)
+    field_stripe = [0.0] * (fw * fh)
     inv_fw = 1.0 / max(1, fw - 1)
     inv_fh = 1.0 / max(1, fh - 1)
 
@@ -365,6 +367,7 @@ def fractal_fusion_rgb(
 
             zr, zi = ix, iy
             j_iter = 0
+            stripe_sum = 0.0
             while j_iter < max_iter:
                 zr2 = zr * zr
                 zi2 = zi * zi
@@ -372,6 +375,9 @@ def fractal_fusion_rgb(
                     break
                 zi = 2.0 * zr * zi + ci
                 zr = zr2 - zi2 + cr
+                stripe_sum += 0.5 + 0.5 * math.sin(
+                    math.atan2(zi, zr) * (2.0 + 6.0 * detail_density) + q_phase * 0.82
+                )
                 j_iter += 1
             if j_iter < max_iter:
                 mag = math.sqrt(zr * zr + zi * zi) + 1e-9
@@ -379,6 +385,7 @@ def fractal_fusion_rgb(
             else:
                 j_val = max_iter
             j_norm = j_val / max_iter
+            stripe_norm = stripe_sum / max(1, j_iter)
 
             mr, mi = 0.0, 0.0
             m_iter = 0
@@ -407,15 +414,15 @@ def fractal_fusion_rgb(
             mand_mask = _clamp01(mand_mask)
             mand_mask = mand_mask * mand_mask * mand_mask
             local_mandelbrot_weight = mandelbrot_weight * mand_mask * 0.55
-            base_weight = max(0.0, 1.0 - julia_weight - local_mandelbrot_weight)
-            fused = (
-                j_norm * julia_weight
-                + m_norm * local_mandelbrot_weight
-                + flow_band * base_weight
-            ) * (0.78 + 0.22 * interference)
-            field[row + x] = fused
+            ribbon = _clamp01(1.0 - j_norm)
+            fused = (ribbon * (0.86 + 0.14 * interference) + 0.10 * flow_band * (0.55 + 0.45 * stripe_norm)) * (
+                0.82 + 0.18 * interference
+            )
+            fused += m_norm * local_mandelbrot_weight
+            field_main[row + x] = _clamp01(fused)
+            field_stripe[row + x] = _clamp01(stripe_norm)
 
-    def sample(fx: float, fy: float) -> float:
+    def sample_from(src: list[float], fx: float, fy: float) -> float:
         if fx < 0.0:
             fx = 0.0
         elif fx > fw - 1:
@@ -430,13 +437,19 @@ def fractal_fusion_rgb(
         y1 = y0 + 1 if y0 < fh - 1 else y0
         tx = fx - x0
         ty = fy - y0
-        a = field[y0 * fw + x0]
-        b = field[y0 * fw + x1]
-        c = field[y1 * fw + x0]
-        d = field[y1 * fw + x1]
+        a = src[y0 * fw + x0]
+        b = src[y0 * fw + x1]
+        c = src[y1 * fw + x0]
+        d = src[y1 * fw + x1]
         top = a + (b - a) * tx
         bot = c + (d - c) * tx
         return top + (bot - top) * ty
+
+    def sample(fx: float, fy: float) -> float:
+        return sample_from(field_main, fx, fy)
+
+    def sample_stripe(fx: float, fy: float) -> float:
+        return sample_from(field_stripe, fx, fy)
 
     sx = (fw - 1) / max(1, width - 1)
     sy = (fh - 1) / max(1, height - 1)
@@ -455,6 +468,7 @@ def fractal_fusion_rgb(
         for x in range(width):
             fx = x * sx
             v = sample(fx, fy)
+            stripe_v = sample_stripe(fx, fy)
 
             dx = (sample(fx - 1.0, fy) - sample(fx + 1.0, fy)) * relief
             dy = (sample(fx, fy - 1.0) - sample(fx, fy + 1.0)) * relief
@@ -477,37 +491,76 @@ def fractal_fusion_rgb(
                 + story_phase_bias[3] * _smoothstep(0.65, 1.0, story_geo)
             )
             electric_anchor = (0.56 + 0.28 * (0.5 + 0.5 * math.sin((story_geo * 3.4 + diagonal_shimmer * 1.7 + texture * 1.2) * math.pi))) % 1.0
-            band_freq = 6.0 + 16.0 * detail_density
-            t = v * band_freq + 0.22 * texture + 0.30 * story_geo + 0.18 * diagonal_shimmer
+            band_freq = 4.0 + 22.0 * detail_density
+            t = (
+                v * band_freq
+                + stripe_v * (1.35 + 0.55 * detail_density)
+                + 0.24 * texture
+                + 0.30 * story_geo
+                + 0.18 * diagonal_shimmer
+            )
             frac = t - math.floor(t)
             dist = frac if frac < 0.5 else 1.0 - frac
-            ridge = 1.0 - _smoothstep(0.02, 0.11, dist)
+            ridge = 1.0 - _smoothstep(0.03, 0.18, dist)
+
+            r = math.sqrt(nx * nx + ny * ny) + 1e-9
+            theta = math.atan2(ny, nx)
+            arms = 5.0 + 9.0 * ring_bias
+            star_a = 0.5 + 0.5 * math.sin(theta * arms + r * (10.0 + 7.0 * diamond_bias) + q_phase * 0.72 + stripe_v * 2.2)
+            star_b = 0.5 + 0.5 * math.sin(theta * arms * 0.55 - r * (7.0 + 6.0 * ring_bias) + q_phase * 0.48)
+            starburst = _clamp01(0.62 * star_a + 0.38 * star_b)
+            bg_wash = _clamp01((1.0 - ridge) * (0.35 + 0.35 * starburst) * (0.78 - 0.50 * story_geo))
 
             hue = (
-                base_hue * (1.0 - 0.34)
-                + electric_anchor * 0.34
-                + v * hue_span * (0.95 + palette_motion + 0.18 * texture)
-                + story_geo * 0.08
-                + texture * 0.04
-                + diagonal_filament_strength * 0.02
-                + ridge * 0.03
+                base_hue * 0.46
+                + electric_anchor * 0.16
+                + v * hue_span * (1.02 + palette_motion + 0.22 * stripe_v + 0.12 * texture)
+                + story_geo * 0.10
+                + texture * 0.06
+                + stripe_v * 0.05
             ) % 1.0
-            sat = min(1.0, max(0.0, sat_base + 0.14 * (1.0 - v) + geo * 0.05 + story_geo * 0.10 + 0.05 * diagonal_shimmer + ridge * 0.08 - metal["metal_desat"] * metallic_edge))
+            rainbow = (0.18 * t + 0.23 * starburst + 0.17 * stripe_v) % 1.0
+            ridge_mix = (0.22 if is_magma else 0.38) * ridge
+            hue = (hue * (1.0 - ridge_mix) + rainbow * ridge_mix) % 1.0
+            purple_hue = (0.86 + 0.05 * starburst) % 1.0
+            bg_mix = (0.30 if is_magma else 0.55) * bg_wash
+            hue = (hue * (1.0 - bg_mix) + purple_hue * bg_mix) % 1.0
+
+            sat = min(
+                1.0,
+                max(
+                    0.0,
+                    sat_base
+                    + 0.10 * (1.0 - v)
+                    + geo * 0.06
+                    + story_geo * 0.12
+                    + 0.06 * diagonal_shimmer
+                    + ridge * (0.16 + 0.08 * stripe_v)
+                    - bg_wash * 0.18
+                    - metal["metal_desat"] * metallic_edge,
+                ),
+            )
             val = _clamp01(
                 brightness_floor
-                + (0.20 + 0.48 * v + val_bias) * metal["background_dim"] * (0.88 + 0.10 * geo + 0.16 * texture_layer + 0.22 * story_geo)
-                + ridge * (0.06 + 0.18 * metallic_edge)
+                + (0.24 + 0.60 * v + val_bias) * metal["background_dim"] * (0.90 + 0.12 * geo + 0.18 * texture_layer + 0.26 * story_geo)
+                + ridge * (0.12 + 0.38 * (0.45 + 0.55 * metallic_edge))
+                + starburst * 0.04
             )
 
             r, g, b = _hsv_to_rgb(hue, sat, val)
             rf, gf, bf = r / 255.0, g / 255.0, b / 255.0
-            cool_metal = (0.46 + 0.30 * texture, 0.50 + 0.24 * texture, 0.58 + 0.18 * texture)
+            cool_metal = (
+                (0.62 + 0.18 * texture, 0.52 + 0.16 * texture, 0.42 + 0.10 * texture)
+                if is_magma
+                else (0.46 + 0.30 * texture, 0.50 + 0.24 * texture, 0.58 + 0.18 * texture)
+            )
             rf *= 0.86 + 0.10 * texture_layer
             gf *= 0.88 + 0.10 * texture_layer
             bf *= 0.94 + 0.08 * texture_layer
 
             light = _clamp01(0.5 + 0.5 * ((dx * 0.72 - dy * 0.54) / (abs(dx) + abs(dy) + 1e-9)))
-            specular = (metallic_edge ** 1.45) * (0.20 + metal["specular_strength"] * light + 0.14 * phase_drive)
+            rim = _clamp01(max(metallic_edge, ridge) * (0.55 + 0.45 * stripe_v))
+            specular = (rim ** 1.55) * (0.28 + (metal["specular_strength"] + 0.10) * light + 0.18 * phase_drive)
             metal_blend = metallic_edge * (0.30 + 0.20 * texture + 0.24 * story_geo)
 
             rf = rf * (1.0 - metal_blend) + cool_metal[0] * metal_blend + specular * 0.90

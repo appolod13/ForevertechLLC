@@ -146,6 +146,23 @@ def test_palette_params_magma_is_warm_and_saturated():
     assert pal["span"] >= 0.24
     assert pal["sat"] >= 0.85
 
+def test_fractal_fusion_rgb_magma_blend_contains_warm_and_cool_accents():
+    img = fusion_main.fractal_fusion_rgb(
+        96,
+        96,
+        "blend all at once magma rainbow starburst ribbons",
+        123,
+        palette_profile="magma",
+        detail_density=0.88,
+        ring_bias=0.9,
+        diamond_bias=0.86,
+    )
+    rs = img[0::3]
+    bs = img[2::3]
+    assert max(rs) >= 240
+    assert max(bs) >= 210
+    assert (sum(rs) / len(rs)) >= (sum(bs) / len(bs)) * 0.75
+
 def test_brain_img2img_invalid_image_rejected():
     response = client.post(
         "/brain/img2img",
