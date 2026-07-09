@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import fs from 'fs/promises';
+import path from 'path';
 
 import { getServiceSupabase } from '@/lib/supabase';
 import { computeDesignHash } from '@/lib/designMockups';
@@ -80,6 +82,17 @@ type PrintifyTemplatePlaceholder = { position?: unknown; images?: unknown };
 type PrintifyTemplatePrintArea = { variant_ids?: unknown; placeholders?: unknown };
 type PrintifyTemplateProduct = { id?: unknown; title?: unknown; blueprint_id?: unknown; print_provider_id?: unknown; variants?: unknown; print_areas?: unknown };
 
+type TemplateTransform = { x: number; y: number; scale: number; angle: number };
+
+type PlacementMatch = {
+  key: string;
+  transform: TemplateTransform;
+};
+
+function normalizePlacementKey(value: string) {
+  return value.trim().toLowerCase().replace(/[\s-]+/g, '_');
+}
+
 function getVariantIds(template: PrintifyTemplateProduct) {
   const variantsRaw = template.variants;
   if (!Array.isArray(variantsRaw)) throw new Error('printify_template_missing_variants');
@@ -110,6 +123,14 @@ function getAllPlaceholderPositions(template: PrintifyTemplateProduct, variantId
     return positions;
   }
   return [];
+}
+
+function matchesAlias(position: string, aliases: string[]) {
+  const normalized = normalizePlacementKey(position);
+  return aliases.some((alias) => {
+    const candidate = normalizePlacementKey(alias);
+    return normalized === candidate || normalized.includes(candidate);
+  });
 }
 
 function placementScore(pos: string, want: 'front' | 'back') {
@@ -161,6 +182,27 @@ function getTransformFromTemplate(template: PrintifyTemplateProduct, variantId: 
     }
   }
   return { x: 0.5, y: 0.5, scale: 0.8, angle: 0 };
+}
+
+function getPlacementMatch(template: PrintifyTemplateProduct, variantId: number, aliases: string[]) {
+  const positions = getAllPlaceholderPositions(template, variantId);
+  const key = positions.find((position) => matchesAlias(position, aliases));
+  if (!key) return null;
+  return {
+    key,
+    transform: getTransformFromTemplate(template, variantId, key),
+  } satisfies PlacementMatch;
+}
+
+async function loadLocalAssetAsBase64(relativePath: string) {
+  const absolutePath = path.join(process.cwd(), 'public', relativePath.replace(/^\/+/, ''));
+  const file = await fs.readFile(absolutePath);
+  return file.toString('base64');
+}
+
+async function uploadSiteLogoToPrintify(fileSafe: string) {
+  const base64 = await loadLocalAssetAsBase64('images/Forevertech_logo.jpg');
+  return uploadImageToPrintify(`necktag-logo-${fileSafe}-${Date.now().toString(36)}.jpg`, base64);
 }
 
 async function getTemplateProduct(shopId: string, preferredProductId?: string) {
@@ -335,7 +377,83 @@ export async function POST(req: Request) {
     const frontPos = pickPlaceholderPosition(positions, 'front') || 'front';
     const frontTransform = getTransformFromTemplate(template, primaryVariantId, frontPos);
 
+    const isAop = printType === 'all_over_print';
+    const appliedPlacements: string[] = [];
+    const skippedPlacements: string[] = [];
+
     const title = `Mockup ${fileSafe}`.slice(0, 60);
+    let placeholders: Array<{ position: string; images: Array<{ id: string; x: number; y: number; scale: number; angle: number }> }>;
+
+    if (isAop) {
+      const front = getPlacementMatch(template, primaryVariantId, ['front', 'chest']);
+      const back = getPlacementMatch(template, primaryVariantId, ['back', 'rear']);
+      const leftSleeve = getPlacementMatch(template, primaryVariantId, ['left_sleeve', 'left sleeve']);
+      const rightSleeve = getPlacementMatch(template, primaryVariantId, ['right_sleeve', 'right sleeve']);
+
+      const requiredPlacements = [
+        ['front', front],
+        ['back', back],
+        ['left_sleeve', leftSleeve],
+        ['right_sleeve', rightSleeve],
+      ] as const;
+
+      const missingRequired = requiredPlacements.find(([, match]) => !match);
+      if (missingRequired) {
+        throw new Error(`required_aop_placement_missing:${missingRequired[0]}`);
+      }
+
+      placeholders = requiredPlacements.map(([name, match]) => {
+        appliedPlacements.push(name);
+        return {
+          position: match!.key,
+          images: [
+            {
+              id: uploaded.id,
+              x: match!.transform.x,
+              y: match!.transform.y,
+              scale: match!.transform.scale,
+              angle: match!.transform.angle,
+            },
+          ],
+        };
+      });
+
+      const insideNeckTag = getPlacementMatch(template, primaryVariantId, ['inside_neck_tag', 'inside neck tag', 'inside_label']);
+      if (insideNeckTag) {
+        const logoUpload = await uploadSiteLogoToPrintify(fileSafe);
+        placeholders.push({
+          position: insideNeckTag.key,
+          images: [
+            {
+              id: logoUpload.id,
+              x: insideNeckTag.transform.x,
+              y: insideNeckTag.transform.y,
+              scale: insideNeckTag.transform.scale,
+              angle: insideNeckTag.transform.angle,
+            },
+          ],
+        });
+        appliedPlacements.push('inside_neck_tag');
+      } else {
+        skippedPlacements.push('inside_neck_tag');
+      }
+
+      const collarPlacement = getPlacementMatch(template, primaryVariantId, ['collar', 'neck']);
+      if (collarPlacement && !matchesAlias(collarPlacement.key, ['inside_neck_tag', 'inside neck tag', 'inside_label'])) {
+        skippedPlacements.push('neck_accent_supported_but_not_applied');
+      } else {
+        skippedPlacements.push('neck_accent');
+      }
+    } else {
+      placeholders = [
+        {
+          position: frontPos,
+          images: [{ id: uploaded.id, x: frontTransform.x, y: frontTransform.y, scale: frontTransform.scale, angle: frontTransform.angle }],
+        },
+      ];
+      appliedPlacements.push('front');
+    }
+
     const bodyPayload = {
       title,
       description: (prompt ? `Auto-generated mockup product.\nPrompt: ${prompt}` : 'Auto-generated mockup product.').slice(0, 500),
@@ -345,12 +463,7 @@ export async function POST(req: Request) {
       print_areas: [
         {
           variant_ids: variantIds.slice(0, 50),
-          placeholders: [
-            {
-              position: frontPos,
-              images: [{ id: uploaded.id, x: frontTransform.x, y: frontTransform.y, scale: frontTransform.scale, angle: frontTransform.angle }],
-            },
-          ],
+          placeholders,
         },
       ],
     };
@@ -379,13 +492,36 @@ export async function POST(req: Request) {
             updated_at: new Date().toISOString(),
           })
           .eq('design_hash', designHash);
-        return NextResponse.json({ success: true, designHash, status: 'ready', mockups: urls, printifyProductId: productId }, { status: 200 });
+        return NextResponse.json(
+          {
+            success: true,
+            designHash,
+            status: 'ready',
+            mockups: urls,
+            printifyProductId: productId,
+            meta: {
+              appliedPlacements,
+              skippedPlacements,
+            },
+          },
+          { status: 200 },
+        );
       }
       await sleep(1500);
     }
 
     return NextResponse.json(
-      { success: true, designHash, status: 'pending', mockups: { frontUrl: undefined, backUrl: undefined, leftUrl: undefined, rightUrl: undefined }, printifyProductId: productId },
+      {
+        success: true,
+        designHash,
+        status: 'pending',
+        mockups: { frontUrl: undefined, backUrl: undefined, leftUrl: undefined, rightUrl: undefined },
+        printifyProductId: productId,
+        meta: {
+          appliedPlacements,
+          skippedPlacements,
+        },
+      },
       { status: 200 },
     );
   } catch (e: unknown) {
