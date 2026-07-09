@@ -25,9 +25,19 @@ vi.mock('qrcode', () => ({
 
 describe('ProductCustomizer', () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+  let originalLocation: Location;
 
   beforeEach(() => {
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...originalLocation,
+        href: 'http://localhost/customize',
+        origin: 'http://localhost',
+      },
+    });
     useRouterMock.mockReturnValue({
       back: vi.fn(),
     });
@@ -39,6 +49,10 @@ describe('ProductCustomizer', () => {
 
   afterEach(() => {
     consoleErrorSpy.mockRestore();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: originalLocation,
+    });
   });
 
   it('shows $59.99 pricing in the fallback merch product', async () => {
@@ -212,5 +226,20 @@ describe('ProductCustomizer', () => {
     const previewShell = screen.getByTestId('preview-shell');
     expect(previewShell.className).toContain('min-h-[');
     expect(previewShell.className).toContain('lg:aspect-square');
+  });
+
+  it('routes send-to-poster actions to the dedicated multiposter page', async () => {
+    render(<ProductCustomizer initialImageUrl="https://example.com/design.png" promptOverride="quantum wormhole tee" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Send to Multi-Channel Poster' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send to Multi-Channel Poster' }));
+
+    const parsed = new URL(window.location.href);
+    expect(parsed.pathname).toBe('/poster');
+    expect(parsed.searchParams.get('shareImage')).toBe('https://example.com/design.png');
+    expect(parsed.searchParams.get('sharePrompt')).toBe('quantum wormhole tee');
   });
 });

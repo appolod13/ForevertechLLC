@@ -6,6 +6,7 @@ import { ArrowLeft, ShoppingCart, Shirt } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCart } from '@/context/CartContext';
 import { MerchPreviewPanel } from '@/components/MerchPreviewPanel';
+import { buildPosterHref } from '@/lib/multiposter';
 
 type PreviewSurface = 'front' | 'back' | 'overview' | 'spin360' | 'finished';
 
@@ -308,11 +309,12 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
       .filter(Boolean)
       .join('\n\n')
       .slice(0, 900);
-    const studioUrl = new URL('/studio', origin);
-    studioUrl.searchParams.set('shareImage', img);
-    studioUrl.searchParams.set('shareText', shareText);
-    if (sharePrompt) studioUrl.searchParams.set('sharePrompt', sharePrompt.slice(0, 600));
-    window.location.href = studioUrl.toString();
+    window.location.href = buildPosterHref({
+      origin,
+      imageUrl: img,
+      text: shareText,
+      prompt: sharePrompt,
+    });
   };
 
 

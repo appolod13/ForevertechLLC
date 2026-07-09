@@ -8,6 +8,7 @@ import { useCart } from '@/context/CartContext';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { MerchPreviewPanel } from '@/components/MerchPreviewPanel';
+import { buildPosterHref } from '@/lib/multiposter';
 
 export interface CatalogItemProps {
   id: string;
@@ -164,11 +165,12 @@ export function CatalogItem({
       .join('\n\n')
       .slice(0, 900);
 
-    const studioUrl = new URL('/studio', origin);
-    studioUrl.searchParams.set('shareImage', img);
-    studioUrl.searchParams.set('shareText', shareText);
-    if (customizePrompt) studioUrl.searchParams.set('sharePrompt', customizePrompt.slice(0, 600));
-    window.location.href = studioUrl.toString();
+    window.location.href = buildPosterHref({
+      origin,
+      imageUrl: img,
+      text: shareText,
+      prompt: customizePrompt,
+    });
   };
 
   const handlePurchase = async () => {

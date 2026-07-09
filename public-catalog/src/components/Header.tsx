@@ -42,6 +42,7 @@ export function Header() {
     { href: '/governance', label: 'Governance', visible: true },
     { href: '/pixelqrypt', label: 'PixelQrypt™', visible: true },
     { href: '/studio', label: 'Studio', visible: true },
+    { href: '/poster', label: 'MultiPoster', visible: true },
     { href: '/gallery', label: 'Gallery', visible: true },
     { href: '/faqs', label: 'FAQs', visible: true },
     { href: '/support', label: 'Support', visible: true },
@@ -200,6 +201,13 @@ export function Header() {
               onClick={() => setIsMobileMenuOpen(false)}
             >
               Studio
+            </Link>
+            <Link
+              href="/poster"
+              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              MultiPoster
             </Link>
             <Link
               href="/pixelqrypt"

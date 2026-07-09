@@ -137,33 +137,39 @@ describe('StudioPage calendar date range', () => {
     expect(screen.getByPlaceholderText('Describe the image and post content you want to generate...')).toBeDefined();
   });
 
-  it('loads live multichannel poster connection state in Studio', async () => {
+  it('does not bootstrap poster connection state in Studio', async () => {
     localStorage.setItem('user', JSON.stringify({ id: 'user-1', name: 'Poster User' }));
     await renderStudioPage();
 
     const calls = (global.fetch as unknown as { mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> } }).mock.calls;
     const calledUrls = calls.map((c) => String(c[0]));
 
-    expect(calledUrls.some((url) => url.includes('/api/auth/session?userId=user-1'))).toBe(true);
+    expect(calledUrls.some((url) => url.includes('/api/auth/session?userId=user-1'))).toBe(false);
     expect(calledUrls.some((url) => url.includes('/api/chat/history'))).toBe(false);
     expect(calledUrls.some((url) => url.includes('/api/catalog/posts'))).toBe(false);
   });
 
-  it('keeps the main creation flow and restores the multichannel poster as a secondary section', async () => {
+  it('keeps the main creation flow and links out to the dedicated multiposter page', async () => {
     localStorage.setItem('user', JSON.stringify({ id: 'user-1', name: 'Poster User' }));
+    localStorage.setItem(
+      'foreverteck.studio.lastImage',
+      JSON.stringify({
+        imageUrl: 'https://example.com/latest-build.png',
+        prompt: 'quantum skyline tee',
+      }),
+    );
     await renderStudioPage();
 
     expect(screen.getByText('Latest Build Preview')).toBeInTheDocument();
-    expect(screen.getByText('Multichannel Poster')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Refresh Connections' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Post to All Channels' })).toBeInTheDocument();
-    expect(screen.getByText('Reddit connected')).toBeInTheDocument();
-    expect(screen.getByText('Discord connected')).toBeInTheDocument();
-    expect(screen.getByText('RSS available')).toBeInTheDocument();
+    expect(screen.queryByText('Multichannel Poster')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open in MultiPoster' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('/poster?'),
+    );
     expect(screen.queryByText('Live Chat')).not.toBeInTheDocument();
   });
 
-  it('publishes the latest generated content through the restored multichannel poster', async () => {
+  it('sends the latest generated content to the dedicated multiposter page', async () => {
     localStorage.setItem('user', JSON.stringify({ id: 'user-1', name: 'Poster User' }));
     localStorage.setItem(
       'foreverteck.studio.lastImage',
@@ -177,82 +183,16 @@ describe('StudioPage calendar date range', () => {
       mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> };
     };
 
-    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-      if (url.includes('/api/auth/session')) {
-        return {
-          ok: true,
-          json: async () => ({
-            twitter: { authenticated: false },
-            telegram: { authenticated: false },
-            instagram: { authenticated: false },
-            tiktok: { authenticated: false },
-            youtube: { authenticated: false },
-            reddit: { authenticated: true, screenName: 'reddit_user' },
-            discord: { authenticated: true, screenName: 'Discord connected' },
-            rss: { authenticated: true, screenName: 'RSS feed' },
-          }),
-        } as Response;
-      }
-      if (url.includes('/api/post')) {
-        return {
-          ok: true,
-          json: async () => ({
-            success: true,
-            results: {
-              reddit: { success: true },
-              discord: { success: true },
-              rss: { success: true },
-            },
-          }),
-        } as Response;
-      }
-      if (url.includes('/api/printify/mockups')) {
-        return {
-          ok: true,
-          json: async () => ({
-            success: true,
-            designHash: 'hash_test',
-            status: 'pending',
-            mockups: { frontUrl: undefined, backUrl: undefined, leftUrl: undefined, rightUrl: undefined },
-          }),
-        } as Response;
-      }
-      return { ok: true, json: async () => ({ success: true }) } as Response;
-    });
-
     await renderStudioPage();
 
-    const posterCopy = screen.getByLabelText('Poster Copy') as HTMLTextAreaElement;
-    fireEvent.change(posterCopy, { target: { value: 'Quantum drop is live' } });
-    fireEvent.click(screen.getByLabelText('Post to Reddit'));
-    fireEvent.click(screen.getByLabelText('Post to Discord'));
-    fireEvent.click(screen.getByLabelText('Post to RSS'));
-    fireEvent.click(screen.getByRole('button', { name: 'Post to All Channels' }));
-
-    await waitFor(() => {
-      expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('/api/post'))).toBe(true);
-    });
-
-    const postCall = fetchMock.mock.calls.find((call) => String(call[0]).includes('/api/post'));
-    expect(postCall).toBeDefined();
-    expect(postCall?.[1]?.method).toBe('POST');
-    expect(postCall?.[1]?.body).toEqual(
-      JSON.stringify({
-        userId: 'user-1',
-        content: 'Quantum drop is live',
-        platforms: ['reddit', 'discord', 'rss'],
-        metadata: {
-          mediaUrl: 'https://example.com/latest-build.png',
-        },
-      }),
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('reddit: success')).toBeInTheDocument();
-      expect(screen.getByText('discord: success')).toBeInTheDocument();
-      expect(screen.getByText('rss: success')).toBeInTheDocument();
-    });
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('/api/post'))).toBe(false);
+    const posterLink = screen.getByRole('link', { name: 'Open in MultiPoster' });
+    const href = posterLink.getAttribute('href') || '';
+    const parsedHref = new URL(href, 'http://localhost:3000');
+    expect(parsedHref.pathname).toBe('/poster');
+    expect(parsedHref.searchParams.get('shareImage')).toBe('https://example.com/latest-build.png');
+    expect(parsedHref.searchParams.get('shareText')).toBe('quantum skyline tee');
+    expect(parsedHref.searchParams.get('sharePrompt')).toBe('quantum skyline tee');
   });
 
   it('disables generate button until prompt is entered', async () => {

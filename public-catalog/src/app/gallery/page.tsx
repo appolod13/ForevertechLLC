@@ -9,6 +9,7 @@ import { useCart } from '@/context/CartContext';
 import PixelQryptModal from '@/components/PixelQryptModal';
 import { MerchPreviewPanel } from '@/components/MerchPreviewPanel';
 import { getCreatorAccess } from '@/lib/creatorAccess';
+import { buildPosterHref } from '@/lib/multiposter';
 
 interface GalleryItem {
   id: string;
@@ -162,11 +163,12 @@ export default function GalleryPage() {
       .join('\n\n')
       .slice(0, 900);
 
-    const studioUrl = new URL('/studio', origin);
-    studioUrl.searchParams.set('shareImage', img);
-    studioUrl.searchParams.set('shareText', shareText);
-    if (prompt) studioUrl.searchParams.set('sharePrompt', prompt.slice(0, 600));
-    window.location.href = studioUrl.toString();
+    window.location.href = buildPosterHref({
+      origin,
+      imageUrl: img,
+      text: shareText,
+      prompt,
+    });
   };
 
   return (
