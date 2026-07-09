@@ -53,10 +53,38 @@ describe('ProfilePage', () => {
       isLoading: false,
     });
 
-    global.fetch = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({ orders: [], success: true, connected: true, webhookDisplay: 'https://discord.com/.../abc...xyz' }),
-    })) as typeof fetch;
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/api/social/discord')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            connected: true,
+            webhookDisplay: 'https://discord.com/.../abc...xyz',
+          }),
+        } as Response;
+      }
+      if (url.includes('/api/auth/session')) {
+        return {
+          ok: true,
+          json: async () => ({
+            twitter: { authenticated: true, screenName: 'bird_bot' },
+            telegram: { authenticated: true, screenName: 'tg_channel' },
+            instagram: { authenticated: false },
+            tiktok: { authenticated: true, screenName: 'motion_drop' },
+            youtube: { authenticated: false },
+            reddit: { authenticated: true, screenName: 'reddit_user' },
+            discord: { authenticated: true, screenName: 'Discord connected' },
+            rss: { authenticated: true, screenName: 'RSS feed' },
+          }),
+        } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => ({ orders: [], success: true }),
+      } as Response;
+    }) as typeof fetch;
   });
 
   it('shows premium creator status and stored generation usage', async () => {
@@ -123,5 +151,42 @@ describe('ProfilePage', () => {
     });
 
     expect(screen.getByText('https://discord.com/.../abc...xyz')).toBeInTheDocument();
+  });
+
+  it('shows all connected social destinations in profile settings', async () => {
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Social Connections')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Twitter')).toBeInTheDocument();
+    expect(screen.getByText('Telegram')).toBeInTheDocument();
+    expect(screen.getByText('Instagram')).toBeInTheDocument();
+    expect(screen.getByText('TikTok')).toBeInTheDocument();
+    expect(screen.getByText('YouTube')).toBeInTheDocument();
+    expect(screen.getByText('Reddit')).toBeInTheDocument();
+    expect(screen.getByText('Discord')).toBeInTheDocument();
+    expect(screen.getByText('RSS')).toBeInTheDocument();
+    expect(screen.getByText('Twitter connected')).toBeInTheDocument();
+    expect(screen.getByText('Telegram connected')).toBeInTheDocument();
+    expect(screen.getByText('Instagram needs connection')).toBeInTheDocument();
+    expect(screen.getByText('TikTok connected')).toBeInTheDocument();
+    expect(screen.getByText('YouTube needs connection')).toBeInTheDocument();
+    expect(screen.getByText('Reddit connected')).toBeInTheDocument();
+    expect(screen.getAllByText('Discord connected').length).toBeGreaterThan(0);
+    expect(screen.getByText('RSS available')).toBeInTheDocument();
+  });
+
+  it('shows a social calendar draft section in profile settings', async () => {
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Social Calendar')).toBeInTheDocument();
+    });
+
+    expect(screen.getByLabelText('Campaign Start Date')).toBeInTheDocument();
+    expect(screen.getByLabelText('Campaign End Date')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save Calendar Draft' })).toBeInTheDocument();
   });
 });

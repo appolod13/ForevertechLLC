@@ -135,6 +135,9 @@ describe('StudioPage calendar date range', () => {
     expect(screen.getByText('Creator Studio')).toBeDefined();
     expect(screen.getByText('AI Asset Generator')).toBeDefined();
     expect(screen.getByPlaceholderText('Describe the image and post content you want to generate...')).toBeDefined();
+    expect(screen.getByText('Campaign Calendar')).toBeInTheDocument();
+    expect(screen.getByLabelText('Campaign Start Date')).toBeInTheDocument();
+    expect(screen.getByLabelText('Campaign End Date')).toBeInTheDocument();
   });
 
   it('does not bootstrap poster connection state in Studio', async () => {
@@ -166,6 +169,7 @@ describe('StudioPage calendar date range', () => {
       'href',
       expect.stringContaining('/poster?'),
     );
+    expect(screen.getByText('Campaign Calendar')).toBeInTheDocument();
     expect(screen.queryByText('Live Chat')).not.toBeInTheDocument();
   });
 

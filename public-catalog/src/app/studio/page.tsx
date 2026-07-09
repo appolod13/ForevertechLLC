@@ -17,6 +17,7 @@ import {
   type StoredGenerationRecord,
 } from '@/lib/creatorArtifacts';
 import { buildPosterHref } from '@/lib/multiposter';
+import { readSocialCalendarDraft, writeSocialCalendarDraft, type SocialCalendarDraft } from '@/lib/socialCalendar';
 
 type GenerationSession = {
   generation_count: number;
@@ -111,6 +112,8 @@ function StudioPageInner() {
   const [logs, setLogs] = useState<
     { time: string; msg: string; code?: string; type: 'info' | 'error' | 'warn' | 'success' }[]
   >([]);
+  const [socialCalendarDraft, setSocialCalendarDraft] = useState<SocialCalendarDraft>(() => readSocialCalendarDraft());
+  const [socialCalendarStatus, setSocialCalendarStatus] = useState<'idle' | 'saved'>('idle');
   const previewImageUrl = useMemo(() => {
     if (previewDismissed && !generatedImage.trim()) return null;
     return pickPreferredImageUrl(generatedImage, latestDropImageUrl);
@@ -212,6 +215,10 @@ function StudioPageInner() {
       setQuantumUnlocked(false);
     }
   }, [quantumMode, quantumUnlocked]);
+
+  useEffect(() => {
+    writeSocialCalendarDraft(socialCalendarDraft);
+  }, [socialCalendarDraft]);
 
   const generationMode = quantumMode ? 'real_quantum' : 'standard';
   const freeSessionFull = generationSession.generation_count >= GENERATION_LIMIT;
@@ -710,6 +717,71 @@ function StudioPageInner() {
                 value={prompt}
                 onChange={e => setPrompt(e.target.value)}
               />
+              <div className="rounded-xl border border-gray-700 bg-gray-950/60 p-5">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Campaign Calendar</h3>
+                    <div className="mt-1 text-sm text-gray-400">
+                      Keep the launch window visible in Studio and share the same draft with your profile scheduling surface.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      writeSocialCalendarDraft(socialCalendarDraft);
+                      setSocialCalendarStatus('saved');
+                    }}
+                    className="inline-flex min-h-[40px] items-center justify-center rounded-lg border border-purple-300/30 bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-500"
+                  >
+                    Save Calendar Draft
+                  </button>
+                </div>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <label className="text-sm font-medium text-gray-200">
+                    <span className="mb-2 block">Campaign Start Date</span>
+                    <input
+                      aria-label="Campaign Start Date"
+                      type="date"
+                      value={socialCalendarDraft.startDate}
+                      onChange={(e) => {
+                        setSocialCalendarStatus('idle');
+                        setSocialCalendarDraft((prev) => ({ ...prev, startDate: e.target.value }));
+                      }}
+                      className="min-h-[44px] w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-sm text-white"
+                    />
+                  </label>
+                  <label className="text-sm font-medium text-gray-200">
+                    <span className="mb-2 block">Campaign End Date</span>
+                    <input
+                      aria-label="Campaign End Date"
+                      type="date"
+                      value={socialCalendarDraft.endDate}
+                      onChange={(e) => {
+                        setSocialCalendarStatus('idle');
+                        setSocialCalendarDraft((prev) => ({ ...prev, endDate: e.target.value }));
+                      }}
+                      className="min-h-[44px] w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-sm text-white"
+                    />
+                  </label>
+                </div>
+                <label className="mt-4 block text-sm font-medium text-gray-200">
+                  <span className="mb-2 block">Campaign Notes</span>
+                  <textarea
+                    value={socialCalendarDraft.note}
+                    onChange={(e) => {
+                      setSocialCalendarStatus('idle');
+                      setSocialCalendarDraft((prev) => ({ ...prev, note: e.target.value }));
+                    }}
+                    className="min-h-[110px] w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-sm text-white"
+                    placeholder="Track launch timing, social channels, and what should be posted during this window."
+                  />
+                </label>
+                <div className="mt-3 text-sm text-gray-500">
+                  {socialCalendarStatus === 'saved'
+                    ? 'Calendar draft saved locally and shared with your profile.'
+                    : 'This planning draft stays local until server-side scheduling is restored.'}
+                </div>
+              </div>
               <div className="grid gap-3 md:grid-cols-2">
                 <label className={`rounded-lg border p-3 transition-all cursor-pointer ${!quantumMode ? 'border-white bg-white/5 shadow-[0_0_15px_rgba(255,255,255,0.08)]' : 'border-gray-700 hover:border-gray-600'}`}>
                   <div className="flex items-start gap-3">

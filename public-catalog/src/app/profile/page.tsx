@@ -1,12 +1,21 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ShoppingBag, Image as ImageIcon, Loader2 } from 'lucide-react';
 import type { OrderRecord } from '@/lib/cartStore';
 import { creatorAccessConstants, getCreatorAccess } from '@/lib/creatorAccess';
 import type { StoredGenerationRecord } from '@/lib/creatorArtifacts';
+import {
+  buildPosterPlatformStates,
+  POSTER_PLATFORM_NAMES,
+  POSTER_PLATFORM_ORDER,
+  type PosterPlatformKey,
+  type PosterPlatformState,
+} from '@/lib/multiposter';
+import { readSocialCalendarDraft, writeSocialCalendarDraft, type SocialCalendarDraft } from '@/lib/socialCalendar';
 
 function ProfilePageInner() {
   const { user, isLoading } = useAuth();
@@ -29,10 +38,30 @@ function ProfilePageInner() {
   const [discordWebhookDisplay, setDiscordWebhookDisplay] = useState('');
   const [discordStatus, setDiscordStatus] = useState<'idle' | 'saving' | 'deleting' | 'error'>('idle');
   const [discordError, setDiscordError] = useState('');
+  const [socialConnections, setSocialConnections] = useState<Record<PosterPlatformKey, PosterPlatformState>>(() =>
+    buildPosterPlatformStates({}),
+  );
+  const [socialConnectionsError, setSocialConnectionsError] = useState('');
+  const [socialCalendarDraft, setSocialCalendarDraft] = useState<SocialCalendarDraft>(() => readSocialCalendarDraft());
+  const [socialCalendarStatus, setSocialCalendarStatus] = useState<'idle' | 'saved'>('idle');
 
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
+    const loadSocialConnections = async () => {
+      try {
+        const res = await fetch(`/api/auth/session?userId=${encodeURIComponent(user.id)}`, { cache: 'no-store' });
+        const json = await res.json().catch(() => ({}));
+        if (cancelled || !res.ok) {
+          if (!cancelled) setSocialConnectionsError('Unable to load social connection status right now.');
+          return;
+        }
+        setSocialConnections(buildPosterPlatformStates(json));
+        setSocialConnectionsError('');
+      } catch {
+        if (!cancelled) setSocialConnectionsError('Unable to load social connection status right now.');
+      }
+    };
     const loadDiscord = async () => {
       try {
         const res = await fetch(`/api/social/discord?userId=${encodeURIComponent(user.id)}`, { cache: 'no-store' });
@@ -42,6 +71,7 @@ function ProfilePageInner() {
       } catch {
       }
     };
+    loadSocialConnections();
     loadDiscord();
     return () => {
       cancelled = true;
@@ -125,6 +155,10 @@ function ProfilePageInner() {
     };
     load();
   }, [user]);
+
+  useEffect(() => {
+    writeSocialCalendarDraft(socialCalendarDraft);
+  }, [socialCalendarDraft]);
 
   if (isLoading || !user) {
     return (
@@ -277,6 +311,120 @@ function ProfilePageInner() {
               </div>
             </div>
           ) : null}
+        </section>
+
+        <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">
+          <h2 className="text-2xl font-semibold text-white">Social Connections</h2>
+          <p className="mt-2 text-sm text-zinc-400">
+            Review every connected destination in one place, then use MultiPoster when you are ready to publish.
+          </p>
+          {socialConnectionsError ? (
+            <div className="mt-4 rounded-lg border border-yellow-500/20 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-200">
+              {socialConnectionsError}
+            </div>
+          ) : null}
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {POSTER_PLATFORM_ORDER.map((platform) => {
+              const state = socialConnections[platform];
+              const needsOAuth =
+                !state.authenticated &&
+                platform !== 'discord' &&
+                platform !== 'rss';
+              return (
+                <div key={platform} className="rounded-xl border border-zinc-800 bg-black/30 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-semibold text-white">{POSTER_PLATFORM_NAMES[platform]}</div>
+                      <div className="mt-1 text-sm text-zinc-400">{state.label}</div>
+                    </div>
+                    <div
+                      className={`rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                        state.authenticated ? 'bg-emerald-500/15 text-emerald-200' : 'bg-zinc-800 text-zinc-300'
+                      }`}
+                    >
+                      {state.authenticated ? 'Connected' : 'Pending'}
+                    </div>
+                  </div>
+                  {needsOAuth ? (
+                    <Link
+                      href={`/api/auth/${platform}/login`}
+                      className="mt-4 inline-flex min-h-[40px] items-center rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm font-semibold text-white hover:bg-black/55"
+                    >
+                      Connect {POSTER_PLATFORM_NAMES[platform]}
+                    </Link>
+                  ) : platform === 'discord' ? (
+                    <div className="mt-4 text-xs text-zinc-500">Manage the Discord destination in the webhook section below.</div>
+                  ) : platform === 'rss' ? (
+                    <div className="mt-4 text-xs text-zinc-500">RSS is provided by the app feed when backend publishing is available.</div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">
+          <h2 className="text-2xl font-semibold text-white">Social Calendar</h2>
+          <p className="mt-2 text-sm text-zinc-400">
+            Keep a lightweight campaign window for your next drop without leaving your account workflow.
+          </p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <label className="text-sm font-medium text-zinc-200">
+              <span className="mb-2 block">Campaign Start Date</span>
+              <input
+                aria-label="Campaign Start Date"
+                type="date"
+                value={socialCalendarDraft.startDate}
+                onChange={(e) => {
+                  setSocialCalendarStatus('idle');
+                  setSocialCalendarDraft((prev) => ({ ...prev, startDate: e.target.value }));
+                }}
+                className="min-h-[44px] w-full rounded-lg border border-zinc-700 bg-black/40 px-4 py-2 text-sm text-white"
+              />
+            </label>
+            <label className="text-sm font-medium text-zinc-200">
+              <span className="mb-2 block">Campaign End Date</span>
+              <input
+                aria-label="Campaign End Date"
+                type="date"
+                value={socialCalendarDraft.endDate}
+                onChange={(e) => {
+                  setSocialCalendarStatus('idle');
+                  setSocialCalendarDraft((prev) => ({ ...prev, endDate: e.target.value }));
+                }}
+                className="min-h-[44px] w-full rounded-lg border border-zinc-700 bg-black/40 px-4 py-2 text-sm text-white"
+              />
+            </label>
+          </div>
+          <label className="mt-4 block text-sm font-medium text-zinc-200">
+            <span className="mb-2 block">Campaign Notes</span>
+            <textarea
+              value={socialCalendarDraft.note}
+              onChange={(e) => {
+                setSocialCalendarStatus('idle');
+                setSocialCalendarDraft((prev) => ({ ...prev, note: e.target.value }));
+              }}
+              className="min-h-[120px] w-full rounded-lg border border-zinc-700 bg-black/40 px-4 py-3 text-sm text-white"
+              placeholder="Capture timing, connected channels, and any launch notes for your next promotion."
+            />
+          </label>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                writeSocialCalendarDraft(socialCalendarDraft);
+                setSocialCalendarStatus('saved');
+              }}
+              className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-purple-300/30 bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-500"
+            >
+              Save Calendar Draft
+            </button>
+            {socialCalendarStatus === 'saved' ? (
+              <div className="text-sm text-emerald-300">Calendar draft saved locally for Studio and Profile.</div>
+            ) : (
+              <div className="text-sm text-zinc-500">This draft stays local until scheduling automation is restored server-side.</div>
+            )}
+          </div>
         </section>
 
         <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">
