@@ -43,6 +43,11 @@ describe('PosterPage', () => {
         return {
           ok: true,
           json: async () => ({
+            twitter: { authenticated: true, screenName: 'bird_bot' },
+            telegram: { authenticated: true, screenName: 'tg_channel' },
+            instagram: { authenticated: false },
+            tiktok: { authenticated: true, screenName: 'motion_drop' },
+            youtube: { authenticated: false },
             reddit: { authenticated: true, screenName: 'reddit_user' },
             discord: { authenticated: true, screenName: 'Discord connected' },
             rss: { authenticated: true, screenName: 'RSS feed' },
@@ -55,6 +60,9 @@ describe('PosterPage', () => {
           json: async () => ({
             success: true,
             results: {
+              twitter: { success: true },
+              telegram: { success: true },
+              tiktok: { success: true },
               reddit: { success: true },
               discord: { success: true },
               rss: { success: true },
@@ -75,12 +83,24 @@ describe('PosterPage', () => {
     const calledUrls = calls.map((c) => String(c[0]));
 
     expect(calledUrls.some((url) => url.includes('/api/auth/session?userId=user-1'))).toBe(true);
+    expect(screen.getByText('Twitter')).toBeInTheDocument();
+    expect(screen.getByText('Telegram')).toBeInTheDocument();
+    expect(screen.getByText('Instagram')).toBeInTheDocument();
+    expect(screen.getByText('TikTok')).toBeInTheDocument();
+    expect(screen.getByText('YouTube')).toBeInTheDocument();
     expect(screen.getByText('Reddit connected')).toBeInTheDocument();
     expect(screen.getByText('Discord connected')).toBeInTheDocument();
+    expect(screen.getByText('Twitter connected')).toBeInTheDocument();
+    expect(screen.getByText('Telegram connected')).toBeInTheDocument();
+    expect(screen.getByText('Instagram needs connection')).toBeInTheDocument();
+    expect(screen.getByText('TikTok connected')).toBeInTheDocument();
+    expect(screen.getByText('YouTube needs connection')).toBeInTheDocument();
     expect(screen.getByText('RSS available')).toBeInTheDocument();
+    expect(screen.getByLabelText('Post to Instagram')).toBeDisabled();
+    expect(screen.getByLabelText('Post to YouTube')).toBeDisabled();
   });
 
-  it('prefills image and text from share params and publishes through the poster page', async () => {
+  it('prefills image and text from share params and only publishes authenticated platforms through the poster page', async () => {
     localStorage.setItem('user', JSON.stringify({ id: 'user-1', name: 'Poster User' }));
     searchParamsState.set('shareImage', 'https://example.com/latest-build.png');
     searchParamsState.set('shareText', 'Quantum drop is live');
@@ -95,6 +115,9 @@ describe('PosterPage', () => {
     expect(screen.getByLabelText('Poster Copy')).toHaveValue('Quantum drop is live');
     expect(screen.getByText('Media: https://example.com/latest-build.png')).toBeInTheDocument();
 
+    fireEvent.click(screen.getByLabelText('Post to Twitter'));
+    fireEvent.click(screen.getByLabelText('Post to Telegram'));
+    fireEvent.click(screen.getByLabelText('Post to TikTok'));
     fireEvent.click(screen.getByLabelText('Post to Reddit'));
     fireEvent.click(screen.getByLabelText('Post to Discord'));
     fireEvent.click(screen.getByLabelText('Post to RSS'));
@@ -109,7 +132,7 @@ describe('PosterPage', () => {
       JSON.stringify({
         userId: 'user-1',
         content: 'Quantum drop is live',
-        platforms: ['reddit', 'discord', 'rss'],
+        platforms: ['twitter', 'telegram', 'tiktok', 'reddit', 'discord', 'rss'],
         metadata: {
           mediaUrl: 'https://example.com/latest-build.png',
         },
@@ -117,6 +140,9 @@ describe('PosterPage', () => {
     );
 
     await waitFor(() => {
+      expect(screen.getByText('twitter: success')).toBeInTheDocument();
+      expect(screen.getByText('telegram: success')).toBeInTheDocument();
+      expect(screen.getByText('tiktok: success')).toBeInTheDocument();
       expect(screen.getByText('reddit: success')).toBeInTheDocument();
       expect(screen.getByText('discord: success')).toBeInTheDocument();
       expect(screen.getByText('rss: success')).toBeInTheDocument();

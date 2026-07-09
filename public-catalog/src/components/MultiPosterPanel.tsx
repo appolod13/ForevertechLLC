@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   buildPosterPlatformStates,
+  createPosterPlatformMap,
   isRecord,
+  POSTER_PLATFORM_ORDER,
   POSTER_PLATFORM_NAMES,
   type PosterPlatformKey,
   type PosterPlatformState,
@@ -21,16 +23,20 @@ export function MultiPosterPanel({ initialImageUrl = '', initialText = '', initi
   const [posterUserId, setPosterUserId] = useState('');
   const [posterCopy, setPosterCopy] = useState('');
   const [posterCopyTouched, setPosterCopyTouched] = useState(false);
-  const [posterConnections, setPosterConnections] = useState<Record<PosterPlatformKey, PosterPlatformState>>({
-    reddit: { status: 'needs_connection', label: 'Reddit needs connection', authenticated: false },
-    discord: { status: 'needs_connection', label: 'Discord needs connection', authenticated: false },
-    rss: { status: 'warning', label: 'RSS unavailable', authenticated: false },
-  });
-  const [selectedPosterPlatforms, setSelectedPosterPlatforms] = useState<Record<PosterPlatformKey, boolean>>({
-    reddit: false,
-    discord: false,
-    rss: false,
-  });
+  const [posterConnections, setPosterConnections] = useState<Record<PosterPlatformKey, PosterPlatformState>>(
+    createPosterPlatformMap((platform) => ({
+      status: platform === 'rss' ? 'warning' : 'needs_connection',
+      label:
+        platform === 'rss'
+          ? 'RSS unavailable'
+          : `${POSTER_PLATFORM_NAMES[platform]} needs connection`,
+      authenticated: false,
+      publishable: false,
+    })),
+  );
+  const [selectedPosterPlatforms, setSelectedPosterPlatforms] = useState<Record<PosterPlatformKey, boolean>>(
+    createPosterPlatformMap(() => false),
+  );
   const [posterConnectionsLoading, setPosterConnectionsLoading] = useState(false);
   const [posterConnectionsError, setPosterConnectionsError] = useState<string | null>(null);
   const [posterPublishError, setPosterPublishError] = useState<string | null>(null);
@@ -85,11 +91,14 @@ export function MultiPosterPanel({ initialImageUrl = '', initialText = '', initi
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load connection state';
       setPosterConnectionsError(message);
-      setPosterConnections({
-        reddit: { status: 'warning', label: 'Reddit status unavailable', authenticated: false },
-        discord: { status: 'warning', label: 'Discord status unavailable', authenticated: false },
-        rss: { status: 'warning', label: 'RSS status unavailable', authenticated: false },
-      });
+      setPosterConnections(
+        createPosterPlatformMap((platform) => ({
+          status: 'warning',
+          label: `${POSTER_PLATFORM_NAMES[platform]} status unavailable`,
+          authenticated: false,
+          publishable: false,
+        })),
+      );
     } finally {
       setPosterConnectionsLoading(false);
     }
@@ -101,7 +110,7 @@ export function MultiPosterPanel({ initialImageUrl = '', initialText = '', initi
   }, [hydrated, loadPosterConnections]);
 
   const handlePosterPlatformToggle = (platform: PosterPlatformKey) => {
-    if (!posterConnections[platform]?.authenticated) return;
+    if (!posterConnections[platform]?.publishable) return;
     setSelectedPosterPlatforms((prev) => ({ ...prev, [platform]: !prev[platform] }));
   };
 
@@ -165,11 +174,11 @@ export function MultiPosterPanel({ initialImageUrl = '', initialText = '', initi
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-3">
-        {(['reddit', 'discord', 'rss'] as PosterPlatformKey[]).map((platform) => (
+        {POSTER_PLATFORM_ORDER.map((platform) => (
           <label
             key={platform}
             className={`rounded-lg border p-3 transition-all ${
-              posterConnections[platform].authenticated
+              posterConnections[platform].publishable
                 ? 'cursor-pointer border-gray-700 bg-gray-900/80 hover:border-gray-500'
                 : 'cursor-not-allowed border-gray-800 bg-gray-900/40 opacity-80'
             }`}
@@ -179,7 +188,7 @@ export function MultiPosterPanel({ initialImageUrl = '', initialText = '', initi
                 type="checkbox"
                 aria-label={`Post to ${POSTER_PLATFORM_NAMES[platform]}`}
                 checked={selectedPosterPlatforms[platform]}
-                disabled={!posterConnections[platform].authenticated}
+                disabled={!posterConnections[platform].publishable}
                 onChange={() => handlePosterPlatformToggle(platform)}
                 className="mt-1 h-4 w-4 accent-purple-500"
               />
