@@ -22,6 +22,8 @@ export function LatestAIImage({
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+
     const resolveUrl = (input: string) => {
       const s = String(input || '').trim();
       if (!s) return '';
@@ -36,16 +38,25 @@ export function LatestAIImage({
     if (overrideUrl) {
       const normalized = resolveUrl(overrideUrl);
       if (normalized) {
-        setImageUrl(normalized);
-        setLoading(false);
-        setError(false);
+        if (!cancelled) {
+          setImageUrl(normalized);
+          setLoading(false);
+          setError(false);
+        }
       } else {
-        setImageUrl(null);
-        setLoading(false);
-        setError(true);
+        if (!cancelled) {
+          setImageUrl(null);
+          setLoading(false);
+          setError(true);
+        }
       }
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
+
+    setLoading(true);
+    setError(false);
 
     async function fetchImage() {
       try {
@@ -63,18 +74,30 @@ export function LatestAIImage({
         if (data.success && data.imageUrl) {
           const fullUrl = resolveUrl(data.imageUrl);
           if (!fullUrl) throw new Error('Invalid image url');
-          setImageUrl(fullUrl);
+          if (!cancelled) {
+            setImageUrl(fullUrl);
+          }
         } else {
-          setError(true);
+          if (!cancelled) {
+            setError(true);
+          }
         }
       } catch (err) {
-        setError(true);
+        if (!cancelled) {
+          setError(true);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
     fetchImage();
+
+    return () => {
+      cancelled = true;
+    };
   }, [overrideUrl]);
 
   useEffect(() => {
