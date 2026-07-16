@@ -1,29 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mockupsSelectSingleMock = vi.fn();
-const mockupsUpdateMock = vi.fn();
+const { mockupsSelectSingleMock, mockupsUpdateMock, getServiceSupabaseMock } = vi.hoisted(() => ({
+  mockupsSelectSingleMock: vi.fn(),
+  mockupsUpdateMock: vi.fn(),
+  getServiceSupabaseMock: vi.fn(),
+}));
 
 vi.mock('@/lib/supabase', () => ({
-  getServiceSupabase: () => ({
-    from: (table: string) => {
-      if (table !== 'design_mockups') throw new Error(`Unexpected table: ${table}`);
-      return {
-        select: () => ({
-          eq: () => ({
-            single: mockupsSelectSingleMock,
-          }),
-        }),
-        insert: vi.fn(() => ({
-          select: () => ({
-            single: async () => ({ data: null, error: null }),
-          }),
-        })),
-        update: mockupsUpdateMock.mockImplementation(() => ({
-          eq: async () => ({ error: null }),
-        })),
-      };
-    },
-  }),
+  getServiceSupabase: getServiceSupabaseMock,
 }));
 
 import { POST } from './route';
@@ -32,6 +16,27 @@ describe('printify mockups route', () => {
   beforeEach(() => {
     mockupsSelectSingleMock.mockReset();
     mockupsUpdateMock.mockReset();
+    getServiceSupabaseMock.mockReset();
+    getServiceSupabaseMock.mockReturnValue({
+      from: (table: string) => {
+        if (table !== 'design_mockups') throw new Error(`Unexpected table: ${table}`);
+        return {
+          select: () => ({
+            eq: () => ({
+              single: mockupsSelectSingleMock,
+            }),
+          }),
+          insert: vi.fn(() => ({
+            select: () => ({
+              single: async () => ({ data: null, error: null }),
+            }),
+          })),
+          update: mockupsUpdateMock.mockImplementation(() => ({
+            eq: async () => ({ error: null }),
+          })),
+        };
+      },
+    });
     process.env.PRINTIFY_SHOP_ID = 'shop_123';
     process.env.PRINTIFY_API_TOKEN = 'token_123';
   });
@@ -298,5 +303,23 @@ describe('printify mockups route', () => {
     const json = await res.json();
     expect(json.success).toBe(false);
     expect(String(json.details || '')).toContain('required_aop_placement_missing');
+  });
+
+  it('returns a non-blocking error status in local mode when Supabase is not configured', async () => {
+    getServiceSupabaseMock.mockReturnValue(null);
+
+    const res = await POST(
+      new Request('http://localhost/api/printify/mockups', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ imageUrl: 'https://example.com/design.png', prompt: 'x' }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.status).toBe('error');
+    expect(json.error).toBe('supabase_not_configured');
   });
 });

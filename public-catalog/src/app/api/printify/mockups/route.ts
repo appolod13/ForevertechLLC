@@ -33,6 +33,21 @@ function normalizeMockupsRow(row: Record<string, unknown>) {
   };
 }
 
+function configErrorResponse(params: { designHash: string; error: string; details?: string }) {
+  const payload = {
+    success: true,
+    designHash: params.designHash,
+    status: 'error',
+    error: params.error,
+    details: params.details || params.error,
+    mockups: { frontUrl: undefined, backUrl: undefined, leftUrl: undefined, rightUrl: undefined },
+  };
+  if (process.env.NODE_ENV !== 'production') {
+    return NextResponse.json(payload, { status: 200 });
+  }
+  return NextResponse.json({ success: false, error: params.error, details: params.details || params.error }, { status: 500 });
+}
+
 async function sleep(ms: number) {
   await new Promise((r) => setTimeout(r, ms));
 }
@@ -271,7 +286,7 @@ export async function POST(req: Request) {
 
   const designHash = computeDesignHash({ imageUrl, prompt });
   const supabase = getServiceSupabase();
-  if (!supabase) return NextResponse.json({ success: false, error: 'supabase_not_configured' }, { status: 500 });
+  if (!supabase) return configErrorResponse({ designHash, error: 'supabase_not_configured' });
 
   let reuseExistingRow = false;
   const { data: existing } = await supabase.from('design_mockups').select('*').eq('design_hash', designHash).single();
@@ -321,7 +336,7 @@ export async function POST(req: Request) {
   }
 
   const shopId = (process.env.PRINTIFY_SHOP_ID || '').trim();
-  if (!shopId) return NextResponse.json({ success: false, error: 'missing_printify_shop_id' }, { status: 500 });
+  if (!shopId) return configErrorResponse({ designHash, error: 'missing_printify_shop_id' });
 
   const origin = new URL(req.url).origin;
   const fetchUrl = imageUrl.startsWith('/') ? `${origin}${imageUrl}` : imageUrl;
@@ -530,6 +545,9 @@ export async function POST(req: Request) {
       .from('design_mockups')
       .update({ status: 'error', error_message: msg.slice(0, 500), updated_at: new Date().toISOString() })
       .eq('design_hash', designHash);
+    if (msg === 'missing_printify_api_token') {
+      return configErrorResponse({ designHash, error: 'missing_printify_api_token', details: msg });
+    }
     return NextResponse.json({ success: false, error: 'mockup_generation_failed', details: msg }, { status: 500 });
   }
 }

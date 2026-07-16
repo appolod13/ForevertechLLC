@@ -205,4 +205,105 @@ describe('StudioPage calendar date range', () => {
     expect(screen.getByText('@Discord connected')).toBeInTheDocument();
     expect(screen.getByText('@RSS feed')).toBeInTheDocument();
   });
+
+  it('logs a warning instead of a false success when the build trigger returns unauthorized', async () => {
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/api/auth/session')) {
+        return {
+          ok: true,
+          json: async () => ({
+            twitter: { authenticated: false },
+            telegram: { authenticated: false },
+            instagram: { authenticated: false },
+            tiktok: { authenticated: false },
+            youtube: { authenticated: false },
+            reddit: { authenticated: true, screenName: 'reddit_user' },
+            discord: { authenticated: true, screenName: 'Discord connected' },
+            rss: { authenticated: true, screenName: 'RSS feed' },
+          }),
+        } as Response;
+      }
+      if (url.includes('/api/social/discord')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            connected: true,
+            webhookDisplay: 'https://discord.com/.../abc...xyz',
+          }),
+        } as Response;
+      }
+      if (url.includes('/api/chat/history')) {
+        return { ok: true, json: async () => ({ success: true, data: { messages: [] } }) } as Response;
+      }
+      if (url.includes('/api/catalog/posts')) {
+        return { ok: true, json: async () => ({ posts: [] }) } as Response;
+      }
+      if (url.includes('/api/printify/mockups')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            designHash: 'hash_test',
+            status: 'pending',
+            mockups: { frontUrl: undefined, backUrl: undefined, leftUrl: undefined, rightUrl: undefined },
+          }),
+        } as Response;
+      }
+      if (url.includes('/api/generate/image')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            image_url: 'https://example.com/generated.png',
+            data: { requestId: 'req_123' },
+          }),
+        } as Response;
+      }
+      if (url.includes('/api/content-factory')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            items: [{ text_content: 'Generated post copy' }],
+          }),
+        } as Response;
+      }
+      if (url.includes('/api/gallery')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            item: { id: 'gallery_1', imageUrl: 'https://example.com/generated.png' },
+          }),
+        } as Response;
+      }
+      if (url.includes('/api/build')) {
+        return {
+          ok: false,
+          status: 401,
+          json: async () => ({
+            success: false,
+            error: 'unauthorized',
+          }),
+        } as Response;
+      }
+      return { ok: true, json: async () => ({ success: true }) } as Response;
+    }) as typeof fetch;
+
+    await renderStudioPage();
+
+    const textarea = screen.getByPlaceholderText('Describe the image and post content you want to generate...') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'quantum wormhole fractal' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Standard Asset & Content' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/failed to trigger build pipeline: unauthorized/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Build pipeline triggered successfully')).not.toBeInTheDocument();
+  });
 });

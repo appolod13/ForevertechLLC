@@ -836,7 +836,15 @@ function StudioPageInner() {
       if (process.env.NODE_ENV !== 'production') {
         try {
           addLog('Triggering automated build pipeline...', 'info', 'I_BUILD_TRIGGER');
-          await fetch('/api/build', { method: 'POST' });
+          const buildRes = await fetch('/api/build', { method: 'POST' });
+          const buildJson = (await buildRes.json().catch(() => null)) as { error?: unknown } | null;
+          if (!buildRes.ok) {
+            const buildError =
+              typeof buildJson?.error === 'string' && buildJson.error.trim()
+                ? buildJson.error.trim()
+                : `http_${buildRes.status}`;
+            throw new Error(buildError);
+          }
           addLog('Build pipeline triggered successfully', 'success', 'I_BUILD_SUCCESS');
         } catch (buildErr: unknown) {
           addLog('Failed to trigger build pipeline: ' + ((buildErr as Error).message || String(buildErr)), 'warn', 'E_BUILD_FAILED');
