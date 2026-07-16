@@ -137,19 +137,19 @@ describe('StudioPage calendar date range', () => {
     expect(screen.getByPlaceholderText('Describe the image and post content you want to generate...')).toBeDefined();
   });
 
-  it('does not bootstrap poster connection state in Studio', async () => {
+  it('bootstraps poster connection state in Studio', async () => {
     localStorage.setItem('user', JSON.stringify({ id: 'user-1', name: 'Poster User' }));
     await renderStudioPage();
 
     const calls = (global.fetch as unknown as { mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> } }).mock.calls;
     const calledUrls = calls.map((c) => String(c[0]));
 
-    expect(calledUrls.some((url) => url.includes('/api/auth/session?userId=user-1'))).toBe(false);
-    expect(calledUrls.some((url) => url.includes('/api/chat/history'))).toBe(false);
-    expect(calledUrls.some((url) => url.includes('/api/catalog/posts'))).toBe(false);
+    expect(calledUrls.some((url) => url.includes('/api/auth/session?userId=user-1'))).toBe(true);
+    expect(calledUrls.some((url) => url.includes('/api/chat/history'))).toBe(true);
+    expect(calledUrls.some((url) => url.includes('/api/catalog/posts'))).toBe(true);
   });
 
-  it('keeps the main creation flow and links out to the dedicated multiposter page', async () => {
+  it('renders the in-page multiposter template in Studio', async () => {
     localStorage.setItem('user', JSON.stringify({ id: 'user-1', name: 'Poster User' }));
     localStorage.setItem(
       'foreverteck.studio.lastImage',
@@ -161,15 +161,14 @@ describe('StudioPage calendar date range', () => {
     await renderStudioPage();
 
     expect(screen.getByText('Latest Build Preview')).toBeInTheDocument();
-    expect(screen.queryByText('Multichannel Poster')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open in MultiPoster' })).toHaveAttribute(
-      'href',
-      expect.stringContaining('/poster?'),
-    );
-    expect(screen.queryByText('Live Chat')).not.toBeInTheDocument();
+    expect(screen.getByText('Live Chat')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("What's on your mind? #Web3")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Share Asset to Chat' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Attached preview' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open in MultiPoster' })).not.toBeInTheDocument();
   });
 
-  it('sends the latest generated content to the dedicated multiposter page', async () => {
+  it('sends the latest generated content into the in-page poster template', async () => {
     localStorage.setItem('user', JSON.stringify({ id: 'user-1', name: 'Poster User' }));
     localStorage.setItem(
       'foreverteck.studio.lastImage',
@@ -179,20 +178,11 @@ describe('StudioPage calendar date range', () => {
       }),
     );
 
-    const fetchMock = global.fetch as unknown as {
-      mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> };
-    };
-
     await renderStudioPage();
 
-    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('/api/post'))).toBe(false);
-    const posterLink = screen.getByRole('link', { name: 'Open in MultiPoster' });
-    const href = posterLink.getAttribute('href') || '';
-    const parsedHref = new URL(href, 'http://localhost:3000');
-    expect(parsedHref.pathname).toBe('/poster');
-    expect(parsedHref.searchParams.get('shareImage')).toBe('https://example.com/latest-build.png');
-    expect(parsedHref.searchParams.get('shareText')).toBe('quantum skyline tee');
-    expect(parsedHref.searchParams.get('sharePrompt')).toBe('quantum skyline tee');
+    fireEvent.click(screen.getByRole('button', { name: 'Send to Multi-Channel Poster' }));
+    expect(screen.getByPlaceholderText("What's on your mind? #Web3")).toHaveValue('quantum skyline tee');
+    expect(screen.getByRole('img', { name: 'Attached preview' })).toHaveAttribute('src', 'https://example.com/latest-build.png');
   });
 
   it('disables generate button until prompt is entered', async () => {

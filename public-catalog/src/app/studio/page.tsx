@@ -8,6 +8,7 @@ import { DataDashboardButton } from '../../components/DataDashboardButton';
 import { FusionAI } from '../../components/FusionAI';
 import { LatestAIImage } from '../../components/LatestAIImage';
 import { MerchPreviewPanel } from '../../components/MerchPreviewPanel';
+import { MultiPosterPanel } from '../../components/MultiPosterPanel';
 import { Sparkles } from 'lucide-react';
 import { buildQuantumSourceLinks, getCreatorAccess } from '@/lib/creatorAccess';
 import {
@@ -16,7 +17,6 @@ import {
   type SourceRecordLike,
   type StoredGenerationRecord,
 } from '@/lib/creatorArtifacts';
-import { buildPosterHref } from '@/lib/multiposter';
 
 type GenerationSession = {
   generation_count: number;
@@ -111,20 +111,13 @@ function StudioPageInner() {
   const [logs, setLogs] = useState<
     { time: string; msg: string; code?: string; type: 'info' | 'error' | 'warn' | 'success' }[]
   >([]);
+  const [posterSeedImageUrl, setPosterSeedImageUrl] = useState('');
+  const [posterSeedText, setPosterSeedText] = useState('');
+  const [posterSeedPrompt, setPosterSeedPrompt] = useState('');
   const previewImageUrl = useMemo(() => {
     if (previewDismissed && !generatedImage.trim()) return null;
     return pickPreferredImageUrl(generatedImage, latestDropImageUrl);
   }, [generatedImage, latestDropImageUrl, previewDismissed]);
-  const posterHref = useMemo(() => {
-    if (typeof window === 'undefined') return '/poster';
-    const posterText = generatedTextContent.trim() || prompt.trim();
-    return buildPosterHref({
-      origin: window.location.origin,
-      imageUrl: previewImageUrl || generatedImage || latestDropImageUrl || '',
-      text: posterText,
-      prompt,
-    });
-  }, [generatedImage, generatedTextContent, latestDropImageUrl, previewImageUrl, prompt]);
 
   const addLog = (msg: string, type: 'info' | 'error' | 'warn' | 'success' = 'info', code?: string) => {
     const t = new Date();
@@ -930,21 +923,26 @@ function StudioPageInner() {
                 </div>
               ) : null}
 
-              <div className="mt-8 rounded-xl border border-gray-700 bg-gray-950/60 p-5">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <h3 className="text-xl font-bold text-white">Share In MultiPoster</h3>
-                    <div className="mt-1 text-sm text-gray-400">
-                      Keep Studio focused on creation, then open the dedicated MultiPoster page to publish across channels.
-                    </div>
-                  </div>
-                  <Link
-                    href={posterHref}
-                    className="inline-flex items-center justify-center rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:border-gray-500 hover:bg-gray-800"
-                  >
-                    Open in MultiPoster
-                  </Link>
-                </div>
+              {previewImageUrl ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPosterSeedImageUrl(previewImageUrl);
+                    setPosterSeedText((generatedTextContent || prompt).trim());
+                    setPosterSeedPrompt(prompt.trim());
+                  }}
+                  className="mt-4 w-full rounded-lg bg-indigo-600 py-3 font-bold text-white hover:bg-indigo-500"
+                >
+                  Send to Multi-Channel Poster
+                </button>
+              ) : null}
+
+              <div className="mt-8">
+                <MultiPosterPanel
+                  initialImageUrl={posterSeedImageUrl || previewImageUrl || ''}
+                  initialText={posterSeedText}
+                  initialPrompt={posterSeedPrompt}
+                />
               </div>
             </div>
           </div>
