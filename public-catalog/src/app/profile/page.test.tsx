@@ -66,7 +66,7 @@ describe('ProfilePage', () => {
       expect(screen.getByText('Premium Creator')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('75% payout active')).toBeInTheDocument();
+    expect(screen.getByText('45% payout active')).toBeInTheDocument();
     expect(screen.getByText('Stored Generations')).toBeInTheDocument();
     expect(screen.getByText('2 / Unlimited')).toBeInTheDocument();
   });

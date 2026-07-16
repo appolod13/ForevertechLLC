@@ -490,7 +490,7 @@ export default function CheckoutPage() {
               <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 p-4">
                 <div className="text-sm font-semibold text-white">Premium Creator - $24.99/month</div>
                 <div className="mt-2 text-sm text-purple-100/90">
-                  Earn 75% on creator-linked sales, unlock QR selling, and keep expanded storage for your artwork, seeds, math, code, and source records.
+                  Earn 45% on creator-linked sales, unlock QR selling, and keep expanded storage for your artwork, seeds, math, code, and source records.
                 </div>
                 {creatorUpgradeStatus === 'error' && creatorUpgradeError ? (
                   <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">

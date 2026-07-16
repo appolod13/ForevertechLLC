@@ -235,7 +235,7 @@ describe('StudioPage calendar date range', () => {
   it('shows a separate premium creator upgrade path', async () => {
     await renderStudioPage();
     expect(screen.getByText('Premium Creator - $24.99/month')).toBeInTheDocument();
-    expect(screen.getByText(/earn 75% on creator-linked sales/i)).toBeInTheDocument();
+    expect(screen.getByText(/earn 45% on creator-linked sales/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Upgrade to Premium Creator' })).toHaveAttribute(
       'href',
       '/profile?upgrade=premium-creator',

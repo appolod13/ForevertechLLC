@@ -36,7 +36,7 @@ export function getCreatorAccess(user: UserAccessLike | null | undefined): Creat
       storageLimit: Number.POSITIVE_INFINITY,
       tier: 'premium_creator',
       canResell: true,
-      payoutRate: 0.75,
+      payoutRate: 0.45,
       hasPremiumCreatorAccess: true,
     };
   }

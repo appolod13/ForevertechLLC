@@ -148,8 +148,8 @@ function ProfilePageInner() {
               <h2 className="text-2xl font-semibold text-white">{access.hasPremiumCreatorAccess ? 'Premium Creator' : 'Free Tier'}</h2>
               <p className="mt-2 max-w-2xl text-sm text-zinc-400">
                 {access.hasPremiumCreatorAccess
-                  ? '75% payout active. Creator-linked sales, QR listings, and expanded source-record storage are available on this account.'
-                  : 'You can store up to 5 free generations. Upgrade to Premium Creator to unlock QR selling, 75% creator payouts, and expanded storage.'}
+                  ? '45% payout active. Creator-linked sales, QR listings, and expanded source-record storage are available on this account.'
+                  : 'You can store up to 5 free generations. Upgrade to Premium Creator to unlock QR selling, 45% creator payouts, and expanded storage.'}
               </p>
             </div>
 
@@ -163,7 +163,7 @@ function ProfilePageInner() {
               <div className="rounded-xl border border-zinc-800 bg-black/30 p-4">
                 <div className="text-xs uppercase tracking-wider text-zinc-500">Creator Payout</div>
                 <div className="mt-2 text-xl font-semibold text-white">
-                  {access.hasPremiumCreatorAccess ? '75% payout active' : 'Upgrade required'}
+                  {access.hasPremiumCreatorAccess ? '45% payout active' : 'Upgrade required'}
                 </div>
               </div>
             </div>
@@ -181,7 +181,7 @@ function ProfilePageInner() {
             <div className="mt-5 rounded-xl border border-purple-500/30 bg-purple-500/10 p-4">
               <div className="text-sm font-semibold text-white">Premium Creator upgrade selected.</div>
               <div className="mt-2 text-sm text-purple-100/90">
-                Connect Stripe Express for future creator payouts, then activate your Premium Creator subscription to unlock 75% creator payouts and QR-linked selling.
+                Connect Stripe Express for future creator payouts, then activate your Premium Creator subscription to unlock 45% creator payouts and QR-linked selling.
               </div>
 
               {premiumConfirmStatus === 'checking' ? (

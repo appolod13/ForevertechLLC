@@ -747,7 +747,7 @@ function StudioPageInner() {
               <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 p-4">
                 <div className="text-sm font-semibold text-white">Premium Creator - $24.99/month</div>
                 <div className="mt-2 text-sm text-purple-100/90">
-                  Earn 75% on creator-linked sales, unlock QR selling, and expand storage for your images, seeds, math, code, and source records.
+                  Earn 45% on creator-linked sales, unlock QR selling, and expand storage for your images, seeds, math, code, and source records.
                 </div>
                 <div className="mt-2 text-xs text-purple-100/75">
                   Free accounts can keep 5 stored generations. Paid quantum artworks always keep their source record.

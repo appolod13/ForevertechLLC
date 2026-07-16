@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     const priceEnv = (process.env.PIXELQRYPT_DOWNLOAD_PRICE_CENTS || '').trim();
     const priceRaw = priceEnv ? Number(priceEnv) : 799;
     const unitAmount = Number.isFinite(priceRaw) ? Math.max(0, Math.min(100_000, Math.trunc(priceRaw))) : 799;
-    const payoutRate = 0.75;
+    const payoutRate = 0.45;
     const creatorPayoutCents =
       creatorUserId && unitAmount > 0 ? Math.max(0, Math.min(unitAmount, Math.trunc(unitAmount * payoutRate))) : 0;
     const platformFeeCents =

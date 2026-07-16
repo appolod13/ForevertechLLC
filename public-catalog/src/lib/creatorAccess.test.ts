@@ -33,7 +33,7 @@ describe('creatorAccess', () => {
 
     expect(access.tier).toBe('premium_creator');
     expect(access.canResell).toBe(true);
-    expect(access.payoutRate).toBe(0.75);
+    expect(access.payoutRate).toBe(0.45);
     expect(canStoreGeneration(existing, { access, storedVia: 'premium_creator' })).toBe(true);
   });
 

@@ -75,7 +75,7 @@ describe('CheckoutPage', () => {
       expect(screen.getByText('Premium Creator - $24.99/month')).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/earn 75% on creator-linked sales/i)).toBeInTheDocument();
+    expect(screen.getByText(/earn 45% on creator-linked sales/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Upgrade to Premium Creator' })).toBeInTheDocument();
   });
 });
