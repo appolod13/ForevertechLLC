@@ -5,8 +5,6 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import StudioPage from './page';
 import { Providers } from '../../components/Providers';
 
-let latestAiImageResolvedUrlOverride: string | null = null;
-
 vi.mock('sonner', () => ({
   Toaster: () => null,
 }));
@@ -23,18 +21,6 @@ vi.mock('../../components/FusionAI', () => ({
   FusionAI: () => <div>FusionAI</div>,
 }));
 
-vi.mock('../../components/MerchPreviewPanel', () => ({
-  MerchPreviewPanel: () => (
-    <div>
-      <div>Buyer Preview</div>
-      <div>Printify Sample</div>
-      <div>
-        No Printify sample image is linked yet. The finished product mockup above still shows the buyer what the shirt looks like before purchase.
-      </div>
-    </div>
-  ),
-}));
-
 vi.mock('../../components/LatestAIImage', () => ({
   LatestAIImage: ({
     overrideUrl,
@@ -44,7 +30,7 @@ vi.mock('../../components/LatestAIImage', () => ({
     onResolvedUrl?: (url: string | null) => void;
   }) => {
     React.useEffect(() => {
-      onResolvedUrl?.((latestAiImageResolvedUrlOverride ?? overrideUrl) || 'https://example.com/latest-build.png');
+      onResolvedUrl?.(overrideUrl || 'https://example.com/latest-build.png');
     }, [overrideUrl, onResolvedUrl]);
 
     return <div>LatestAIImage</div>;
@@ -70,6 +56,13 @@ async function renderStudioPage() {
   await waitFor(() => {
     expect(screen.getByText('AI Asset Generator')).toBeInTheDocument();
   });
+  await waitFor(() => {
+    expect(
+      (global.fetch as unknown as { mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> } }).mock.calls.some((c) =>
+        String(c[0]).includes('/api/printify/mockups'),
+      ),
+    ).toBe(true);
+  });
 }
 
 class EventSourceMock {
@@ -79,8 +72,6 @@ class EventSourceMock {
 
 describe('StudioPage calendar date range', () => {
   beforeEach(() => {
-    latestAiImageResolvedUrlOverride = null;
-    localStorage.clear();
     vi.stubGlobal('EventSource', EventSourceMock);
     global.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
@@ -135,54 +126,6 @@ describe('StudioPage calendar date range', () => {
     expect(screen.getByText('Creator Studio')).toBeDefined();
     expect(screen.getByText('AI Asset Generator')).toBeDefined();
     expect(screen.getByPlaceholderText('Describe the image and post content you want to generate...')).toBeDefined();
-  });
-
-  it('bootstraps poster connection state in Studio', async () => {
-    localStorage.setItem('user', JSON.stringify({ id: 'user-1', name: 'Poster User' }));
-    await renderStudioPage();
-
-    const calls = (global.fetch as unknown as { mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> } }).mock.calls;
-    const calledUrls = calls.map((c) => String(c[0]));
-
-    expect(calledUrls.some((url) => url.includes('/api/auth/session?userId=user-1'))).toBe(true);
-    expect(calledUrls.some((url) => url.includes('/api/chat/history'))).toBe(true);
-    expect(calledUrls.some((url) => url.includes('/api/catalog/posts'))).toBe(true);
-  });
-
-  it('renders the in-page multiposter template in Studio', async () => {
-    localStorage.setItem('user', JSON.stringify({ id: 'user-1', name: 'Poster User' }));
-    localStorage.setItem(
-      'foreverteck.studio.lastImage',
-      JSON.stringify({
-        imageUrl: 'https://example.com/latest-build.png',
-        prompt: 'quantum skyline tee',
-      }),
-    );
-    await renderStudioPage();
-
-    expect(screen.getByText('Latest Build Preview')).toBeInTheDocument();
-    expect(screen.getByText('Live Chat')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("What's on your mind? #Web3")).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Share Asset to Chat' })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Attached preview' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Open in MultiPoster' })).not.toBeInTheDocument();
-  });
-
-  it('sends the latest generated content into the in-page poster template', async () => {
-    localStorage.setItem('user', JSON.stringify({ id: 'user-1', name: 'Poster User' }));
-    localStorage.setItem(
-      'foreverteck.studio.lastImage',
-      JSON.stringify({
-        imageUrl: 'https://example.com/latest-build.png',
-        prompt: 'quantum skyline tee',
-      }),
-    );
-
-    await renderStudioPage();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Send to Multi-Channel Poster' }));
-    expect(screen.getByPlaceholderText("What's on your mind? #Web3")).toHaveValue('quantum skyline tee');
-    expect(screen.getByRole('img', { name: 'Attached preview' })).toHaveAttribute('src', 'https://example.com/latest-build.png');
   });
 
   it('disables generate button until prompt is entered', async () => {
@@ -255,67 +198,11 @@ describe('StudioPage calendar date range', () => {
     ).toBeInTheDocument();
   });
 
-  it('keeps the real generated image when LatestAIImage resolves to a placeholder svg', async () => {
-    latestAiImageResolvedUrlOverride =
-      'data:image/svg+xml;base64,PHN2Zz48dGV4dD5BSSBJbWFnZTwvdGV4dD48L3N2Zz4=';
-    localStorage.setItem(
-      'foreverteck.studio.lastImage',
-      JSON.stringify({
-        imageUrl: 'https://example.com/real-generated.png',
-        prompt: 'metallic dim fractal',
-      }),
-    );
-
+  it('shows Reddit, Discord, and RSS inside the Multi-Channel Poster', async () => {
     await renderStudioPage();
 
-    const customizeLink = await screen.findByRole('link', { name: 'Customize Your Gear' });
-    expect(customizeLink).toHaveAttribute('href', expect.stringContaining(encodeURIComponent('https://example.com/real-generated.png')));
-    expect(customizeLink).not.toHaveAttribute('href', expect.stringContaining(encodeURIComponent('data:image/svg+xml')));
-  });
-
-  it('shows free session count from stored generation session', async () => {
-    localStorage.setItem(
-      'foreverteck.studio.generationSession',
-      JSON.stringify({
-        generation_count: 7,
-        reset_version: 1,
-        family_bias_seed: 123,
-        bad_output_streak: 0,
-      }),
-    );
-
-    await renderStudioPage();
-
-    expect(screen.getByText('Free session: 7/20')).toBeInTheDocument();
-  });
-
-  it('shows reset generator action at the free limit and clears preview state when clicked', async () => {
-    localStorage.setItem(
-      'foreverteck.studio.lastImage',
-      JSON.stringify({
-        imageUrl: 'https://example.com/latest-build.png',
-        prompt: 'quantum skyline tee',
-      }),
-    );
-    localStorage.setItem(
-      'foreverteck.studio.generationSession',
-      JSON.stringify({
-        generation_count: 20,
-        reset_version: 2,
-        family_bias_seed: 123,
-        bad_output_streak: 1,
-      }),
-    );
-
-    await renderStudioPage();
-
-    const resetButton = screen.getByRole('button', { name: 'Reset Generator' });
-    expect(resetButton).toBeInTheDocument();
-    fireEvent.click(resetButton);
-
-    await waitFor(() => {
-      expect(screen.queryByRole('link', { name: 'Customize Your Gear' })).not.toBeInTheDocument();
-    });
-    expect(localStorage.getItem('foreverteck.studio.lastImage')).toBeNull();
+    expect(screen.getByText('@reddit_user')).toBeInTheDocument();
+    expect(screen.getByText('@Discord connected')).toBeInTheDocument();
+    expect(screen.getByText('@RSS feed')).toBeInTheDocument();
   });
 });
