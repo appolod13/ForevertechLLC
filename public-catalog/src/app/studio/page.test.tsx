@@ -217,6 +217,20 @@ describe('StudioPage calendar date range', () => {
     expect(screen.getByText('@RSS feed')).toBeInTheDocument();
   });
 
+  it('requests auth session with the logged-in user id so Discord status can resolve', async () => {
+    localStorage.setItem('user', JSON.stringify({ id: 'user-1', name: 'Test User' }));
+
+    await renderStudioPage();
+
+    await waitFor(() => {
+      expect(
+        (global.fetch as unknown as { mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> } }).mock.calls.some((c) =>
+          String(c[0]).includes('/api/auth/session?userId=user-1'),
+        ),
+      ).toBe(true);
+    });
+  });
+
   it('hydrates shared poster params into the Studio multiposter section', async () => {
     localStorage.clear();
     mockSearchParams = new URLSearchParams({

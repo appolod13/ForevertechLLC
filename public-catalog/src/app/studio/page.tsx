@@ -161,7 +161,16 @@ function StudioPageInner() {
 
   useEffect(() => {
     setHydrated(true);
-    fetch('/api/auth/session')
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+
+    const params = new URLSearchParams();
+    if (currentUserId) params.set('userId', currentUserId);
+    const sessionUrl = params.size ? `/api/auth/session?${params.toString()}` : '/api/auth/session';
+
+    fetch(sessionUrl)
       .then(r => r.json())
       .then(data => setSocialAccounts(data))
       .catch(() => setSocialAccounts({
@@ -174,7 +183,7 @@ function StudioPageInner() {
         discord: { authenticated: false },
         rss: { authenticated: false },
       }));
-  }, []);
+  }, [hydrated, currentUserId]);
 
   useEffect(() => {
     let isMounted = true;
