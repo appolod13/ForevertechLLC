@@ -206,6 +206,79 @@ describe('StudioPage calendar date range', () => {
     expect(screen.getByText('@RSS feed')).toBeInTheDocument();
   });
 
+  it('sends the default Reddit subreddit in the poster payload', async () => {
+    localStorage.clear();
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/api/auth/session')) {
+        return {
+          ok: true,
+          json: async () => ({
+            twitter: { authenticated: false },
+            telegram: { authenticated: false },
+            instagram: { authenticated: false },
+            tiktok: { authenticated: false },
+            youtube: { authenticated: false },
+            reddit: { authenticated: true, screenName: 'reddit_user' },
+            discord: { authenticated: false },
+            rss: { authenticated: false },
+          }),
+        } as Response;
+      }
+      if (url.includes('/api/chat/history')) {
+        return { ok: true, json: async () => ({ success: true, data: { messages: [] } }) } as Response;
+      }
+      if (url.includes('/api/catalog/posts')) {
+        return { ok: true, json: async () => ({ posts: [] }) } as Response;
+      }
+      if (url.includes('/api/printify/mockups')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            designHash: 'hash_test',
+            status: 'pending',
+            mockups: { frontUrl: undefined, backUrl: undefined, leftUrl: undefined, rightUrl: undefined },
+          }),
+        } as Response;
+      }
+      if (url.includes('/api/post')) {
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'application/json' : null) },
+          json: async () => ({ success: true }),
+        } as Response;
+      }
+      return { ok: true, json: async () => ({ success: true }) } as Response;
+    }) as typeof fetch;
+
+    await renderStudioPage();
+
+    const posterTextarea = screen.getByPlaceholderText("What's on your mind? #Web3") as HTMLTextAreaElement;
+    fireEvent.change(posterTextarea, { target: { value: 'Check out these Reddit links' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Post to All Channels' }));
+
+    await waitFor(() => {
+      expect(
+        (global.fetch as unknown as { mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> } }).mock.calls.some((c) =>
+          String(c[0]).includes('/api/post'),
+        ),
+      ).toBe(true);
+    });
+
+    const postCall = (
+      global.fetch as unknown as { mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> } }
+    ).mock.calls.find((c) => String(c[0]).includes('/api/post'));
+    const body = JSON.parse(String(postCall?.[1]?.body || '{}')) as {
+      metadata?: { redditSubreddit?: string };
+      platforms?: string[];
+    };
+
+    expect(body.platforms).toContain('reddit');
+    expect(body.metadata?.redditSubreddit).toBe('LivestreamFail');
+  });
+
   it('logs a warning instead of a false success when the build trigger returns unauthorized', async () => {
     global.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;

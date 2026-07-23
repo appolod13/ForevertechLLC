@@ -61,6 +61,7 @@ function StudioPageInner() {
   const [importProgress, setImportProgress] = useState(0);
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [postContent, setPostContent] = useState('');
+  const [redditSubreddit, setRedditSubreddit] = useState('LivestreamFail');
   const [isPosting, setIsPosting] = useState(false);
   const [scheduleAt, setScheduleAt] = useState<string>('');
   const [ipfsEnabled, setIpfsEnabled] = useState<boolean>(false);
@@ -890,7 +891,10 @@ function StudioPageInner() {
         body: JSON.stringify({ 
           content: postContent,
           platforms,
-          metadata: { mediaUrl: mediaToPost || undefined },
+          metadata: {
+            mediaUrl: mediaToPost || undefined,
+            redditSubreddit: redditSubreddit.trim() || undefined,
+          },
           userId: 'user-123',
           scheduledFor: scheduleAt || undefined,
           ipfs: ipfsEnabled
@@ -1532,6 +1536,23 @@ function StudioPageInner() {
                   onChange={e => setScheduleAt(e.target.value)}
                 />
                 <span className="text-xs text-gray-400">Schedule (optional)</span>
+              </div>
+              <div className="flex flex-col gap-2">
+                <label htmlFor="reddit-subreddit" className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
+                  Reddit Subreddit
+                </label>
+                <input
+                  id="reddit-subreddit"
+                  type="text"
+                  className="bg-gray-900 border border-gray-600 rounded-lg p-2 text-sm text-white"
+                  value={redditSubreddit}
+                  onChange={e => setRedditSubreddit(e.target.value)}
+                  placeholder="LivestreamFail"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+                <span className="text-xs text-gray-500">Used when Reddit is selected. Accepts names like `LivestreamFail`, `r/LivestreamFail`, or a subreddit URL.</span>
               </div>
               
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 my-4">
