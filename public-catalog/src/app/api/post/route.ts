@@ -960,7 +960,7 @@ export async function POST(request: Request) {
           let res: Response;
 
           if (discordMediaUrl) {
-            let imageBlob: Blob;
+            let imageBlob: Blob | null;
             try {
               imageBlob = await resolveDiscordMediaBlob(request, discordMediaUrl);
             } catch (e: unknown) {
