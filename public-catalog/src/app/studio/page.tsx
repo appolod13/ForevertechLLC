@@ -12,6 +12,7 @@ import { Send, Sparkles } from 'lucide-react';
 import styles from './page.module.css';
 
 import { MIRROR_API_URL } from '@/lib/utils';
+import { buildPlatformLoginUrl } from '@/lib/authRedirect';
 import { buildQuantumSourceLinks, getCreatorAccess } from '@/lib/creatorAccess';
 import {
   saveStoredGeneration,
@@ -111,6 +112,18 @@ function StudioPageInner() {
   const [logs, setLogs] = useState<
     { time: string; msg: string; code?: string; type: 'info' | 'error' | 'warn' | 'success' }[]
   >([]);
+
+  const currentUserId = useMemo(() => {
+    if (!hydrated) return '';
+    try {
+      const raw = localStorage.getItem('user');
+      if (!raw) return '';
+      const parsed = JSON.parse(raw) as { id?: unknown };
+      return typeof parsed.id === 'string' ? parsed.id.trim() : '';
+    } catch {
+      return '';
+    }
+  }, [hydrated]);
 
   const addLog = (msg: string, type: 'info' | 'error' | 'warn' | 'success' = 'info', code?: string) => {
     const t = new Date();
@@ -1656,7 +1669,8 @@ function StudioPageInner() {
                           window.open('/rss.xml', '_blank');
                           return;
                         }
-                        window.location.href = `/api/auth/${platform}/login`;
+                        const nextUrl = buildPlatformLoginUrl(platform, currentUserId);
+                        window.location.href = nextUrl;
                       }}
                       className={`px-3 py-2 rounded-lg text-sm font-semibold border ${colors[platform]} text-white flex items-center justify-center gap-2 transition hover:opacity-80`}
                     >

@@ -7,24 +7,37 @@ export async function GET(
 ) {
   const resolvedParams = await params;
   const platform = resolvedParams.platform;
+  const requestUrl = new URL(request.url);
+  const userId = requestUrl.searchParams.get('userId');
+
+  const buildPlatformUrl = (pathname: string) => {
+    const url = new URL(pathname, request.url);
+    if (userId) url.searchParams.set('userId', userId);
+    return url;
+  };
 
   if (platform === 'twitter') {
-    const url = new URL('/api/auth/twitter/login', request.url);
+    const url = buildPlatformUrl('/api/auth/twitter/login');
     return NextResponse.redirect(url);
   }
 
   if (platform === 'instagram') {
-    const url = new URL('/api/auth/instagram/login', request.url);
+    const url = buildPlatformUrl('/api/auth/instagram/login');
     return NextResponse.redirect(url);
   }
 
   if (platform === 'tiktok') {
-    const url = new URL('/api/auth/tiktok/login', request.url);
+    const url = buildPlatformUrl('/api/auth/tiktok/login');
     return NextResponse.redirect(url);
   }
 
   if (platform === 'youtube') {
-    const url = new URL('/api/auth/youtube/login', request.url);
+    const url = buildPlatformUrl('/api/auth/youtube/login');
+    return NextResponse.redirect(url);
+  }
+
+  if (platform === 'reddit') {
+    const url = buildPlatformUrl('/api/auth/reddit/login');
     return NextResponse.redirect(url);
   }
   
