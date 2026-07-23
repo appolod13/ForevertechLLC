@@ -228,7 +228,7 @@ describe('ProductCustomizer', () => {
     expect(previewShell.className).toContain('lg:aspect-square');
   });
 
-  it('routes send-to-poster actions to the dedicated multiposter page', async () => {
+  it('routes send-to-poster actions to the Studio multiposter section', async () => {
     render(<ProductCustomizer initialImageUrl="https://example.com/design.png" promptOverride="quantum wormhole tee" />);
 
     await waitFor(() => {
@@ -238,7 +238,7 @@ describe('ProductCustomizer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send to Multi-Channel Poster' }));
 
     const parsed = new URL(window.location.href);
-    expect(parsed.pathname).toBe('/poster');
+    expect(parsed.pathname).toBe('/studio');
     expect(parsed.searchParams.get('shareImage')).toBe('https://example.com/design.png');
     expect(parsed.searchParams.get('sharePrompt')).toBe('quantum wormhole tee');
   });

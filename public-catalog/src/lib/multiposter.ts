@@ -57,7 +57,7 @@ export function buildPosterHref({
   text?: string | null;
   prompt?: string | null;
 }) {
-  const href = new URL('/poster', origin);
+  const href = new URL('/studio', origin);
   const safeImageUrl = typeof imageUrl === 'string' ? imageUrl.trim() : '';
   const safeText = typeof text === 'string' ? text.trim() : '';
   const safePrompt = typeof prompt === 'string' ? prompt.trim() : '';

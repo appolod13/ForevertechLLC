@@ -1,9 +1,11 @@
 import '@testing-library/jest-dom/vitest';
 import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import StudioPage from './page';
 import { Providers } from '../../components/Providers';
+
+let mockSearchParams = new URLSearchParams();
 
 vi.mock('sonner', () => ({
   Toaster: () => null,
@@ -43,7 +45,7 @@ vi.mock('next/navigation', async () => {
     ...actual,
     usePathname: () => '/',
     useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
-    useSearchParams: () => new URLSearchParams(),
+    useSearchParams: () => mockSearchParams,
   };
 });
 
@@ -72,6 +74,7 @@ class EventSourceMock {
 
 describe('StudioPage calendar date range', () => {
   beforeEach(() => {
+    mockSearchParams = new URLSearchParams();
     vi.stubGlobal('EventSource', EventSourceMock);
     global.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
@@ -119,6 +122,10 @@ describe('StudioPage calendar date range', () => {
       }
       return { ok: true, json: async () => ({ success: true }) } as Response;
     }) as typeof fetch;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('renders the asset generator UI', async () => {
@@ -204,6 +211,33 @@ describe('StudioPage calendar date range', () => {
     expect(screen.getByText('@reddit_user')).toBeInTheDocument();
     expect(screen.getByText('@Discord connected')).toBeInTheDocument();
     expect(screen.getByText('@RSS feed')).toBeInTheDocument();
+  });
+
+  it('hydrates shared poster params into the Studio multiposter section', async () => {
+    localStorage.clear();
+    mockSearchParams = new URLSearchParams({
+      shareImage: 'https://example.com/shared-image.png',
+      shareText: 'Shared text from customize',
+      sharePrompt: 'Dragapult',
+    });
+
+    const scrollIntoViewMock = vi.fn();
+    vi.spyOn(document, 'getElementById').mockImplementation((id: string) => {
+      if (id === 'multi-channel-poster') {
+        return { scrollIntoView: scrollIntoViewMock } as unknown as HTMLElement;
+      }
+      return null;
+    });
+
+    await renderStudioPage();
+
+    expect(screen.getByDisplayValue('Shared text from customize')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Dragapult')).toBeInTheDocument();
+    expect(screen.getByAltText('Attached preview')).toHaveAttribute('src', 'https://example.com/shared-image.png');
+
+    await waitFor(() => {
+      expect(scrollIntoViewMock).toHaveBeenCalled();
+    });
   });
 
   it('sends the default Reddit subreddit in the poster payload', async () => {

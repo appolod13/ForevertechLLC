@@ -130,16 +130,20 @@ function StudioPageInner() {
     if (!hydrated) return;
     if (!sharedImage && !sharedText && !sharedPrompt) return;
     if (sharedImage) {
-      setPosterAttachedImage((prev) => prev || sharedImage);
-      setGeneratedImage((prev) => prev || sharedImage);
+      setPosterAttachedImage(sharedImage);
+      setGeneratedImage(sharedImage);
     }
     if (sharedText) {
-      setPostContent((prev) => (prev && prev.trim() ? prev : sharedText));
+      setPostContent(sharedText);
     }
     if (sharedPrompt) {
-      setPrompt((prev) => (prev && prev.trim() ? prev : sharedPrompt));
+      setPrompt(sharedPrompt);
     }
     addLog('Imported item into Multi-Channel Poster', 'success', 'share_in');
+    const scrollTarget = globalThis.setTimeout(() => {
+      document.getElementById('multi-channel-poster')?.scrollIntoView({ behavior: 'smooth' });
+    }, 0);
+    return () => globalThis.clearTimeout(scrollTarget);
   }, [hydrated, sharedImage, sharedPrompt, sharedText]);
 
   useEffect(() => {
