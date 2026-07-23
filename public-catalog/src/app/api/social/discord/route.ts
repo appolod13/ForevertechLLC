@@ -36,6 +36,28 @@ async function loadDestination(userId: string) {
   return { data: result.data as { webhook_url?: string } | null, error: result.error };
 }
 
+async function saveDestination(userId: string, webhookUrl: string) {
+  const supabase = getServiceSupabase({ requireServiceRole: true });
+  if (!supabase) return { error: 'supabase_not_configured' as const };
+  const result = await supabase.from('user_social_destinations').upsert(
+    {
+      user_id: userId,
+      platform: 'discord',
+      webhook_url: webhookUrl,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id,platform' },
+  );
+  return { error: result.error };
+}
+
+async function deleteDestination(userId: string) {
+  const supabase = getServiceSupabase({ requireServiceRole: true });
+  if (!supabase) return { error: 'supabase_not_configured' as const };
+  const result = await supabase.from('user_social_destinations').delete().eq('user_id', userId).eq('platform', 'discord');
+  return { error: result.error };
+}
+
 export async function GET(request: Request) {
   const userId = getString(new URL(request.url).searchParams.get('userId'));
   if (!userId) return NextResponse.json({ success: false, error: 'missing_user_id' }, { status: 400 });
@@ -63,6 +85,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, error: 'invalid_discord_webhook' }, { status: 400 });
   }
 
+  const saveResult = await saveDestination(userId, webhookUrl);
+  if (saveResult.error === 'supabase_not_configured') {
+    return NextResponse.json({ success: false, error: 'supabase_not_configured' }, { status: 500 });
+  }
+  if (saveResult.error) {
+    return NextResponse.json({ success: false, error: 'discord_destination_save_failed' }, { status: 500 });
+  }
+
   const verifyRes = await fetch(webhookUrl, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -70,23 +100,9 @@ export async function POST(request: Request) {
   }).catch(() => null);
 
   if (!verifyRes || !verifyRes.ok) {
+    await deleteDestination(userId);
     return NextResponse.json({ success: false, error: 'discord_webhook_verification_failed' }, { status: 400 });
   }
-
-  const supabase = getServiceSupabase({ requireServiceRole: true });
-  if (!supabase) return NextResponse.json({ success: false, error: 'supabase_not_configured' }, { status: 500 });
-
-  const { error } = await supabase.from('user_social_destinations').upsert(
-    {
-      user_id: userId,
-      platform: 'discord',
-      webhook_url: webhookUrl,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'user_id,platform' },
-  );
-
-  if (error) return NextResponse.json({ success: false, error: 'discord_destination_save_failed' }, { status: 500 });
 
   return NextResponse.json({
     success: true,
@@ -99,11 +115,11 @@ export async function DELETE(request: Request) {
   const userId = getString(new URL(request.url).searchParams.get('userId'));
   if (!userId) return NextResponse.json({ success: false, error: 'missing_user_id' }, { status: 400 });
 
-  const supabase = getServiceSupabase({ requireServiceRole: true });
-  if (!supabase) return NextResponse.json({ success: false, error: 'supabase_not_configured' }, { status: 500 });
-
-  const { error } = await supabase.from('user_social_destinations').delete().eq('user_id', userId).eq('platform', 'discord');
-  if (error) return NextResponse.json({ success: false, error: 'discord_destination_delete_failed' }, { status: 500 });
+  const result = await deleteDestination(userId);
+  if (result.error === 'supabase_not_configured') {
+    return NextResponse.json({ success: false, error: 'supabase_not_configured' }, { status: 500 });
+  }
+  if (result.error) return NextResponse.json({ success: false, error: 'discord_destination_delete_failed' }, { status: 500 });
 
   return NextResponse.json({ success: true, connected: false });
 }

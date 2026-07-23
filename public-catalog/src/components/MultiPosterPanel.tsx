@@ -9,6 +9,7 @@ import {
   type PosterPlatformKey,
   type PosterPlatformState,
 } from '@/lib/multiposter';
+import { useAuth } from '@/context/AuthContext';
 
 type MultiPosterPanelProps = {
   initialImageUrl?: string;
@@ -17,6 +18,7 @@ type MultiPosterPanelProps = {
 };
 
 export function MultiPosterPanel({ initialImageUrl = '', initialText = '', initialPrompt = '' }: MultiPosterPanelProps) {
+  const { user } = useAuth();
   const [hydrated, setHydrated] = useState(false);
   const [posterUserId, setPosterUserId] = useState('');
   const [posterCopy, setPosterCopy] = useState('');
@@ -56,6 +58,11 @@ export function MultiPosterPanel({ initialImageUrl = '', initialText = '', initi
   }, []);
 
   useEffect(() => {
+    const authUserId = typeof user?.id === 'string' ? user.id.trim() : '';
+    if (authUserId) {
+      setPosterUserId(authUserId);
+      return;
+    }
     try {
       const raw = localStorage.getItem('user');
       if (!raw) return;
@@ -65,7 +72,7 @@ export function MultiPosterPanel({ initialImageUrl = '', initialText = '', initi
       if (userId) setPosterUserId(userId);
     } catch {
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     if (posterCopyTouched) return;

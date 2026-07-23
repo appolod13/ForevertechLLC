@@ -58,6 +58,36 @@ describe('discord social destination route', () => {
     expect(destinationUpsertMock).toHaveBeenCalled();
   });
 
+  it('rolls back the saved webhook when verification fails after persistence', async () => {
+    destinationUpsertMock.mockResolvedValue({ error: null });
+    destinationDeleteEqMock.mockReturnValueOnce({
+      eq: async () => ({ error: null }),
+    });
+    const fetchMock = vi.fn(async () => ({
+      ok: false,
+      status: 401,
+      text: async () => 'unauthorized',
+    }));
+    global.fetch = fetchMock as typeof fetch;
+
+    const res = await POST(
+      new Request('http://localhost/api/social/discord', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ userId: 'user-1', webhookUrl: 'https://discord.com/api/webhooks/123456/abcdef' }),
+      }),
+    );
+
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.success).toBe(false);
+    expect(json.error).toBe('discord_webhook_verification_failed');
+    expect(destinationUpsertMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(destinationDeleteEqMock).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(destinationUpsertMock.mock.invocationCallOrder[0]).toBeLessThan(fetchMock.mock.invocationCallOrder[0]);
+  });
+
   it('loads redacted connection state for the current user', async () => {
     destinationSingleMock.mockResolvedValue({
       data: {
