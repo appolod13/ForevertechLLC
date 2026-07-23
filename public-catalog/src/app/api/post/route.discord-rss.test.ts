@@ -56,6 +56,13 @@ describe('post route discord and rss', () => {
     posterPostsInsertMock.mockResolvedValue({ error: null });
     global.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url === 'https://example.com/post.png') {
+        return {
+          ok: true,
+          headers: new Headers({ 'content-type': 'image/png' }),
+          blob: async () => new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' }),
+        } as Response;
+      }
       if (url.includes('discord.com/api/webhooks/')) {
         return {
           ok: true,
@@ -87,6 +94,58 @@ describe('post route discord and rss', () => {
     expect(json.results.discord.success).toBe(true);
     expect(json.results.rss.success).toBe(true);
     expect(posterPostsInsertMock).toHaveBeenCalled();
+  });
+
+  it('uploads a Discord attachment and keeps image metadata when media is provided', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url === 'https://example.com/post.png') {
+        return {
+          ok: true,
+          headers: new Headers({ 'content-type': 'image/png' }),
+          blob: async () => new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' }),
+        } as Response;
+      }
+      if (url.includes('discord.com/api/webhooks/')) {
+        return {
+          ok: true,
+          status: 204,
+          text: async () => '',
+        } as Response;
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    global.fetch = fetchMock as typeof fetch;
+
+    const res = await POST(
+      new Request('http://localhost/api/post', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          userId: 'user-1',
+          content: 'Quantum drop is live',
+          platforms: ['discord'],
+          metadata: { mediaUrl: 'https://example.com/post.png' },
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.results.discord.success).toBe(true);
+
+    expect(fetchMock).toHaveBeenCalledWith('https://example.com/post.png', expect.anything());
+
+    const discordCall = fetchMock.mock.calls.find((call) => String(call[0]).includes('discord.com/api/webhooks/'));
+    expect(discordCall?.[1]?.body).toBeInstanceOf(FormData);
+
+    const form = discordCall?.[1]?.body as FormData;
+    expect(form.get('file')).toBeInstanceOf(File);
+    const payloadJson = String(form.get('payload_json') || '');
+    expect(payloadJson).toContain('Quantum drop is live');
+    expect(payloadJson).toContain('attachment://');
+    expect(payloadJson).toContain('https://example.com/post.png');
   });
 
   it('submits a reddit link post when a public https image URL is provided', async () => {

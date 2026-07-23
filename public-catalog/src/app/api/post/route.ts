@@ -11,6 +11,8 @@ type PostMetadata = {
   [key: string]: unknown;
 };
 
+const DISCORD_ATTACHMENT_NAME = 'pixelqrypt-post.png';
+
 function getString(value: unknown, maxLen = 4000) {
   const s = typeof value === 'string' ? value.trim() : '';
   return s.length > maxLen ? s.slice(0, maxLen) : s;
@@ -60,6 +62,36 @@ async function blobFromUrl(url: string): Promise<Blob> {
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) throw new Error(`image_source_http_${res.status}`);
   return res.blob();
+}
+
+function buildAbsoluteUrl(request: Request, value: string) {
+  if (!value.startsWith('/')) return value;
+  try {
+    return new URL(value, request.url).toString();
+  } catch {
+    return value;
+  }
+}
+
+function getDiscordPublicMediaUrl(request: Request, mediaUrl: string) {
+  const absolute = buildAbsoluteUrl(request, mediaUrl);
+  try {
+    const parsed = new URL(absolute);
+    if (parsed.protocol !== 'https:') return '';
+    const host = parsed.hostname.trim().toLowerCase();
+    if (!host || host === 'localhost' || host === '127.0.0.1') return '';
+    return parsed.toString();
+  } catch {
+    return '';
+  }
+}
+
+async function resolveDiscordMediaBlob(request: Request, mediaUrl: string) {
+  const desired = getString(mediaUrl);
+  if (!desired) return null;
+  if (desired.startsWith('data:')) return blobFromDataUrl(desired);
+  const absolute = buildAbsoluteUrl(request, desired);
+  return blobFromUrl(absolute);
 }
 
 async function telegramSendMessage(params: { token: string; chatId: string; text: string }) {
@@ -924,23 +956,50 @@ export async function POST(request: Request) {
         results.discord = { success: false, error: errorMessage };
       } else {
         try {
-          const body = {
-            content,
-            embeds: mediaUrl
-              ? [
-                  {
-                    description: content,
-                    image: { url: mediaUrl },
-                  },
-                ]
-              : undefined,
-          };
-          const res = await fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(body),
-            cache: 'no-store',
-          });
+          const discordMediaUrl = getString(metadata?.platformMediaUrls?.discord) || mediaUrl || '';
+          let res: Response;
+
+          if (discordMediaUrl) {
+            let imageBlob: Blob;
+            try {
+              imageBlob = await resolveDiscordMediaBlob(request, discordMediaUrl);
+            } catch (e: unknown) {
+              const msg = e instanceof Error ? e.message : 'discord_image_fetch_failed';
+              throw new Error(`discord_image_fetch_failed:${msg}`);
+            }
+
+            if (!imageBlob) throw new Error('discord_bad_image_source');
+
+            const publicImageUrl = getDiscordPublicMediaUrl(request, discordMediaUrl);
+            const payload = {
+              content,
+              embeds: [
+                {
+                  description: publicImageUrl ? publicImageUrl : undefined,
+                  image: { url: `attachment://${DISCORD_ATTACHMENT_NAME}` },
+                  url: publicImageUrl || undefined,
+                },
+              ],
+            };
+            const form = new FormData();
+            form.append('payload_json', JSON.stringify(payload));
+            form.append('file', imageBlob, DISCORD_ATTACHMENT_NAME);
+            res = await fetch(webhookUrl, {
+              method: 'POST',
+              body: form,
+              cache: 'no-store',
+            });
+          } else {
+            const body = {
+              content,
+            };
+            res = await fetch(webhookUrl, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify(body),
+              cache: 'no-store',
+            });
+          }
           if (!res.ok) throw new Error(`discord_http_${res.status}`);
           results.discord = { success: true };
         } catch (e: unknown) {

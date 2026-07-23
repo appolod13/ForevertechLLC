@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import ProfilePage from './page';
 
@@ -123,5 +123,39 @@ describe('ProfilePage', () => {
     });
 
     expect(screen.getByText('https://discord.com/.../abc...xyz')).toBeInTheDocument();
+  });
+
+  it('deletes only the selected saved generations and updates local storage', async () => {
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'user-1',
+        name: 'Test User',
+        email: 'test@example.com',
+        premiumCreator: false,
+      },
+      isLoading: false,
+    });
+
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Saved AI Generations')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('2 / 5')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Select saved generation prompt-1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Selected' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('prompt-1')).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByText('prompt-2')).toBeInTheDocument();
+    expect(screen.getByText('1 / 5')).toBeInTheDocument();
+
+    const saved = JSON.parse(localStorage.getItem('foreverteck.studio.savedGenerations') || '[]');
+    expect(saved).toHaveLength(1);
+    expect(saved[0]?.id).toBe('generation-2');
   });
 });

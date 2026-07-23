@@ -29,6 +29,7 @@ function ProfilePageInner() {
   const [discordWebhookDisplay, setDiscordWebhookDisplay] = useState('');
   const [discordStatus, setDiscordStatus] = useState<'idle' | 'saving' | 'deleting' | 'error'>('idle');
   const [discordError, setDiscordError] = useState('');
+  const [selectedGenerationIds, setSelectedGenerationIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -125,6 +126,25 @@ function ProfilePageInner() {
     };
     load();
   }, [user]);
+
+  const toggleGenerationSelection = (generationId: string) => {
+    setSelectedGenerationIds((prev) =>
+      prev.includes(generationId) ? prev.filter((id) => id !== generationId) : [...prev, generationId],
+    );
+  };
+
+  const deleteSelectedGenerations = () => {
+    if (!selectedGenerationIds.length) return;
+    setSavedGenerations((prev) => {
+      const next = prev.filter((generation) => !selectedGenerationIds.includes(generation.id));
+      try {
+        localStorage.setItem('foreverteck.studio.savedGenerations', JSON.stringify(next));
+      } catch {
+      }
+      return next;
+    });
+    setSelectedGenerationIds([]);
+  };
 
   if (isLoading || !user) {
     return (
@@ -413,14 +433,34 @@ function ProfilePageInner() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-semibold text-white mb-6 flex items-center gap-2">
-            <ImageIcon className="h-6 w-6 text-primary" />
-            Saved AI Generations
-          </h2>
+          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-2xl font-semibold text-white flex items-center gap-2">
+              <ImageIcon className="h-6 w-6 text-primary" />
+              Saved AI Generations
+            </h2>
+            <button
+              type="button"
+              disabled={!selectedGenerationIds.length}
+              onClick={deleteSelectedGenerations}
+              className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-100 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Delete Selected
+            </button>
+          </div>
           {savedGenerations.length ? (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {savedGenerations.map((generation) => (
                 <div key={generation.id} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+                  <label className="mb-3 flex cursor-pointer items-center gap-2 text-xs font-medium text-zinc-300">
+                    <input
+                      type="checkbox"
+                      checked={selectedGenerationIds.includes(generation.id)}
+                      onChange={() => toggleGenerationSelection(generation.id)}
+                      aria-label={`Select saved generation ${generation.prompt}`}
+                      className="h-4 w-4 accent-red-500"
+                    />
+                    Select
+                  </label>
                   <div className="relative mb-4 aspect-square overflow-hidden rounded-lg bg-black">
                     <img
                       src={generation.imageUrl}
