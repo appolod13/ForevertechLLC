@@ -995,6 +995,31 @@ function StudioPageInner() {
       throw new Error('Empty image URL');
     }
 
+    const describeImageResponseError = async (response: Response) => {
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const data = await response.json().catch(() => null);
+        const err =
+          data && typeof data === 'object' && 'error' in data && typeof (data as { error?: unknown }).error === 'string'
+            ? (data as { error: string }).error.trim()
+            : '';
+        if (err) return err;
+      }
+      const text = await response.text().catch(() => '');
+      return text.trim() || `HTTP ${response.status}`;
+    };
+
+    const inspectImageSource = async (candidateUrl: string) => {
+      try {
+        const response = await fetch(candidateUrl, { cache: 'no-store', credentials: 'include' });
+        if (response.ok) return '';
+        const detail = await describeImageResponseError(response);
+        return `Image source unavailable: ${detail}`;
+      } catch {
+        return 'Image source unavailable';
+      }
+    };
+
     const img = document.createElement('img');
 
     const isData = url.startsWith('data:');
@@ -1023,12 +1048,22 @@ function StudioPageInner() {
       if (isData) {
         throw new Error('Image validation failed');
       }
+      if (isRelative || isSameOriginAbsolute) {
+        const sourceError = await inspectImageSource(directUrl);
+        if (sourceError) {
+          throw new Error(sourceError);
+        }
+      }
       const fallbackLoaded = await new Promise<boolean>((resolve) => {
         img.onload = () => resolve(true);
         img.onerror = () => resolve(false);
         img.src = proxiedUrl;
       });
       if (!fallbackLoaded) {
+        const proxyError = await inspectImageSource(proxiedUrl);
+        if (proxyError) {
+          throw new Error(proxyError);
+        }
         throw new Error('Image validation failed');
       }
     }

@@ -16,10 +16,6 @@ function getString(value: unknown, maxLen = 4000) {
   return s.length > maxLen ? s.slice(0, maxLen) : s;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
 async function loadDiscordWebhookForUser(userId: string) {
   const { getServiceSupabase } = await import('@/lib/supabase');
   const supabase = getServiceSupabase({ requireServiceRole: true });
@@ -58,6 +54,12 @@ async function blobFromDataUrl(dataUrl: string): Promise<Blob> {
     ? Uint8Array.from(Buffer.from(dataPart, 'base64'))
     : Uint8Array.from(Buffer.from(decodeURIComponent(dataPart), 'utf-8'));
   return new Blob([bytes], { type: mime });
+}
+
+async function blobFromUrl(url: string): Promise<Blob> {
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`image_source_http_${res.status}`);
+  return res.blob();
 }
 
 async function telegramSendMessage(params: { token: string; chatId: string; text: string }) {
@@ -848,7 +850,7 @@ export async function POST(request: Request) {
 
             let redditMediaId: string | undefined;
             try {
-              const imageBlob = await blobFromDataUrl(publicUrl);
+              const imageBlob = publicUrl.startsWith('data:') ? await blobFromDataUrl(publicUrl) : await blobFromUrl(publicUrl);
               const uploadResult = await redditUploadImage({ accessToken, imageBlob, fileName: `reddit_${Date.now()}.png` });
               redditMediaId = uploadResult.assetId;
             } catch (e) {

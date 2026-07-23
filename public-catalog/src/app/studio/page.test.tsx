@@ -313,6 +313,126 @@ describe('StudioPage calendar date range', () => {
     expect(body.metadata?.redditSubreddit).toBe('LivestreamFail');
   });
 
+  it('shows a specific image-source error for a broken same-origin shared image', async () => {
+    localStorage.clear();
+    const brokenImageUrl = `${window.location.origin}/api/fusion-image?path=%2Fuploads%2Fbroken.png`;
+    mockSearchParams = new URLSearchParams({
+      shareImage: brokenImageUrl,
+      shareText: 'Shared text from customize',
+      sharePrompt: 'Dragapult',
+    });
+
+    vi.spyOn(document, 'getElementById').mockImplementation((id: string) => {
+      if (id === 'multi-channel-poster') {
+        return { scrollIntoView: vi.fn() } as unknown as HTMLElement;
+      }
+      return null;
+    });
+
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/api/auth/session')) {
+        return {
+          ok: true,
+          json: async () => ({
+            twitter: { authenticated: false },
+            telegram: { authenticated: false },
+            instagram: { authenticated: false },
+            tiktok: { authenticated: false },
+            youtube: { authenticated: false },
+            reddit: { authenticated: true, screenName: 'reddit_user' },
+            discord: { authenticated: false },
+            rss: { authenticated: false },
+          }),
+        } as Response;
+      }
+      if (url.includes('/api/chat/history')) {
+        return { ok: true, json: async () => ({ success: true, data: { messages: [] } }) } as Response;
+      }
+      if (url.includes('/api/catalog/posts')) {
+        return { ok: true, json: async () => ({ posts: [] }) } as Response;
+      }
+      if (url.includes('/api/printify/mockups')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            designHash: 'hash_test',
+            status: 'pending',
+            mockups: { frontUrl: undefined, backUrl: undefined, leftUrl: undefined, rightUrl: undefined },
+          }),
+        } as Response;
+      }
+      if (url === brokenImageUrl) {
+        return {
+          ok: false,
+          status: 502,
+          headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'application/json' : null) },
+          json: async () => ({ success: false, error: 'upstream fetch failed' }),
+        } as Response;
+      }
+      if (url.includes('/api/post')) {
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'application/json' : null) },
+          json: async () => ({ success: true }),
+        } as Response;
+      }
+      return { ok: true, json: async () => ({ success: true }) } as Response;
+    }) as typeof fetch;
+
+    await renderStudioPage();
+
+    const originalCreateElement = document.createElement.bind(document);
+    const createElementSpy = vi.spyOn(document, 'createElement');
+    createElementSpy.mockImplementation((tagName: string) => {
+      if (tagName.toLowerCase() === 'img') {
+        let onload: null | (() => void) = null;
+        let onerror: null | (() => void) = null;
+        return {
+          width: 0,
+          height: 0,
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          set onload(handler: null | (() => void)) {
+            onload = handler;
+          },
+          get onload() {
+            return onload;
+          },
+          set onerror(handler: null | (() => void)) {
+            onerror = handler;
+          },
+          get onerror() {
+            return onerror;
+          },
+          set src(_value: string) {
+            queueMicrotask(() => {
+              onerror?.();
+            });
+          },
+          get src() {
+            return '';
+          },
+          crossOrigin: '',
+        } as unknown as HTMLImageElement;
+      }
+      return originalCreateElement(tagName);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Post to All Channels' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Posting failed: Image source unavailable: upstream fetch failed')).toBeInTheDocument();
+    });
+    expect(
+      (global.fetch as unknown as { mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> } }).mock.calls.some((c) =>
+        String(c[0]).includes('/api/post'),
+      ),
+    ).toBe(false);
+  });
+
   it('logs a warning instead of a false success when the build trigger returns unauthorized', async () => {
     global.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;

@@ -17,12 +17,15 @@ export async function GET(request?: Request) {
 
   for (const p of platforms) {
     const token = cookieStore.get(`${p}_user_token`)?.value;
+    const refreshToken = cookieStore.get(`${p}_user_refresh_token`)?.value;
     const screenName = cookieStore.get(`${p}_screen_name`)?.value;
 
     const envTelegramReady =
       p === 'telegram' && Boolean((process.env.TELEGRAM_BOT_TOKEN || '').trim()) && Boolean((process.env.TELEGRAM_CHAT_ID || '').trim());
 
-    if (token || envTelegramReady) {
+    const hasRedditSession = p === 'reddit' && Boolean((refreshToken || '').trim());
+
+    if (token || hasRedditSession || envTelegramReady) {
       session[p] = { authenticated: true, screenName: screenName || p };
     } else {
       session[p] = { authenticated: false };

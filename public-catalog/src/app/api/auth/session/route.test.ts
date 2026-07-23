@@ -56,4 +56,18 @@ describe('auth session route', () => {
     expect(json.rss).toEqual({ authenticated: true, screenName: 'RSS feed' });
     expect(json.twitter).toEqual({ authenticated: false });
   });
+
+  it('treats a reddit refresh token as a usable connected session', async () => {
+    cookieGetMock.mockImplementation((key: string) => {
+      if (key === 'reddit_user_refresh_token') return { value: 'reddit_refresh_123' };
+      if (key === 'reddit_screen_name') return { value: 'reddit_user' };
+      return undefined;
+    });
+
+    const res = await GET(new Request('http://localhost/api/auth/session?userId=user-1'));
+    expect(res.status).toBe(200);
+
+    const json = await res.json();
+    expect(json.reddit).toEqual({ authenticated: true, screenName: 'reddit_user' });
+  });
 });

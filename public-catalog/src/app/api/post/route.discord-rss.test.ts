@@ -88,4 +88,73 @@ describe('post route discord and rss', () => {
     expect(json.results.rss.success).toBe(true);
     expect(posterPostsInsertMock).toHaveBeenCalled();
   });
+
+  it('submits a reddit link post when a public https image URL is provided', async () => {
+    cookieGetMock.mockImplementation((key: string) => {
+      if (key === 'reddit_user_token') return { value: 'reddit_token_123' };
+      return undefined;
+    });
+
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url === 'https://oauth.reddit.com/api/media/asset.json') {
+        return {
+          ok: true,
+          json: async () => ({
+            asset_id: 'reddit_asset_123',
+          }),
+        } as Response;
+      }
+      if (url === 'https://oauth.reddit.com/api/submit') {
+        return {
+          ok: true,
+          json: async () => ({
+            json: {
+              errors: [],
+              data: {
+                id: 'reddit_post_123',
+                url: 'https://reddit.com/r/LivestreamFail/comments/reddit_post_123/example',
+              },
+            },
+          }),
+        } as Response;
+      }
+      if (url === 'https://example.com/post.png') {
+        return {
+          ok: true,
+          headers: new Headers({ 'content-type': 'image/png' }),
+          arrayBuffer: async () => new Uint8Array([137, 80, 78, 71]).buffer,
+          blob: async () => new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' }),
+        } as Response;
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    const res = await POST(
+      new Request('https://www.pixelqrypt.com/api/post', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', host: 'www.pixelqrypt.com', 'x-forwarded-proto': 'https' },
+        body: JSON.stringify({
+          userId: 'user-1',
+          content: 'Quantum drop is live',
+          platforms: ['reddit'],
+          metadata: {
+            mediaUrl: 'https://example.com/post.png',
+            redditSubreddit: 'LivestreamFail',
+          },
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.results.reddit.success).toBe(true);
+    expect(json.results.reddit.subreddit).toBe('LivestreamFail');
+    expect(
+      (global.fetch as unknown as { mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> } }).mock.calls.some((c) =>
+        String(c[0]) === 'https://example.com/post.png',
+      ),
+    ).toBe(true);
+  });
 });
