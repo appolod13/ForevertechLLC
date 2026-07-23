@@ -100,7 +100,7 @@ export function Header() {
               Menu…
             </option>
             {navItems.map((item) => (
-              <option key={item.href} value={item.href}>
+              <option key={`${item.href}:${item.label}`} value={item.href}>
                 {item.label}
               </option>
             ))}

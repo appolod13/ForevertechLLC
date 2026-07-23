@@ -62,4 +62,20 @@ describe('Header', () => {
       );
     });
   });
+
+  it('does not emit duplicate key warnings for studio navigation items', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(<Header />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'Navigate' })).toBeInTheDocument();
+    });
+
+    expect(errorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('Encountered two children with the same key'),
+    );
+
+    errorSpy.mockRestore();
+  });
 });
