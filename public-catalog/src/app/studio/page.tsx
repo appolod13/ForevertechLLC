@@ -1296,6 +1296,12 @@ function StudioPageInner() {
                 >
                   Upgrade to Premium Creator
                 </Link>
+                <Link
+                  href="/profile#saved-generations"
+                  className="mt-3 inline-flex min-h-[44px] items-center justify-center rounded-lg border border-white/15 bg-black/40 px-4 py-2 text-sm font-semibold text-white hover:bg-black/55"
+                >
+                  Manage Saved Images
+                </Link>
               </div>
               <div className="flex items-center justify-between gap-4">
                 <label className={`flex items-center gap-2 text-sm p-2 rounded-lg border transition-all cursor-pointer ${ipfsEnabled ? 'border-green-500 bg-green-500/10 shadow-[0_0_15px_rgba(34,197,94,0.3)]' : 'border-gray-700 hover:border-gray-600'}`}>

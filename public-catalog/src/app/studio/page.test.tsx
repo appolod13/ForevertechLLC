@@ -180,6 +180,10 @@ describe('StudioPage calendar date range', () => {
       'href',
       '/profile?upgrade=premium-creator',
     );
+    expect(screen.getByRole('link', { name: 'Manage Saved Images' })).toHaveAttribute(
+      'href',
+      '/profile#saved-generations',
+    );
   });
 
   it('shows the approved merch buyer preview for the latest generated image', async () => {

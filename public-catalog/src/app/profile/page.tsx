@@ -432,7 +432,7 @@ function ProfilePageInner() {
           )}
         </section>
 
-        <section>
+        <section id="saved-generations">
           <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-2xl font-semibold text-white flex items-center gap-2">
               <ImageIcon className="h-6 w-6 text-primary" />
