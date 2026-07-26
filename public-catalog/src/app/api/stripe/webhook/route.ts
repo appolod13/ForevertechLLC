@@ -1612,7 +1612,7 @@ export async function POST(request: Request) {
         const placementTransform = getTransformFromTemplate(template, variantId, placementForZone!);
         printAreas[placementForZone!] = [
           {
-            src: uploadedZones[zone].previewUrl,
+            src: uploadedZones[zone],
             x: Number.isFinite(placementTransform.x) ? placementTransform.x : 0.5,
             y: Number.isFinite(placementTransform.y) ? placementTransform.y : 0.5,
             scale: Number.isFinite(placementTransform.scale) ? placementTransform.scale : 1,
@@ -1625,7 +1625,7 @@ export async function POST(request: Request) {
         const logoTransform = getTransformFromTemplate(template, variantId, placementPlan.branding.inside_neck_tag);
         printAreas[placementPlan.branding.inside_neck_tag] = [
           {
-            src: uploadedZones.inside_neck_tag.previewUrl,
+            src: uploadedZones.inside_neck_tag,
             x: Number.isFinite(logoTransform.x) ? logoTransform.x : 0.5,
             y: Number.isFinite(logoTransform.y) ? logoTransform.y : 0.5,
             scale: Number.isFinite(logoTransform.scale) ? logoTransform.scale : 0.35,
@@ -1638,7 +1638,7 @@ export async function POST(request: Request) {
         const collarTransform = getTransformFromTemplate(template, variantId, placementPlan.branding.collar);
         printAreas[placementPlan.branding.collar] = [
           {
-            src: uploadedZones.collar.previewUrl,
+            src: uploadedZones.collar,
             x: Number.isFinite(collarTransform.x) ? collarTransform.x : 0.5,
             y: Number.isFinite(collarTransform.y) ? collarTransform.y : 0.5,
             scale: Number.isFinite(collarTransform.scale) ? collarTransform.scale : 0.35,
