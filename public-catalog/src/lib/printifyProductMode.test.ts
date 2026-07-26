@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { expandAopPlacementKeys, resolveTemplateProductIdForItem } from './printifyProductMode';
+import { buildAopPlacementPlan, expandAopPlacementKeys, resolveTemplateProductIdForItem } from './printifyProductMode';
 
 describe('printify product mode helpers', () => {
   it('prefers explicit template ids and falls back to the AOP template for all-over-print items', () => {
@@ -29,8 +29,26 @@ describe('printify product mode helpers', () => {
   it('selects wrap-friendly AOP placement keys and filters out non-art placements', () => {
     expect(
       expandAopPlacementKeys(['front', 'back', 'left_sleeve', 'right_sleeve', 'neck', 'inside_label']),
-    ).toEqual(['front', 'left_sleeve', 'right_sleeve']);
+    ).toEqual(['front', 'back', 'left_sleeve', 'right_sleeve']);
 
     expect(expandAopPlacementKeys(['back', 'neck'])).toEqual(['back']);
+  });
+
+  it('builds a placement plan for body, inside-tag, and collar zones', () => {
+    expect(
+      buildAopPlacementPlan(['front', 'back', 'left_sleeve', 'right_sleeve', 'inside_label', 'collar']),
+    ).toEqual({
+      body: {
+        front: 'front',
+        back: 'back',
+        left_sleeve: 'left_sleeve',
+        right_sleeve: 'right_sleeve',
+      },
+      branding: {
+        inside_neck_tag: 'inside_label',
+        collar: 'collar',
+      },
+      unsupported: [],
+    });
   });
 });

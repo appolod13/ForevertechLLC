@@ -4,8 +4,9 @@ import { addOrder, clearCart, getCart, type OrderLineItem, type OrderRecord } fr
 import { getPrintifyBackTextConfig, renderBackAbstractPngBuffer, renderBackTextPngBuffer } from '@/lib/printifyBackText';
 import { requestIbmQuantumProof, type QuantumProof } from '@/lib/quantumVerified';
 import { getAiGeneratorsConfig } from '@/lib/aiGeneratorsConfig';
-import { expandAopPlacementKeys, resolveTemplateProductIdForItem } from '@/lib/printifyProductMode';
+import { buildAopPlacementPlan, resolveTemplateProductIdForItem } from '@/lib/printifyProductMode';
 import { getServiceSupabase } from '@/lib/supabase';
+import { composeAopGarmentAssets, resolveBrandingLogoUrl } from '@/lib/garmentComposer';
 import sharp from 'sharp';
 import QRCode from 'qrcode';
 import path from 'path';
@@ -1055,6 +1056,21 @@ async function fetchImageAsBase64(url: string) {
   return Buffer.from(arrayBuffer).toString('base64');
 }
 
+async function fetchImageAsBuffer(url: string) {
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e || '');
+    throw new Error(`Image fetch network error: ${url}${msg ? ` (${msg})` : ''}`);
+  }
+  if (!res.ok) {
+    throw new Error(`Failed to fetch image (${res.status}): ${url}`);
+  }
+  const arrayBuffer = await res.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
 async function uploadImageToPrintify(fileName: string, base64Contents: string) {
   const uploaded = await printifyFetch('/v1/uploads/images.json', {
     method: 'POST',
@@ -1544,53 +1560,119 @@ export async function POST(request: Request) {
           ? `${origin}${rawImageUrl.startsWith('/') ? '' : '/'}${rawImageUrl}`
           : rawImageUrl;
 
-    const base64 = await fetchImageAsBase64(absoluteImageUrl);
-    const previewUrl = await uploadImageToPrintify(buildPrintifyFileName(keyword, String(item.id || 'design')), base64);
-    const transform = getTransformFromTemplate(template, variantId, placementKey);
-    const desiredX = 0.5;
-    const desiredY = 0.36;
-    const desiredScale = 0.78;
-    const finalTransform =
-      placementKey === 'front'
-        ? {
-            x: desiredX,
-            y: desiredY,
-            scale: desiredScale,
-            angle: Number.isFinite(transform.angle) ? transform.angle : 0,
-          }
-        : transform;
-
     const availablePlacements = getPlacementKeysForVariant(template, variantId);
-    const printAreas: Record<string, PrintifyPrintAreaInfo[]> =
-      printType === 'all_over_print'
-        ? Object.fromEntries(
-            expandAopPlacementKeys(availablePlacements).map((placement) => {
-              const placementTransform = getTransformFromTemplate(template, variantId, placement);
-              return [
-                placement,
-                [
-                  {
-                    src: previewUrl,
-                    x: Number.isFinite(placementTransform.x) ? placementTransform.x : 0.5,
-                    y: Number.isFinite(placementTransform.y) ? placementTransform.y : 0.5,
-                    scale: Number.isFinite(placementTransform.scale) ? placementTransform.scale : 1,
-                    angle: Number.isFinite(placementTransform.angle) ? placementTransform.angle : 0,
-                  },
-                ],
-              ];
-            }),
-          )
-        : {
-            [placementKey]: [
-              {
-                src: previewUrl,
-                x: finalTransform.x,
-                y: finalTransform.y,
-                scale: finalTransform.scale,
-                angle: finalTransform.angle,
-              },
-            ],
-          };
+    const printAreas: Record<string, PrintifyPrintAreaInfo[]> = {};
+
+    if (printType === 'all_over_print') {
+      const placementPlan = buildAopPlacementPlan(availablePlacements);
+      const requiredPlacements = [
+        ['front', placementPlan.body.front],
+        ['back', placementPlan.body.back],
+        ['left_sleeve', placementPlan.body.left_sleeve],
+        ['right_sleeve', placementPlan.body.right_sleeve],
+      ] as const;
+      const missingRequired = requiredPlacements.find(([, placement]) => !placement);
+      if (missingRequired) {
+        throw new Error(`missing_required_aop_placement:${missingRequired[0]}`);
+      }
+
+      const designBuffer = await fetchImageAsBuffer(absoluteImageUrl);
+      const brandingLogo = resolveBrandingLogoUrl({
+        metadata,
+        origin: origin || undefined,
+        fallbackLogoUrl: origin ? (process.env.PRINTIFY_COMPANY_LOGO_PATH || '/images/Forevertech_logo.jpg').trim() : '',
+      });
+      const logoBuffer = brandingLogo?.url ? await fetchImageAsBuffer(brandingLogo.url) : null;
+      const fileSafe = String(item.id || 'design').replace(/[^a-z0-9_-]+/gi, '-').slice(0, 32) || 'design';
+      const composed = await composeAopGarmentAssets({
+        designBuffer,
+        logoBuffer,
+        fileSafe,
+        brandingSource: brandingLogo?.source || 'fallback_logo_url',
+      });
+      const uploadedZones = {
+        front: await uploadImageToPrintify(composed.zoneAssets.front.fileName, composed.zoneAssets.front.buffer.toString('base64')),
+        back: await uploadImageToPrintify(composed.zoneAssets.back.fileName, composed.zoneAssets.back.buffer.toString('base64')),
+        left_sleeve: await uploadImageToPrintify(
+          composed.zoneAssets.left_sleeve.fileName,
+          composed.zoneAssets.left_sleeve.buffer.toString('base64'),
+        ),
+        right_sleeve: await uploadImageToPrintify(
+          composed.zoneAssets.right_sleeve.fileName,
+          composed.zoneAssets.right_sleeve.buffer.toString('base64'),
+        ),
+        inside_neck_tag: await uploadImageToPrintify(
+          composed.zoneAssets.inside_neck_tag.fileName,
+          composed.zoneAssets.inside_neck_tag.buffer.toString('base64'),
+        ),
+        collar: await uploadImageToPrintify(composed.zoneAssets.collar.fileName, composed.zoneAssets.collar.buffer.toString('base64')),
+      };
+
+      for (const [zone, placementForZone] of requiredPlacements) {
+        const placementTransform = getTransformFromTemplate(template, variantId, placementForZone!);
+        printAreas[placementForZone!] = [
+          {
+            src: uploadedZones[zone].previewUrl,
+            x: Number.isFinite(placementTransform.x) ? placementTransform.x : 0.5,
+            y: Number.isFinite(placementTransform.y) ? placementTransform.y : 0.5,
+            scale: Number.isFinite(placementTransform.scale) ? placementTransform.scale : 1,
+            angle: Number.isFinite(placementTransform.angle) ? placementTransform.angle : 0,
+          },
+        ];
+      }
+
+      if (placementPlan.branding.inside_neck_tag) {
+        const logoTransform = getTransformFromTemplate(template, variantId, placementPlan.branding.inside_neck_tag);
+        printAreas[placementPlan.branding.inside_neck_tag] = [
+          {
+            src: uploadedZones.inside_neck_tag.previewUrl,
+            x: Number.isFinite(logoTransform.x) ? logoTransform.x : 0.5,
+            y: Number.isFinite(logoTransform.y) ? logoTransform.y : 0.5,
+            scale: Number.isFinite(logoTransform.scale) ? logoTransform.scale : 0.35,
+            angle: Number.isFinite(logoTransform.angle) ? logoTransform.angle : 0,
+          },
+        ];
+      }
+
+      if (placementPlan.branding.collar && placementPlan.branding.collar !== placementPlan.branding.inside_neck_tag) {
+        const collarTransform = getTransformFromTemplate(template, variantId, placementPlan.branding.collar);
+        printAreas[placementPlan.branding.collar] = [
+          {
+            src: uploadedZones.collar.previewUrl,
+            x: Number.isFinite(collarTransform.x) ? collarTransform.x : 0.5,
+            y: Number.isFinite(collarTransform.y) ? collarTransform.y : 0.5,
+            scale: Number.isFinite(collarTransform.scale) ? collarTransform.scale : 0.35,
+            angle: Number.isFinite(collarTransform.angle) ? collarTransform.angle : 0,
+          },
+        ];
+      }
+    } else {
+      const base64 = await fetchImageAsBase64(absoluteImageUrl);
+      const previewUrl = await uploadImageToPrintify(buildPrintifyFileName(keyword, String(item.id || 'design')), base64);
+      const transform = getTransformFromTemplate(template, variantId, placementKey);
+      const desiredX = 0.5;
+      const desiredY = 0.36;
+      const desiredScale = 0.78;
+      const finalTransform =
+        placementKey === 'front'
+          ? {
+              x: desiredX,
+              y: desiredY,
+              scale: desiredScale,
+              angle: Number.isFinite(transform.angle) ? transform.angle : 0,
+            }
+          : transform;
+
+      printAreas[placementKey] = [
+        {
+          src: previewUrl,
+          x: finalTransform.x,
+          y: finalTransform.y,
+          scale: finalTransform.scale,
+          angle: finalTransform.angle,
+        },
+      ];
+    }
 
     if (origin && printType !== 'all_over_print') {
       try {

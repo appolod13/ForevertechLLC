@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import sharp from 'sharp';
 
 const { mockupsSelectSingleMock, mockupsUpdateMock, getServiceSupabaseMock } = vi.hoisted(() => ({
   mockupsSelectSingleMock: vi.fn(),
@@ -11,6 +12,19 @@ vi.mock('@/lib/supabase', () => ({
 }));
 
 import { POST } from './route';
+
+async function tinyPngBuffer() {
+  return sharp({
+    create: {
+      width: 8,
+      height: 8,
+      channels: 4,
+      background: { r: 140, g: 40, b: 180, alpha: 1 },
+    },
+  })
+    .png()
+    .toBuffer();
+}
 
 describe('printify mockups route', () => {
   beforeEach(() => {
@@ -120,16 +134,25 @@ describe('printify mockups route', () => {
     expect(mockupsUpdateMock).toHaveBeenCalled();
   });
 
-  it('builds an AOP Printify payload with front, back, left_sleeve, right_sleeve, and inside neck tag placements', async () => {
+  it('builds an AOP Printify payload with explicit per-zone assets plus branding placements', async () => {
     mockupsSelectSingleMock.mockResolvedValue({ data: null, error: { code: 'PGRST116' } });
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
 
       if (url === 'https://example.com/design.png') {
+        const png = await tinyPngBuffer();
         return {
           ok: true,
-          arrayBuffer: async () => Uint8Array.from([1, 2, 3]).buffer,
+          arrayBuffer: async () => png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength),
+        } as Response;
+      }
+
+      if (url === 'http://localhost/images/Forevertech_logo.jpg') {
+        const png = await tinyPngBuffer();
+        return {
+          ok: true,
+          arrayBuffer: async () => png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength),
         } as Response;
       }
 
@@ -140,7 +163,19 @@ describe('printify mockups route', () => {
           status: 200,
           text: async () =>
             JSON.stringify({
-              id: body.file_name?.includes('necktag') ? 'upload_logo' : 'upload_art',
+              id: body.file_name?.includes('inside-tag')
+                ? 'upload_logo'
+                : body.file_name?.includes('front')
+                  ? 'upload_front'
+                  : body.file_name?.includes('back')
+                    ? 'upload_back'
+                    : body.file_name?.includes('left-sleeve')
+                      ? 'upload_left'
+                      : body.file_name?.includes('right-sleeve')
+                        ? 'upload_right'
+                        : body.file_name?.includes('collar')
+                          ? 'upload_collar'
+                          : 'upload_misc',
               preview_url: 'https://printify.example/upload.png',
             }),
         } as Response;
@@ -165,6 +200,7 @@ describe('printify mockups route', () => {
                     { position: 'left_sleeve', images: [{ x: 0.4, y: 0.5, scale: 0.55, angle: 0 }] },
                     { position: 'right_sleeve', images: [{ x: 0.6, y: 0.5, scale: 0.55, angle: 0 }] },
                     { position: 'inside_neck_tag', images: [{ x: 0.5, y: 0.5, scale: 0.2, angle: 0 }] },
+                    { position: 'collar', images: [{ x: 0.5, y: 0.15, scale: 0.35, angle: 0 }] },
                   ],
                 },
               ],
@@ -183,12 +219,14 @@ describe('printify mockups route', () => {
           'left_sleeve',
           'right_sleeve',
           'inside_neck_tag',
+          'collar',
         ]);
-        expect(placeholders[0]?.images?.[0]?.id).toBe('upload_art');
-        expect(placeholders[1]?.images?.[0]?.id).toBe('upload_art');
-        expect(placeholders[2]?.images?.[0]?.id).toBe('upload_art');
-        expect(placeholders[3]?.images?.[0]?.id).toBe('upload_art');
+        expect(placeholders[0]?.images?.[0]?.id).toBe('upload_front');
+        expect(placeholders[1]?.images?.[0]?.id).toBe('upload_back');
+        expect(placeholders[2]?.images?.[0]?.id).toBe('upload_left');
+        expect(placeholders[3]?.images?.[0]?.id).toBe('upload_right');
         expect(placeholders[4]?.images?.[0]?.id).toBe('upload_logo');
+        expect(placeholders[5]?.images?.[0]?.id).toBe('upload_collar');
 
         return {
           ok: true,
@@ -240,9 +278,18 @@ describe('printify mockups route', () => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
 
       if (url === 'https://example.com/design.png') {
+        const png = await tinyPngBuffer();
         return {
           ok: true,
-          arrayBuffer: async () => Uint8Array.from([1, 2, 3]).buffer,
+          arrayBuffer: async () => png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength),
+        } as Response;
+      }
+
+      if (url === 'http://localhost/images/Forevertech_logo.jpg') {
+        const png = await tinyPngBuffer();
+        return {
+          ok: true,
+          arrayBuffer: async () => png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength),
         } as Response;
       }
 

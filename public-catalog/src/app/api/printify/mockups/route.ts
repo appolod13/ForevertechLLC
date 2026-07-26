@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
 
 import { getServiceSupabase } from '@/lib/supabase';
 import { computeDesignHash } from '@/lib/designMockups';
+import { buildAopPlacementPlan } from '@/lib/printifyProductMode';
+import { composeAopGarmentAssets, resolveBrandingLogoUrl } from '@/lib/garmentComposer';
 
 function getString(value: unknown) {
   return typeof value === 'string' ? value : '';
@@ -76,6 +76,13 @@ async function fetchImageAsBase64(url: string) {
   return Buffer.from(ab).toString('base64');
 }
 
+async function fetchImageAsBuffer(url: string) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`image_fetch_failed:${res.status}`);
+  const ab = await res.arrayBuffer();
+  return Buffer.from(ab);
+}
+
 async function uploadImageToPrintify(fileName: string, base64Contents: string) {
   const json = await printifyFetch('/v1/uploads/images.json', {
     method: 'POST',
@@ -99,10 +106,6 @@ type PrintifyTemplateProduct = { id?: unknown; title?: unknown; blueprint_id?: u
 
 type TemplateTransform = { x: number; y: number; scale: number; angle: number };
 
-type PlacementMatch = {
-  key: string;
-  transform: TemplateTransform;
-};
 
 function normalizePlacementKey(value: string) {
   return value.trim().toLowerCase().replace(/[\s-]+/g, '_');
@@ -199,27 +202,6 @@ function getTransformFromTemplate(template: PrintifyTemplateProduct, variantId: 
   return { x: 0.5, y: 0.5, scale: 0.8, angle: 0 };
 }
 
-function getPlacementMatch(template: PrintifyTemplateProduct, variantId: number, aliases: string[]) {
-  const positions = getAllPlaceholderPositions(template, variantId);
-  const key = positions.find((position) => matchesAlias(position, aliases));
-  if (!key) return null;
-  return {
-    key,
-    transform: getTransformFromTemplate(template, variantId, key),
-  } satisfies PlacementMatch;
-}
-
-async function loadLocalAssetAsBase64(relativePath: string) {
-  const absolutePath = path.join(process.cwd(), 'public', relativePath.replace(/^\/+/, ''));
-  const file = await fs.readFile(absolutePath);
-  return file.toString('base64');
-}
-
-async function uploadSiteLogoToPrintify(fileSafe: string) {
-  const base64 = await loadLocalAssetAsBase64('images/Forevertech_logo.jpg');
-  return uploadImageToPrintify(`necktag-logo-${fileSafe}-${Date.now().toString(36)}.jpg`, base64);
-}
-
 async function getTemplateProduct(shopId: string, preferredProductId?: string) {
   const preferred = typeof preferredProductId === 'string' ? preferredProductId.trim() : '';
   if (preferred) {
@@ -281,6 +263,7 @@ export async function POST(req: Request) {
   const imageUrl = getString(b.imageUrl).trim();
   const prompt = getString(b.prompt).trim();
   const printType = getString(b.printType).trim();
+  const explicitLogoUrl = getString(b.logoUrl).trim();
 
   if (!imageUrl) return NextResponse.json({ success: false, error: 'missing_image_url' }, { status: 400 });
 
@@ -377,10 +360,7 @@ export async function POST(req: Request) {
         .single();
     }
 
-    const base64 = await fetchImageAsBase64(fetchUrl);
     const fileSafe = designHash.slice(0, 12);
-    const uploaded = await uploadImageToPrintify(`mockup-${fileSafe}-${Date.now().toString(36)}.png`, base64);
-
     const template = await getTemplateProduct(shopId, preferredTemplateId);
     const blueprintId = getNumber(template.blueprint_id);
     const printProviderId = getNumber(template.print_provider_id);
@@ -400,51 +380,70 @@ export async function POST(req: Request) {
     let placeholders: Array<{ position: string; images: Array<{ id: string; x: number; y: number; scale: number; angle: number }> }>;
 
     if (isAop) {
-      const front = getPlacementMatch(template, primaryVariantId, ['front', 'chest']);
-      const back = getPlacementMatch(template, primaryVariantId, ['back', 'rear']);
-      const leftSleeve = getPlacementMatch(template, primaryVariantId, ['left_sleeve', 'left sleeve']);
-      const rightSleeve = getPlacementMatch(template, primaryVariantId, ['right_sleeve', 'right sleeve']);
-
+      const placementPlan = buildAopPlacementPlan(positions);
       const requiredPlacements = [
-        ['front', front],
-        ['back', back],
-        ['left_sleeve', leftSleeve],
-        ['right_sleeve', rightSleeve],
+        ['front', placementPlan.body.front],
+        ['back', placementPlan.body.back],
+        ['left_sleeve', placementPlan.body.left_sleeve],
+        ['right_sleeve', placementPlan.body.right_sleeve],
       ] as const;
-
-      const missingRequired = requiredPlacements.find(([, match]) => !match);
+      const missingRequired = requiredPlacements.find(([, placementKey]) => !placementKey);
       if (missingRequired) {
         throw new Error(`required_aop_placement_missing:${missingRequired[0]}`);
       }
 
-      placeholders = requiredPlacements.map(([name, match]) => {
+      const designBuffer = await fetchImageAsBuffer(fetchUrl);
+      const brandingLogo = resolveBrandingLogoUrl({
+        explicitLogoUrl,
+        fallbackLogoUrl: (process.env.PRINTIFY_COMPANY_LOGO_PATH || '/images/Forevertech_logo.jpg').trim(),
+        origin,
+      });
+      const logoBuffer = brandingLogo ? await fetchImageAsBuffer(brandingLogo.url) : null;
+      const composed = await composeAopGarmentAssets({
+        designBuffer,
+        logoBuffer,
+        fileSafe,
+        brandingSource: brandingLogo?.source || 'fallback_logo_url',
+      });
+      const uploadedZones = {
+        front: await uploadImageToPrintify(composed.zoneAssets.front.fileName, composed.zoneAssets.front.buffer.toString('base64')),
+        back: await uploadImageToPrintify(composed.zoneAssets.back.fileName, composed.zoneAssets.back.buffer.toString('base64')),
+        left_sleeve: await uploadImageToPrintify(
+          composed.zoneAssets.left_sleeve.fileName,
+          composed.zoneAssets.left_sleeve.buffer.toString('base64'),
+        ),
+        right_sleeve: await uploadImageToPrintify(
+          composed.zoneAssets.right_sleeve.fileName,
+          composed.zoneAssets.right_sleeve.buffer.toString('base64'),
+        ),
+        inside_neck_tag: await uploadImageToPrintify(
+          composed.zoneAssets.inside_neck_tag.fileName,
+          composed.zoneAssets.inside_neck_tag.buffer.toString('base64'),
+        ),
+        collar: await uploadImageToPrintify(composed.zoneAssets.collar.fileName, composed.zoneAssets.collar.buffer.toString('base64')),
+      };
+
+      placeholders = requiredPlacements.map(([name, placementKey]) => {
         appliedPlacements.push(name);
         return {
-          position: match!.key,
+          position: placementKey!,
           images: [
             {
-              id: uploaded.id,
-              x: match!.transform.x,
-              y: match!.transform.y,
-              scale: match!.transform.scale,
-              angle: match!.transform.angle,
+              id: uploadedZones[name].id,
+              ...getTransformFromTemplate(template, primaryVariantId, placementKey!),
             },
           ],
         };
       });
 
-      const insideNeckTag = getPlacementMatch(template, primaryVariantId, ['inside_neck_tag', 'inside neck tag', 'inside_label']);
-      if (insideNeckTag) {
-        const logoUpload = await uploadSiteLogoToPrintify(fileSafe);
+      const insideNeckTagKey = placementPlan.branding.inside_neck_tag;
+      if (insideNeckTagKey) {
         placeholders.push({
-          position: insideNeckTag.key,
+          position: insideNeckTagKey,
           images: [
             {
-              id: logoUpload.id,
-              x: insideNeckTag.transform.x,
-              y: insideNeckTag.transform.y,
-              scale: insideNeckTag.transform.scale,
-              angle: insideNeckTag.transform.angle,
+              id: uploadedZones.inside_neck_tag.id,
+              ...getTransformFromTemplate(template, primaryVariantId, insideNeckTagKey),
             },
           ],
         });
@@ -453,13 +452,24 @@ export async function POST(req: Request) {
         skippedPlacements.push('inside_neck_tag');
       }
 
-      const collarPlacement = getPlacementMatch(template, primaryVariantId, ['collar', 'neck']);
-      if (collarPlacement && !matchesAlias(collarPlacement.key, ['inside_neck_tag', 'inside neck tag', 'inside_label'])) {
-        skippedPlacements.push('neck_accent_supported_but_not_applied');
+      const collarPlacementKey = placementPlan.branding.collar;
+      if (collarPlacementKey && collarPlacementKey !== insideNeckTagKey) {
+        placeholders.push({
+          position: collarPlacementKey,
+          images: [
+            {
+              id: uploadedZones.collar.id,
+              ...getTransformFromTemplate(template, primaryVariantId, collarPlacementKey),
+            },
+          ],
+        });
+        appliedPlacements.push('collar');
       } else {
-        skippedPlacements.push('neck_accent');
+        skippedPlacements.push('collar');
       }
     } else {
+      const base64 = await fetchImageAsBase64(fetchUrl);
+      const uploaded = await uploadImageToPrintify(`mockup-${fileSafe}-${Date.now().toString(36)}.png`, base64);
       placeholders = [
         {
           position: frontPos,
