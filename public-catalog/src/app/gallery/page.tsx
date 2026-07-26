@@ -178,7 +178,7 @@ export default function GalleryPage() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
             <h1 className="text-4xl font-bold mb-2">My Gallery</h1>
-            <p className="text-zinc-400">View the images you have generated, your favorites, and PixelQrypt™ Verified items.</p>
+            <p className="text-zinc-400">Browse your saved designs, preview how they look on merch, and move into customization or checkout when you are ready.</p>
           </div>
           
           <div className="flex items-center gap-4">
@@ -444,9 +444,9 @@ export default function GalleryPage() {
                   </div>
                   <button
                     onClick={() => sendToPoster(item)}
-                    className="w-full flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3 py-2 rounded-lg text-sm transition-colors mb-3"
+                    className="w-full flex items-center justify-center gap-2 border border-zinc-800 bg-zinc-950 hover:bg-zinc-900 text-zinc-300 px-3 py-2 rounded-lg text-sm transition-colors mb-3"
                   >
-                    <Send className="w-4 h-4" /> Send to Multi-Channel Poster
+                    <Send className="w-4 h-4" /> Share Later
                   </button>
                   {item.isQuantumVerified && (
                     <button 

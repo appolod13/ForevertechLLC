@@ -145,4 +145,21 @@ describe('GalleryPage creator tab', () => {
       'https://printify.example/gallery-sample.png',
     );
   });
+
+  it('demotes sharing to a secondary gallery action label', async () => {
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'user-1',
+        name: 'Test User',
+        email: 'test@example.com',
+        premiumCreator: false,
+      },
+    });
+
+    render(<GalleryPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Share Later' })).toBeInTheDocument();
+    });
+  });
 });

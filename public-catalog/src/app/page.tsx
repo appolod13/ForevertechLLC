@@ -115,23 +115,23 @@ export default async function Home() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex items-end p-8">
                 <div className="max-w-xl">
                   <h1 className="text-3xl md:text-5xl font-bold text-white tracking-tight drop-shadow-lg mb-2">
-                    Own a One-of-One <span className="text-primary">Fractal</span> Story Tee
+                    Create Your One-of-One <span className="text-primary">Fractal</span> Tee
                   </h1>
-                  <p className="text-zinc-300 text-sm md:text-base line-clamp-2">
-                    Generate a one-of-one fractal story tee from your prompt, unlock a verified origin record with Real Quantum Generation, and wear a piece that proves its own futuristic creation story. Upgrade to Premium Creator for ownership rights and an earnings opportunity through QR‑linked sales and creator payouts.
+                  <p className="text-zinc-300 text-sm md:text-base line-clamp-3">
+                    Turn a prompt into an original design, preview it on merch, customize the final product, and order a piece that feels made just for you.
                   </p>
                   <div className="mt-5 flex flex-wrap items-center gap-3">
                     <Link
                       href="/studio"
                       className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200 transition-colors"
                     >
-                      Create in Studio
+                      Start Creating
                     </Link>
                     <Link
                       href="/gallery"
                       className="inline-flex items-center justify-center rounded-lg bg-black/40 px-4 py-2 text-sm font-semibold text-white hover:bg-black/55 border border-white/10 backdrop-blur-md transition-colors"
                     >
-                      View Your Gallery
+                      Browse Gallery
                     </Link>
                   </div>
                 </div>
@@ -160,8 +160,8 @@ export default async function Home() {
                 <div className="h-full w-full bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.18),transparent_55%),radial-gradient(ellipse_at_bottom,rgba(16,185,129,0.10),transparent_55%)]" />
               )}
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 to-transparent p-4">
-                 <p className="text-sm font-medium text-white">Prompt-to-Image Output</p>
-                 <p className="text-xs text-zinc-400">Ready to customize, print, and ship</p>
+                 <p className="text-sm font-medium text-white">Fresh From The Studio</p>
+                 <p className="text-xs text-zinc-400">Create, preview, customize, and order from one flow</p>
               </div>
             </div>
           </div>
@@ -171,8 +171,8 @@ export default async function Home() {
         
         <section className="container mx-auto px-4 border-t border-gray-800 pt-12">
           <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold tracking-tight mb-2">Social Updates</h2>
-            <p className="text-gray-400">Real-time updates from our official X account</p>
+            <h2 className="text-3xl font-bold tracking-tight mb-2">From The ForeverTech Feed</h2>
+            <p className="text-gray-400">Recent updates and product activity from the public brand feed</p>
           </div>
           <TwitterFeed />
         </section>

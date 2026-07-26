@@ -212,6 +212,7 @@ describe('StudioPage calendar date range', () => {
   it('shows Reddit, Discord, and RSS inside the Multi-Channel Poster', async () => {
     await renderStudioPage();
 
+    expect(screen.getByText('Share & Publish Later')).toBeInTheDocument();
     expect(screen.getByText('@reddit_user')).toBeInTheDocument();
     expect(screen.getByText('@Discord connected')).toBeInTheDocument();
     expect(screen.getByText('@RSS feed')).toBeInTheDocument();

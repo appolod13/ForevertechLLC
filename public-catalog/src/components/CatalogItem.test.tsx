@@ -87,7 +87,7 @@ describe('CatalogItem', () => {
     );
   });
 
-  it('routes send-to-poster actions to the Studio multiposter section', () => {
+  it('routes share-later actions to the Studio multiposter section', () => {
     render(
       <CatalogItem
         id="catalog-2"
@@ -101,7 +101,7 @@ describe('CatalogItem', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Send to Multi-Channel Poster' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Share Later' }));
 
     const parsed = new URL(window.location.href);
     expect(parsed.pathname).toBe('/studio');

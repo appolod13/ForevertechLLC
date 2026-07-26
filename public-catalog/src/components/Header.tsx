@@ -17,7 +17,6 @@ export function Header() {
   const { itemCount } = useCart();
   const { user, logout } = useAuth();
   const [showAdmin, setShowAdmin] = useState(false);
-  const showDevTools = process.env.NODE_ENV !== 'production' || showAdmin;
   const router = useRouter();
   const pathname = usePathname();
   const showLiveBadge = !(pathname === '/checkout' || pathname.startsWith('/checkout/'));
@@ -37,22 +36,15 @@ export function Header() {
   }, []);
 
   const navItems = [
-    { href: '/', label: 'Latest Drops', visible: true },
-    { href: '/about', label: 'About', visible: true },
-    { href: '/governance', label: 'Governance', visible: true },
-    { href: '/pixelqrypt', label: 'PixelQrypt™', visible: true },
+    { href: '/', label: 'Home', visible: true },
     { href: '/studio', label: 'Studio', visible: true },
-    { href: '/studio', label: 'MultiPoster', visible: true },
     { href: '/gallery', label: 'Gallery', visible: true },
-    { href: '/faqs', label: 'FAQs', visible: true },
+    { href: '/about', label: 'About', visible: true },
     { href: '/support', label: 'Support', visible: true },
+    { href: '/faqs', label: 'FAQs', visible: true },
     { href: '/shipping-policy', label: 'Shipping', visible: true },
     { href: '/refund-policy', label: 'Refunds', visible: true },
-    { href: '/terms', label: 'Terms', visible: true },
-    { href: '/privacy-policy', label: 'Privacy', visible: true },
     { href: '/admin', label: 'Admin', visible: showAdmin },
-    { href: '/tools', label: 'Tools', visible: true },
-    { href: '/scanner', label: 'Scanner', visible: showDevTools }
   ].filter((item) => item.visible);
 
   const selectedHref =
@@ -191,7 +183,21 @@ export function Header() {
               className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              Latest Drops
+              Home
+            </Link>
+            <Link 
+              href="/studio" 
+              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Studio
+            </Link>
+            <Link 
+              href="/gallery" 
+              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Gallery
             </Link>
             <Link 
               href="/about" 
@@ -201,55 +207,11 @@ export function Header() {
               About
             </Link>
             <Link 
-              href="/governance" 
+              href="/support" 
               className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              Governance
-            </Link>
-            <Link 
-              href="/studio" 
-              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Studio
-            </Link>
-            <Link
-              href="/studio"
-              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              MultiPoster
-            </Link>
-            <Link
-              href="/pixelqrypt"
-              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              PixelQrypt™
-            </Link>
-            <Link
-              href="/tools"
-              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Tools
-            </Link>
-            {showDevTools ? (
-              <Link
-                href="/scanner"
-                className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Scanner
-              </Link>
-            ) : null}
-            <Link 
-              href="/gallery" 
-              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Gallery
+              Support
             </Link>
             <Link 
               href="/faqs" 
@@ -258,40 +220,19 @@ export function Header() {
             >
               FAQs
             </Link>
-            <Link 
-              href="/support" 
-              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Support
-            </Link>
             <Link
               href="/shipping-policy"
               className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              Shipping Policy
+              Shipping
             </Link>
             <Link
               href="/refund-policy"
               className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              Refund & Return Policy
-            </Link>
-            <Link
-              href="/terms"
-              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Terms of Service
-            </Link>
-            <Link 
-              href="/privacy-policy" 
-              className="text-base font-medium text-zinc-300 hover:text-white transition-colors py-2"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Privacy Policy
+              Refunds
             </Link>
           </div>
         </div>

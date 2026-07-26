@@ -136,6 +136,9 @@ export function CatalogItem({
     const p = metadata?.prompt ?? metadata?.title ?? safeContent;
     return typeof p === 'string' ? p : (p ? JSON.stringify(p) : '');
   })();
+  const customizeHref = `/customize?imageUrl=${encodeURIComponent(imgSrc)}${
+    customizePrompt ? `&prompt=${encodeURIComponent(customizePrompt)}` : ''
+  }`;
   const printifyPreviewUrl = typeof metadata?.printifyPreviewUrl === 'string' ? metadata.printifyPreviewUrl : '';
   const previewProductName = typeof metadata?.title === 'string' && metadata.title.trim() ? metadata.title.trim() : 'Premium Tee';
   const previewPrintType = metadata?.printType === 'all_over_print' ? 'all_over_print' : 'standard';
@@ -368,6 +371,20 @@ export function CatalogItem({
 
           {/* Actions */}
           <div className="grid grid-cols-1 gap-3">
+            <button
+              type="button"
+              onClick={() => setShowPreview(true)}
+              className="flex items-center justify-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-zinc-800"
+            >
+              <Eye className="h-4 w-4" />
+              Preview Product
+            </button>
+            <Link
+              href={customizeHref}
+              className="flex items-center justify-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-zinc-800"
+            >
+              Customize
+            </Link>
             <button 
               onClick={handlePurchase}
               disabled={isPurchasing}
@@ -380,9 +397,9 @@ export function CatalogItem({
             <button
               type="button"
               onClick={sendToPoster}
-              className="flex items-center justify-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-zinc-800"
+              className="flex items-center justify-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-900 hover:text-white"
             >
-              Send to Multi-Channel Poster
+              Share Later
             </button>
           </div>
         </div>

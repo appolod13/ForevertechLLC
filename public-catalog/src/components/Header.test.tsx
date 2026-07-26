@@ -78,4 +78,18 @@ describe('Header', () => {
 
     errorSpy.mockRestore();
   });
+
+  it('keeps the primary navigation customer-focused', async () => {
+    render(<Header />);
+
+    const nav = await screen.findByRole('combobox', { name: 'Navigate' });
+    const options = Array.from(nav.querySelectorAll('option')).map((option) => option.textContent);
+
+    expect(options).toContain('Home');
+    expect(options).toContain('Studio');
+    expect(options).toContain('Gallery');
+    expect(options).toContain('Support');
+    expect(options).not.toContain('MultiPoster');
+    expect(options).not.toContain('Tools');
+  });
 });

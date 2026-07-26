@@ -1505,6 +1505,12 @@ function StudioPageInner() {
             id="multi-channel-poster"
             className="bg-gradient-to-b from-gray-800 to-gray-900 p-4 sm:p-6 lg:p-8 rounded-xl border border-gray-700"
           >
+            <div className="mb-6 rounded-xl border border-blue-500/20 bg-blue-500/10 p-4">
+              <div className="text-sm font-semibold uppercase tracking-[0.16em] text-blue-200">Share & Publish Later</div>
+              <div className="mt-2 text-sm text-blue-100/80">
+                Finish creating and customizing first. Use the sharing tools below only when you are ready to post or distribute the final result.
+              </div>
+            </div>
             <div className="flex items-center gap-3 mb-6">
               <Send className="text-blue-400" />
               <h2 className="text-2xl font-bold">Multi-Channel Poster</h2>
