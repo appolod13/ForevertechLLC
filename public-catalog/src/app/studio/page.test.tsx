@@ -209,6 +209,47 @@ describe('StudioPage calendar date range', () => {
     ).toBeInTheDocument();
   });
 
+  it('requests all-over-print mockups for the latest build preview', async () => {
+    localStorage.setItem(
+      'foreverteck.studio.lastImage',
+      JSON.stringify({
+        imageUrl: 'https://example.com/latest-build.png',
+        prompt: 'quantum skyline tee',
+      }),
+    );
+
+    await renderStudioPage();
+
+    const printifyCall = (
+      global.fetch as unknown as { mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> } }
+    ).mock.calls.find((c) => String(c[0]).includes('/api/printify/mockups'));
+
+    expect(printifyCall).toBeDefined();
+    expect(JSON.parse(String(printifyCall?.[1]?.body || '{}'))).toMatchObject({
+      imageUrl: 'https://example.com/latest-build.png',
+      printType: 'all_over_print',
+    });
+  });
+
+  it('routes the studio customize action to the AOP tee product', async () => {
+    localStorage.setItem(
+      'foreverteck.studio.lastImage',
+      JSON.stringify({
+        imageUrl: 'https://example.com/latest-build.png',
+        prompt: 'quantum skyline tee',
+      }),
+    );
+
+    await renderStudioPage();
+
+    const customizeLink = screen.getByRole('link', { name: 'Customize Your Gear' });
+    const href = customizeLink.getAttribute('href') || '';
+    const parsed = new URL(href, 'http://localhost');
+
+    expect(parsed.pathname).toBe('/customize');
+    expect(parsed.searchParams.get('product')).toBe('tee-aop');
+  });
+
   it('shows Reddit, Discord, and RSS inside the Multi-Channel Poster', async () => {
     await renderStudioPage();
 

@@ -29,7 +29,15 @@ interface Product {
   printifyPreviewUrl?: string;
 }
 
-export function ProductCustomizer({ initialImageUrl, promptOverride }: { initialImageUrl: string | null; promptOverride?: string | null }) {
+export function ProductCustomizer({
+  initialImageUrl,
+  promptOverride,
+  preferredProductId,
+}: {
+  initialImageUrl: string | null;
+  promptOverride?: string | null;
+  preferredProductId?: string | null;
+}) {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -56,9 +64,13 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
         if (data.success) {
           setProducts(data.products);
           if (data.products.length > 0) {
-            setSelectedProduct(data.products[0]);
-            setSelectedVariant(data.products[0].variants[0]);
-            setSelectedColor(data.products[0].colors[0]);
+            const preferred = typeof preferredProductId === 'string' && preferredProductId.trim()
+              ? data.products.find((product: Product) => product.id === preferredProductId.trim())
+              : null;
+            const initialProduct = preferred || data.products[0];
+            setSelectedProduct(initialProduct);
+            setSelectedVariant(initialProduct.variants[0]);
+            setSelectedColor(initialProduct.colors[0]);
           }
         }
       })
@@ -87,7 +99,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
           setSelectedColor(fallbackProducts[0].colors[0]);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [preferredProductId]);
 
   const PROMPT_STOPWORDS = useMemo(
     () =>

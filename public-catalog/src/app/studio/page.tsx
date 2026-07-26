@@ -1432,8 +1432,8 @@ function StudioPageInner() {
                   <MerchPreviewPanel
                     imageUrl={latestDropImageUrl}
                     prompt={(prompt || generatedTextContent).trim()}
-                    productName="Premium Tee"
-                    printType="standard"
+                    productName="All-over-print Tee"
+                    printType="all_over_print"
                     enablePrintifyMockups
                   />
                 </div>
@@ -1444,7 +1444,7 @@ function StudioPageInner() {
                     (prompt || generatedTextContent).trim()
                       ? `&prompt=${encodeURIComponent((prompt || generatedTextContent).trim())}`
                       : ''
-                  }`}
+                  }&product=tee-aop`}
                   className="mt-4 w-full py-3 rounded-lg font-bold bg-white hover:bg-zinc-200 text-black flex items-center justify-center"
                 >
                   Customize Your Gear
