@@ -136,9 +136,10 @@ export function CatalogItem({
     const p = metadata?.prompt ?? metadata?.title ?? safeContent;
     return typeof p === 'string' ? p : (p ? JSON.stringify(p) : '');
   })();
+  const customizeProductParam = previewPrintType === 'all_over_print' ? '&product=tee-aop' : '';
   const customizeHref = `/customize?imageUrl=${encodeURIComponent(imgSrc)}${
     customizePrompt ? `&prompt=${encodeURIComponent(customizePrompt)}` : ''
-  }`;
+  }${customizeProductParam}`;
   const printifyPreviewUrl = typeof metadata?.printifyPreviewUrl === 'string' ? metadata.printifyPreviewUrl : '';
   const previewProductName = typeof metadata?.title === 'string' && metadata.title.trim() ? metadata.title.trim() : 'Premium Tee';
   const previewPrintType = metadata?.printType === 'all_over_print' ? 'all_over_print' : 'standard';
@@ -153,6 +154,7 @@ export function CatalogItem({
     const customizeUrl = new URL('/customize', origin);
     customizeUrl.searchParams.set('imageUrl', img);
     if (customizePrompt) customizeUrl.searchParams.set('prompt', customizePrompt);
+    if (previewPrintType === 'all_over_print') customizeUrl.searchParams.set('product', 'tee-aop');
 
     const title = (() => {
       const t = metadata?.title;

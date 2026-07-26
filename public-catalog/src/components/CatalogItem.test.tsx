@@ -108,4 +108,25 @@ describe('CatalogItem', () => {
     expect(parsed.searchParams.get('shareImage')).toBe('https://example.com/design.png');
     expect(parsed.searchParams.get('sharePrompt')).toBe('Dragapult');
   });
+
+  it('routes AOP customize links to the all-over-print tee', () => {
+    render(
+      <CatalogItem
+        id="catalog-3"
+        content="quantum skyline shirt"
+        mediaUrl="https://example.com/design.png"
+        timestamp="2026-07-06T00:00:00.000Z"
+        metadata={{
+          title: 'Quantum Skyline Tee',
+          prompt: 'quantum skyline shirt',
+          printType: 'all_over_print',
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: 'Customize' })).toHaveAttribute(
+      'href',
+      '/customize?imageUrl=https%3A%2F%2Fexample.com%2Fdesign.png&prompt=quantum%20skyline%20shirt&product=tee-aop',
+    );
+  });
 });

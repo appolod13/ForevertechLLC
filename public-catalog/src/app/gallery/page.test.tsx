@@ -146,6 +146,27 @@ describe('GalleryPage creator tab', () => {
     );
   });
 
+  it('routes AOP customize actions to the all-over-print tee', async () => {
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'user-1',
+        name: 'Test User',
+        email: 'test@example.com',
+        premiumCreator: false,
+      },
+    });
+
+    render(<GalleryPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Customize Your Gear' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Customize Your Gear' }));
+
+    expect(pushMock).toHaveBeenCalledWith('/customize?imageUrl=https%3A%2F%2Fexample.com%2F1.png&prompt=quantum%20skyline&product=tee-aop');
+  });
+
   it('demotes sharing to a secondary gallery action label', async () => {
     useAuthMock.mockReturnValue({
       user: {

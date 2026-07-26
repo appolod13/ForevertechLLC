@@ -143,7 +143,8 @@ export default function GalleryPage() {
   const customizeHrefFor = (item: GalleryItem) => {
     const imageUrl = typeof item.imageUrl === 'string' ? item.imageUrl : '';
     const prompt = typeof item.prompt === 'string' ? item.prompt : '';
-    return `/customize?imageUrl=${encodeURIComponent(imageUrl)}&prompt=${encodeURIComponent(prompt)}`;
+    const productParam = item.printType === 'all_over_print' ? '&product=tee-aop' : '';
+    return `/customize?imageUrl=${encodeURIComponent(imageUrl)}&prompt=${encodeURIComponent(prompt)}${productParam}`;
   };
 
   const sendToPoster = (item: GalleryItem) => {
@@ -155,6 +156,7 @@ export default function GalleryPage() {
     const customizeUrl = new URL('/customize', origin);
     customizeUrl.searchParams.set('imageUrl', img);
     if (prompt) customizeUrl.searchParams.set('prompt', prompt);
+    if (item.printType === 'all_over_print') customizeUrl.searchParams.set('product', 'tee-aop');
     const shareText = [
       'PixelQrypt',
       prompt ? prompt.slice(0, 220) : '',
