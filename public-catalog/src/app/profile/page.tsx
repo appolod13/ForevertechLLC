@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ShoppingBag, Image as ImageIcon, Loader2 } from 'lucide-react';
@@ -36,7 +36,10 @@ function ProfilePageInner() {
   const [discordError, setDiscordError] = useState('');
   const [brandingLogoInput, setBrandingLogoInput] = useState('');
   const [brandingLogoDisplay, setBrandingLogoDisplay] = useState('');
+  const [brandingLogoUploadStatus, setBrandingLogoUploadStatus] = useState<'idle' | 'uploading' | 'error'>('idle');
+  const [brandingLogoUploadError, setBrandingLogoUploadError] = useState('');
   const [selectedGenerationIds, setSelectedGenerationIds] = useState<string[]>([]);
+  const brandingLogoFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -157,6 +160,39 @@ function ProfilePageInner() {
       return next;
     });
     setSelectedGenerationIds([]);
+  };
+
+  const handleBrandingLogoFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setBrandingLogoUploadStatus('uploading');
+    setBrandingLogoUploadError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const json = await response.json().catch(() => null);
+
+      if (!response.ok || !json?.success || typeof json?.url !== 'string') {
+        throw new Error(typeof json?.error === 'string' ? json.error : 'Upload failed');
+      }
+
+      const saved = setStoredBrandingLogoUrl(json.url);
+      setBrandingLogoInput(saved);
+      setBrandingLogoDisplay(saved);
+      setBrandingLogoUploadStatus('idle');
+    } catch (error: unknown) {
+      setBrandingLogoUploadStatus('error');
+      setBrandingLogoUploadError(error instanceof Error ? error.message : 'Upload failed');
+    } finally {
+      event.target.value = '';
+    }
   };
 
   if (isLoading || !user) {
@@ -318,6 +354,15 @@ function ProfilePageInner() {
             Save the logo image URL you want to use for shirt inside-tag branding and supported collar or neck placements.
           </p>
           {brandingLogoDisplay ? (
+            <div className="mt-4 overflow-hidden rounded-lg border border-zinc-800 bg-black/30 p-3">
+              <img
+                src={brandingLogoDisplay}
+                alt="Saved branding logo preview"
+                className="h-24 w-24 rounded-lg object-contain"
+              />
+            </div>
+          ) : null}
+          {brandingLogoDisplay ? (
             <div className="mt-4 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
               {brandingLogoDisplay}
             </div>
@@ -326,7 +371,29 @@ function ProfilePageInner() {
               No branding logo saved yet.
             </div>
           )}
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+          {brandingLogoUploadError ? (
+            <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              {brandingLogoUploadError}
+            </div>
+          ) : null}
+          <div className="mt-4 flex flex-col gap-3">
+            <input
+              ref={brandingLogoFileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleBrandingLogoFileChange}
+              className="hidden"
+            />
+            <button
+              type="button"
+              disabled={brandingLogoUploadStatus === 'uploading'}
+              onClick={() => brandingLogoFileInputRef.current?.click()}
+              className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
+            >
+              {brandingLogoUploadStatus === 'uploading' ? 'Uploading Logo...' : 'Choose From Phone'}
+            </button>
+          </div>
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row">
             <input
               type="url"
               value={brandingLogoInput}
@@ -337,6 +404,8 @@ function ProfilePageInner() {
             <button
               type="button"
               onClick={() => {
+                setBrandingLogoUploadError('');
+                setBrandingLogoUploadStatus('idle');
                 const saved = setStoredBrandingLogoUrl(brandingLogoInput);
                 setBrandingLogoInput(saved);
                 setBrandingLogoDisplay(saved);
@@ -352,6 +421,8 @@ function ProfilePageInner() {
                 clearStoredBrandingLogoUrl();
                 setBrandingLogoInput('');
                 setBrandingLogoDisplay('');
+                setBrandingLogoUploadError('');
+                setBrandingLogoUploadStatus('idle');
               }}
               className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-white/15 bg-black/40 px-4 py-2 text-sm font-semibold text-white hover:bg-black/55 disabled:opacity-50"
             >

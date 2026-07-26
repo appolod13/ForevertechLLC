@@ -141,6 +141,89 @@ describe('ProfilePage', () => {
     expect(screen.getByText('https://cdn.example.com/logo.png')).toBeInTheDocument();
   });
 
+  it('renders both phone upload and url save controls for branding logo', async () => {
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Branding Logo')).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('button', { name: 'Choose From Phone' })).toBeInTheDocument();
+    expect(document.querySelector('input[type="file"]')).not.toBeNull();
+    expect(screen.getByPlaceholderText('https://example.com/your-logo.png')).toBeInTheDocument();
+  });
+
+  it('uploads a selected phone image and saves the returned branding logo', async () => {
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === '/api/upload') {
+        return {
+          ok: true,
+          json: async () => ({ success: true, url: 'data:image/png;base64,uploaded-logo' }),
+        } as Response;
+      }
+
+      return {
+        ok: true,
+        json: async () => ({ orders: [], success: true, connected: true, webhookDisplay: 'https://discord.com/.../abc...xyz' }),
+      } as Response;
+    }) as typeof fetch;
+
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Branding Logo')).toBeInTheDocument();
+    });
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement | null;
+    expect(fileInput).not.toBeNull();
+
+    const file = new File(['logo'], 'logo.png', { type: 'image/png' });
+    fireEvent.change(fileInput!, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(localStorage.getItem('foreverteck.branding.logoUrl')).toBe('data:image/png;base64,uploaded-logo');
+    });
+
+    expect(screen.getByText('data:image/png;base64,uploaded-logo')).toBeInTheDocument();
+  });
+
+  it('shows upload errors and preserves the previously saved branding logo', async () => {
+    localStorage.setItem('foreverteck.branding.logoUrl', 'https://cdn.example.com/original-logo.png');
+
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === '/api/upload') {
+        return {
+          ok: false,
+          json: async () => ({ success: false, error: 'Upload failed badly' }),
+        } as Response;
+      }
+
+      return {
+        ok: true,
+        json: async () => ({ orders: [], success: true, connected: true, webhookDisplay: 'https://discord.com/.../abc...xyz' }),
+      } as Response;
+    }) as typeof fetch;
+
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('https://cdn.example.com/original-logo.png')).toBeInTheDocument();
+    });
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement | null;
+    expect(fileInput).not.toBeNull();
+
+    const file = new File(['logo'], 'logo.png', { type: 'image/png' });
+    fireEvent.change(fileInput!, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText('Upload failed badly')).toBeInTheDocument();
+    });
+
+    expect(localStorage.getItem('foreverteck.branding.logoUrl')).toBe('https://cdn.example.com/original-logo.png');
+    expect(screen.getByText('https://cdn.example.com/original-logo.png')).toBeInTheDocument();
+  });
+
   it('deletes only the selected saved generations and updates local storage', async () => {
     useAuthMock.mockReturnValue({
       user: {
