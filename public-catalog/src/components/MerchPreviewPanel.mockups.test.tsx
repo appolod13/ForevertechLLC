@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import React from 'react';
-import { describe, expect, it } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { MerchPreviewPanel } from './MerchPreviewPanel';
 
@@ -39,5 +39,37 @@ describe('MerchPreviewPanel Printify mockups', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(hero).toHaveAttribute('src', 'https://printify.example/back.png');
+  });
+
+  it('passes the saved branding logo url when requesting Printify mockups', async () => {
+    localStorage.setItem('foreverteck.branding.logoUrl', 'https://cdn.example.com/logo.png');
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        success: true,
+        designHash: 'hash_test',
+        status: 'pending',
+        mockups: {},
+      }),
+    })) as typeof fetch;
+
+    render(
+      <MerchPreviewPanel
+        imageUrl="https://example.com/design.png"
+        productName="AOP Tee"
+        printType="all_over_print"
+        enablePrintifyMockups
+      />,
+    );
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalled();
+    });
+
+    const [, init] = (global.fetch as unknown as { mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> } }).mock.calls[0]!;
+    expect(JSON.parse(String(init?.body || '{}'))).toMatchObject({
+      imageUrl: 'https://example.com/design.png',
+      logoUrl: 'https://cdn.example.com/logo.png',
+    });
   });
 });

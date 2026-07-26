@@ -63,6 +63,24 @@ describe('ProductCustomizer', () => {
     });
   });
 
+  it('adds the saved branding logo url to cart metadata', async () => {
+    localStorage.setItem('foreverteck.branding.logoUrl', 'https://cdn.example.com/logo.png');
+
+    render(<ProductCustomizer initialImageUrl="https://example.com/design.png" promptOverride="quantum wormhole tee" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Add to Cart' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add to Cart' }));
+
+    await waitFor(() => {
+      expect(addToCartMock).toHaveBeenCalled();
+    });
+
+    expect(addToCartMock.mock.calls[0]?.[0]?.metadata?.logoUrl).toBe('https://cdn.example.com/logo.png');
+  });
+
   it('shows an all-over-print option with overview and 360 preview tabs', async () => {
     global.fetch = vi.fn(async () => ({
       ok: true,

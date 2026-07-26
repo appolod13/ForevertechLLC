@@ -7,6 +7,11 @@ import { ShoppingBag, Image as ImageIcon, Loader2 } from 'lucide-react';
 import type { OrderRecord } from '@/lib/cartStore';
 import { creatorAccessConstants, getCreatorAccess } from '@/lib/creatorAccess';
 import type { StoredGenerationRecord } from '@/lib/creatorArtifacts';
+import {
+  clearStoredBrandingLogoUrl,
+  getStoredBrandingLogoUrl,
+  setStoredBrandingLogoUrl,
+} from '@/lib/brandingLogo';
 
 function ProfilePageInner() {
   const { user, isLoading } = useAuth();
@@ -29,6 +34,8 @@ function ProfilePageInner() {
   const [discordWebhookDisplay, setDiscordWebhookDisplay] = useState('');
   const [discordStatus, setDiscordStatus] = useState<'idle' | 'saving' | 'deleting' | 'error'>('idle');
   const [discordError, setDiscordError] = useState('');
+  const [brandingLogoInput, setBrandingLogoInput] = useState('');
+  const [brandingLogoDisplay, setBrandingLogoDisplay] = useState('');
   const [selectedGenerationIds, setSelectedGenerationIds] = useState<string[]>([]);
 
   useEffect(() => {
@@ -48,6 +55,12 @@ function ProfilePageInner() {
       cancelled = true;
     };
   }, [user?.id]);
+
+  useEffect(() => {
+    const saved = getStoredBrandingLogoUrl();
+    setBrandingLogoInput(saved);
+    setBrandingLogoDisplay(saved);
+  }, []);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -297,6 +310,54 @@ function ProfilePageInner() {
               </div>
             </div>
           ) : null}
+        </section>
+
+        <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">
+          <h2 className="text-2xl font-semibold text-white">Branding Logo</h2>
+          <p className="mt-2 text-sm text-zinc-400">
+            Save the logo image URL you want to use for shirt inside-tag branding and supported collar or neck placements.
+          </p>
+          {brandingLogoDisplay ? (
+            <div className="mt-4 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
+              {brandingLogoDisplay}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-lg border border-zinc-800 bg-black/30 px-3 py-2 text-sm text-zinc-400">
+              No branding logo saved yet.
+            </div>
+          )}
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <input
+              type="url"
+              value={brandingLogoInput}
+              onChange={(e) => setBrandingLogoInput(e.target.value)}
+              placeholder="https://example.com/your-logo.png"
+              className="min-h-[44px] flex-1 rounded-lg border border-zinc-700 bg-black/40 px-4 py-2 text-sm text-white"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const saved = setStoredBrandingLogoUrl(brandingLogoInput);
+                setBrandingLogoInput(saved);
+                setBrandingLogoDisplay(saved);
+              }}
+              className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-emerald-300/30 bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+            >
+              Save Branding Logo
+            </button>
+            <button
+              type="button"
+              disabled={!brandingLogoDisplay}
+              onClick={() => {
+                clearStoredBrandingLogoUrl();
+                setBrandingLogoInput('');
+                setBrandingLogoDisplay('');
+              }}
+              className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-white/15 bg-black/40 px-4 py-2 text-sm font-semibold text-white hover:bg-black/55 disabled:opacity-50"
+            >
+              Remove Branding Logo
+            </button>
+          </div>
         </section>
 
         <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">

@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { useCart } from '@/context/CartContext';
 import { MerchPreviewPanel } from '@/components/MerchPreviewPanel';
 import { buildPosterHref } from '@/lib/multiposter';
+import { withBrandingLogo } from '@/lib/brandingLogo';
 
 type PreviewSurface = 'front' | 'back' | 'overview' | 'spin360' | 'finished';
 
@@ -391,7 +392,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
             currency: 'usd',
             size: selectedVariant as ('S' | 'M' | 'L' | 'XL' | 'XXL'),
             originalPrompt: resolvedPrompt,
-            metadata: {
+            metadata: withBrandingLogo({
                 productId: selectedProduct.id,
                 color: selectedColor,
                 variant: selectedVariant,
@@ -410,7 +411,7 @@ export function ProductCustomizer({ initialImageUrl, promptOverride }: { initial
                 ipfs_gateway,
                 ipfs_cid,
                 ipfs_status
-            }
+            })
         });
         setOrderStatus('success');
         setTimeout(() => setOrderStatus('idle'), 3000);

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Shirt } from 'lucide-react';
 
+import { getStoredBrandingLogoUrl } from '@/lib/brandingLogo';
 import { cn } from '@/lib/utils';
 import type { PrintifyMockups } from '@/lib/designMockups';
 
@@ -34,22 +35,15 @@ export function MerchPreviewPanel({
   const isAopProduct = printType === 'all_over_print';
   const sampleUrl = typeof printifyPreviewUrl === 'string' ? printifyPreviewUrl.trim() : '';
   const normalizedProductName = typeof productName === 'string' && productName.trim() ? productName.trim() : 'Premium Tee';
-  const [mockupView, setMockupView] = useState<'front' | 'back' | 'left' | 'right' | 'sample'>(() => (sampleUrl ? 'sample' : 'front'));
+  const [selectedMockupView, setSelectedMockupView] = useState<'front' | 'back' | 'left' | 'right' | 'sample' | null>(null);
   const [localMockups, setLocalMockups] = useState<PrintifyMockups | undefined>(() => printifyMockups);
   const [localDesignHash, setLocalDesignHash] = useState('');
 
   const normalizedPrompt = typeof prompt === 'string' ? prompt.trim() : '';
   const normalizedImageUrl = typeof imageUrl === 'string' ? imageUrl.trim() : '';
+  const mockupView = selectedMockupView ?? (sampleUrl ? 'sample' : 'front');
   const effectiveMockups = printifyMockups || localMockups;
-
-  useEffect(() => {
-    if (!sampleUrl) return;
-    setMockupView((prev) => (prev === 'front' ? 'sample' : prev));
-  }, [sampleUrl]);
-
-  useEffect(() => {
-    if (printifyMockups) setLocalMockups(printifyMockups);
-  }, [printifyMockups]);
+  const brandingLogoUrl = useMemo(() => getStoredBrandingLogoUrl(), []);
 
   useEffect(() => {
     if (!enablePrintifyMockups) return;
@@ -63,7 +57,12 @@ export function MerchPreviewPanel({
         const res = await fetch('/api/printify/mockups', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ imageUrl: normalizedImageUrl, prompt: normalizedPrompt, printType }),
+          body: JSON.stringify({
+            imageUrl: normalizedImageUrl,
+            prompt: normalizedPrompt,
+            printType,
+            logoUrl: brandingLogoUrl || undefined,
+          }),
         });
         const json = (await res.json().catch(() => null)) as unknown;
         if (cancelled || !json || typeof json !== 'object') return;
@@ -98,7 +97,7 @@ export function MerchPreviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [enablePrintifyMockups, normalizedImageUrl, normalizedPrompt, printType, printifyMockups?.status]);
+  }, [brandingLogoUrl, enablePrintifyMockups, normalizedImageUrl, normalizedPrompt, printType, printifyMockups?.status]);
 
   useEffect(() => {
     if (!enablePrintifyMockups) return;
@@ -177,7 +176,7 @@ export function MerchPreviewPanel({
               {sampleUrl ? (
                 <button
                   type="button"
-                  onClick={() => setMockupView('sample')}
+                  onClick={() => setSelectedMockupView('sample')}
                   className={cn(
                     'rounded-full border px-3 py-1 text-xs font-semibold',
                     mockupView === 'sample'
@@ -190,7 +189,7 @@ export function MerchPreviewPanel({
               ) : null}
               <button
                 type="button"
-                onClick={() => setMockupView('front')}
+                onClick={() => setSelectedMockupView('front')}
                 className={cn(
                   'rounded-full border px-3 py-1 text-xs font-semibold',
                   mockupView === 'front' ? 'border-white/20 bg-white text-black' : 'border-white/10 bg-black/30 text-zinc-200 hover:bg-black/50',
@@ -200,7 +199,7 @@ export function MerchPreviewPanel({
               </button>
               <button
                 type="button"
-                onClick={() => setMockupView('back')}
+                onClick={() => setSelectedMockupView('back')}
                 disabled={!enablePrintifyMockups || effectiveMockups?.status !== 'ready'}
                 className={cn(
                   'rounded-full border px-3 py-1 text-xs font-semibold',
@@ -215,7 +214,7 @@ export function MerchPreviewPanel({
               </button>
               <button
                 type="button"
-                onClick={() => setMockupView('left')}
+                onClick={() => setSelectedMockupView('left')}
                 disabled={!enablePrintifyMockups || effectiveMockups?.status !== 'ready'}
                 className={cn(
                   'rounded-full border px-3 py-1 text-xs font-semibold',
@@ -230,7 +229,7 @@ export function MerchPreviewPanel({
               </button>
               <button
                 type="button"
-                onClick={() => setMockupView('right')}
+                onClick={() => setSelectedMockupView('right')}
                 disabled={!enablePrintifyMockups || effectiveMockups?.status !== 'ready'}
                 className={cn(
                   'rounded-full border px-3 py-1 text-xs font-semibold',

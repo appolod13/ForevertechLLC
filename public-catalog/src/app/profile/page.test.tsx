@@ -125,6 +125,22 @@ describe('ProfilePage', () => {
     expect(screen.getByText('https://discord.com/.../abc...xyz')).toBeInTheDocument();
   });
 
+  it('saves a branding logo url for inside-tag and collar use', async () => {
+    render(<ProfilePage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Branding Logo')).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByPlaceholderText('https://example.com/your-logo.png'), {
+      target: { value: 'https://cdn.example.com/logo.png' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Branding Logo' }));
+
+    expect(localStorage.getItem('foreverteck.branding.logoUrl')).toBe('https://cdn.example.com/logo.png');
+    expect(screen.getByText('https://cdn.example.com/logo.png')).toBeInTheDocument();
+  });
+
   it('deletes only the selected saved generations and updates local storage', async () => {
     useAuthMock.mockReturnValue({
       user: {

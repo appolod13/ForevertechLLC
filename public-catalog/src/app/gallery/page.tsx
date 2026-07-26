@@ -10,6 +10,7 @@ import PixelQryptModal from '@/components/PixelQryptModal';
 import { MerchPreviewPanel } from '@/components/MerchPreviewPanel';
 import { getCreatorAccess } from '@/lib/creatorAccess';
 import { buildPosterHref } from '@/lib/multiposter';
+import { withBrandingLogo } from '@/lib/brandingLogo';
 
 interface GalleryItem {
   id: string;
@@ -129,13 +130,13 @@ export default function GalleryPage() {
       description: item.prompt,
       originalPrompt: item.prompt,
       originalFilename: item.id,
-      metadata: {
+      metadata: withBrandingLogo({
         productId: 'tee',
         variant: size,
         prompt: item.prompt,
         title: `Quantum Asset ${String(item.id || '').slice(0, 8)}`,
         source: 'gallery',
-      },
+      }),
     });
   };
 
