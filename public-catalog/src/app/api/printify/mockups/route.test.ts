@@ -274,7 +274,7 @@ describe('printify mockups route', () => {
   it('fails clearly when an AOP template is missing a required sleeve placement', async () => {
     mockupsSelectSingleMock.mockResolvedValue({ data: null, error: { code: 'PGRST116' } });
 
-    global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
 
       if (url === 'https://example.com/design.png') {

@@ -104,13 +104,6 @@ type PrintifyTemplatePlaceholder = { position?: unknown; images?: unknown };
 type PrintifyTemplatePrintArea = { variant_ids?: unknown; placeholders?: unknown };
 type PrintifyTemplateProduct = { id?: unknown; title?: unknown; blueprint_id?: unknown; print_provider_id?: unknown; variants?: unknown; print_areas?: unknown };
 
-type TemplateTransform = { x: number; y: number; scale: number; angle: number };
-
-
-function normalizePlacementKey(value: string) {
-  return value.trim().toLowerCase().replace(/[\s-]+/g, '_');
-}
-
 function getVariantIds(template: PrintifyTemplateProduct) {
   const variantsRaw = template.variants;
   if (!Array.isArray(variantsRaw)) throw new Error('printify_template_missing_variants');
@@ -141,14 +134,6 @@ function getAllPlaceholderPositions(template: PrintifyTemplateProduct, variantId
     return positions;
   }
   return [];
-}
-
-function matchesAlias(position: string, aliases: string[]) {
-  const normalized = normalizePlacementKey(position);
-  return aliases.some((alias) => {
-    const candidate = normalizePlacementKey(alias);
-    return normalized === candidate || normalized.includes(candidate);
-  });
 }
 
 function placementScore(pos: string, want: 'front' | 'back') {
